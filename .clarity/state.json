@@ -5,9 +5,10 @@
       "id": "check-active",
       "description": "Check active tasks",
       "status": "in_progress",
-      "createdAt": "2026-04-30T14:45:08.676Z",
-      "updatedAt": "2026-04-30T14:45:08.676Z"
+      "createdAt": "2026-04-30T14:53:42.956Z",
+      "updatedAt": "2026-04-30T14:53:42.956Z"
     }
   ],
-  "status": "running"
+  "status": "running",
+  "failedProviderTimestamps": {}
 }
