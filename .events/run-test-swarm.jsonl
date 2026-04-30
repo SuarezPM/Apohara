@@ -1,0 +1,2 @@
+{"id":"4d938ca8-f06e-4a23-86a7-59d2a3030a4a","timestamp":"2026-04-30T19:10:16.225Z","type":"role_assignment","severity":"info","taskId":"task-1","payload":{"message":"Test task assigned","taskId":"task-1","role":"execution"},"metadata":{"role":"execution"}}
+{"id":"549d7653-da36-4618-a502-9ac7530ac4ee","timestamp":"2026-04-30T19:10:59.989Z","type":"role_assignment","severity":"info","taskId":"task-1","payload":{"message":"Test task assigned","taskId":"task-1","role":"execution"},"metadata":{"role":"execution"}}
