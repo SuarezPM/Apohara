@@ -6,6 +6,7 @@ dotenv.config();
 const envSchema = z.object({
 	OPENCODE_API_KEY: z.string().min(1, "OPENCODE_API_KEY is required"),
 	DEEPSEEK_API_KEY: z.string().optional(),
+	GITHUB_TOKEN: z.string().optional(),
 	NODE_ENV: z
 		.enum(["development", "production", "test"])
 		.default("development"),
@@ -20,6 +21,7 @@ const parseEnv = () => {
 			return {
 				OPENCODE_API_KEY: process.env.OPENCODE_API_KEY || "test-opencode-key",
 				DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || "test-deepseek-key",
+				GITHUB_TOKEN: process.env.GITHUB_TOKEN || undefined,
 				NODE_ENV: "test" as const,
 			};
 		}
