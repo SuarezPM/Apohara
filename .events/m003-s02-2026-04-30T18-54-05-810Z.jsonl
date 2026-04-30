@@ -1,3 +1,0 @@
-{"id":"948d9db7-2759-4809-b889-6723e2255293","timestamp":"2026-04-30T18:54:05.810Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
-{"id":"de33ad11-5211-4319-aec9-dea6c8e51870","timestamp":"2026-04-30T18:54:05.811Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
-{"id":"db283109-aa86-4e99-b54c-e1becc91c2d7","timestamp":"2026-04-30T18:54:05.811Z","type":"start","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}

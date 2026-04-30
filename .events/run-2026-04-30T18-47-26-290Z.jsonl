@@ -1,2 +1,0 @@
-{"id":"d163bea3-83cb-48fc-88a4-aea3b2aa3380","timestamp":"2026-04-30T18:47:26.290Z","type":"role_assignment","severity":"info","taskId":"test-task-2","payload":{"message":"Task assigned to role: planning","taskId":"test-task-2","role":"planning"},"metadata":{"role":"planning"}}
-{"id":"56c1f07d-0e33-4fa8-b1aa-1da8a2805339","timestamp":"2026-04-30T18:47:26.290Z","type":"provider_selected","severity":"info","payload":{"message":"Provider gemini selected for role planning","role":"planning","provider":"gemini"},"metadata":{"role":"planning","provider":"gemini"}}
