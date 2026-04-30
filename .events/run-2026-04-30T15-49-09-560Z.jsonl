@@ -1,1 +1,0 @@
-{"id":"3cd1f3a3-28e9-4011-927d-b2ce9fd634fb","timestamp":"2026-04-30T15:49:09.560Z","type":"github_pr_created","severity":"info","payload":{"message":"PR #42 created: \"Test PR\"","prNumber":42,"prUrl":"https://github.com/owner/repo/pull/42","head":"feature-branch","base":"main","repository":"owner/repo"},"metadata":{"provider":"github"}}

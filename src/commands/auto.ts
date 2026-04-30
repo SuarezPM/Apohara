@@ -7,6 +7,7 @@ import { EventLedger } from "../core/ledger";
 import { ParallelScheduler } from "../core/scheduler";
 import { StateMachine } from "../core/state";
 import { SummaryGenerator } from "../core/summary";
+import { GitHubClient } from "../providers/github";
 import { ProviderRouter } from "../providers/router";
 
 export const autoCommand = new Command("auto")
@@ -190,7 +191,28 @@ export const autoCommand = new Command("auto")
 					console.log(`   ✅ No lint issues`);
 				}
 
-				// 8) Generate narrative summary from EventLedger and StateMachine
+				// 9) Create GitHub Pull Request from consolidated branch
+				console.log("🔗 Creating GitHub Pull Request...");
+				const prResult = await createGitHubPullRequest(
+					consolidationResult.branch,
+					ledger,
+				);
+				if (prResult) {
+					await ledger.log(
+						"github_pr_created",
+						{
+							prNumber: prResult.number,
+							prUrl: prResult.htmlUrl,
+							branch: consolidationResult.branch,
+						},
+						"info",
+					);
+					console.log(
+						`   ✅ PR #${prResult.number} created: ${prResult.htmlUrl}`,
+					);
+				}
+
+				// 10) Generate narrative summary from EventLedger and StateMachine
 				console.log("📝 Generating summary...");
 				// Extract runId from the main ledger to share the same event log
 				const runId =
@@ -261,4 +283,63 @@ async function runBiomeLint(): Promise<{
 		fixed,
 		output: stdout + stderr,
 	};
+}
+
+/**
+ * Creates a GitHub Pull Request from the consolidated branch.
+ * Returns null if PR creation fails or GitHub is not configured.
+ */
+async function createGitHubPullRequest(
+	headBranch: string,
+	ledger: EventLedger,
+): Promise<{
+	number: number;
+	htmlUrl: string;
+} | null> {
+	const github = new GitHubClient();
+
+	// Get repository info from remote
+	const repoInfo = await github.getRepositoryFromRemote();
+	if (!repoInfo?.repoInfo) {
+		await ledger.log(
+			"github_pr_skipped",
+			{ reason: "Could not detect repository from git remote" },
+			"warning",
+		);
+		console.log("   ⚠️  Skipped PR creation: no GitHub remote detected");
+		return null;
+	}
+
+	// Validate token
+	const tokenValidation = github.validateToken();
+	if (!tokenValidation.valid) {
+		await ledger.log(
+			"github_pr_skipped",
+			{ reason: tokenValidation.error },
+			"warning",
+		);
+		console.log(`   ⚠️  Skipped PR creation: ${tokenValidation.error}`);
+		return null;
+	}
+
+	try {
+		const pr = await github.createPullRequest({
+			owner: repoInfo.owner,
+			repo: repoInfo.repo,
+			title: `Auto: ${headBranch}`,
+			body: `Changes consolidated from Clarity auto execution.\n\nBranch: ${headBranch}`,
+			head: headBranch,
+			base: repoInfo.repoInfo.defaultBranch,
+		});
+
+		return {
+			number: pr.number,
+			htmlUrl: pr.htmlUrl,
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		await ledger.log("github_pr_error", { error: message }, "error");
+		console.log(`   ⚠️  Failed to create PR: ${message}`);
+		return null;
+	}
 }
