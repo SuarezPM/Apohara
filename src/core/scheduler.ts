@@ -3,6 +3,8 @@ import { IsolationEngine, type IsolationResult } from "./isolation";
 import { EventLedger } from "./ledger";
 import { StateMachine } from "./state";
 import type { Task } from "./types";
+import { ProviderRouter, type ProviderId } from "../providers/router";
+import type { LLMMessage } from "../providers/router";
 
 export interface SchedulerConfig {
 	worktreePoolSize: number;
@@ -21,6 +23,7 @@ export class ParallelScheduler {
 	private isolationEngine: IsolationEngine;
 	private stateMachine: StateMachine;
 	private ledger: EventLedger;
+	private providerRouter: ProviderRouter;
 	private config: SchedulerConfig;
 	private worktrees: Map<string, string>; // worktreeId -> path
 	private activeTasks: Map<string, DecomposedTask>; // worktreeId -> task
@@ -30,11 +33,13 @@ export class ParallelScheduler {
 		isolationEngine?: IsolationEngine,
 		stateMachine?: StateMachine,
 		ledger?: EventLedger,
+		providerRouter?: ProviderRouter,
 		config?: Partial<SchedulerConfig>,
 	) {
 		this.isolationEngine = isolationEngine || new IsolationEngine();
 		this.stateMachine = stateMachine || new StateMachine();
 		this.ledger = ledger || new EventLedger();
+		this.providerRouter = providerRouter || new ProviderRouter();
 		this.config = {
 			worktreePoolSize: config?.worktreePoolSize || 3,
 			cwd: config?.cwd,
@@ -208,6 +213,101 @@ export class ParallelScheduler {
 
 		// Clear from active tasks
 		this.activeTasks.delete(worktreeId);
+	}
+
+	/**
+	 * Executes a single task using the provider router with automatic fallback.
+	 * Handles 429, timeout, and network errors with provider fallback.
+	 * Returns the execution result.
+	 */
+	public async executeTaskWithFallback(
+		task: DecomposedTask,
+		messages: LLMMessage[],
+	): Promise<{ output: string; error?: string; fallbackOccurred: boolean; finalProvider?: ProviderId }> {
+		let fallbackOccurred = false;
+		let lastError: string | undefined;
+		let finalProvider: ProviderId | undefined;
+
+		try {
+			const response = await this.providerRouter.completion({ messages });
+			finalProvider = response.provider;
+			return { output: response.content, fallbackOccurred: false, finalProvider };
+		} catch (error) {
+			lastError = error instanceof Error ? error.message : String(error);
+			
+			// Check if this was a retryable error that triggered fallback
+			const retryableError = lastError.toLowerCase();
+			if (retryableError.includes("429") || retryableError.includes("timeout") || retryableError.includes("network")) {
+				fallbackOccurred = true;
+				// Log the fallback in EventLedger
+				await this.ledger.log(
+					"provider_fallback",
+					{
+						taskId: task.id,
+						error: lastError,
+						message: `Provider fallback occurred for task ${task.id}`,
+					},
+					"warning",
+					task.id,
+				);
+			}
+			
+			// Check if all providers are exhausted
+			if (retryableError.includes("exhausted") || retryableError.includes("unavailable")) {
+				await this.ledger.log(
+					"task_exhausted",
+					{
+						taskId: task.id,
+						error: lastError,
+						message: `All providers exhausted for task ${task.id}`,
+					},
+					"error",
+					task.id,
+				);
+			}
+
+			return { 
+				output: "", 
+				error: lastError, 
+				fallbackOccurred,
+				finalProvider: this.providerRouter.fallback(undefined)
+			};
+		}
+	}
+
+	/**
+	 * Logs a fallback event with console notification.
+	 * Call this when provider fallback occurs for visibility.
+	 */
+	public async logFallbackEvent(
+		fromProvider: ProviderId,
+		toProvider: ProviderId,
+		taskId: string,
+		reason: string,
+	): Promise<void> {
+		// Console notification with the specified format
+		console.warn(`⚠ ${fromProvider} ${reason} → reasignando a ${toProvider}...`);
+		
+		// Log to EventLedger
+		await this.ledger.log(
+			"provider_fallback",
+			{
+				taskId,
+				fromProvider,
+				toProvider,
+				reason,
+				message: `${fromProvider} ${reason} → reasignando a ${toProvider}`,
+			},
+			"warning",
+			taskId,
+		);
+	}
+
+	/**
+	 * Checks if a provider is on cooldown.
+	 */
+	public isProviderOnCooldown(provider: ProviderId): boolean {
+		return this.providerRouter.isOnCooldown(provider);
 	}
 
 	/**

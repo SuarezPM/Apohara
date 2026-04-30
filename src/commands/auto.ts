@@ -42,6 +42,7 @@ export const autoCommand = new Command("auto")
 			isolationEngine,
 			stateMachine,
 			ledger,
+			router,
 			{ worktreePoolSize },
 		);
 
