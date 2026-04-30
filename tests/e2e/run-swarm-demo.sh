@@ -20,7 +20,7 @@ echo "=========================================="
 echo ""
 
 # Ensure we're in the project root
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.." 2>/dev/null || cd "$(dirname "$0")/../../"
 
 # Check if bun is available
 if ! command -v bun &> /dev/null; then
@@ -33,7 +33,7 @@ echo "[1/3] Running swarm integration tests..."
 echo ""
 
 # Run the integration tests  
-bun test tests/e2e-swarm-integration.test.ts
+bun test ./tests/e2e-swarm-integration.test.ts
 
 TEST_RESULT=$?
 

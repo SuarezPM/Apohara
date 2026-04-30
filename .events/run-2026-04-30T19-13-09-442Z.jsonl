@@ -1,0 +1,1 @@
+{"id":"08d1aa55-852b-4e4b-87a9-54e66050d012","timestamp":"2026-04-30T19:13:09.442Z","type":"provider_fallback","severity":"warning","payload":{"message":"Provider opencode-go failed with retryable error, trying next provider","fromProvider":"opencode-go","error":"OpenCode Go API Error: 429 Rate Limit Exceeded"},"metadata":{"provider":"opencode-go"}}
