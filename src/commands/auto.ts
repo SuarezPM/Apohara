@@ -25,12 +25,22 @@ export const autoCommand = new Command("auto")
 		"Simulate a 429 rate limit error on the first provider for demo/testing (default: false)",
 		false,
 	)
+	.option(
+		"--no-pr",
+		"Skip GitHub PR creation (useful for local-only runs)",
+		false,
+	)
 	.action(
 		async (
 			prompt: string,
-			options: { worktrees?: string; simulateFailure?: boolean },
+			options: {
+				worktrees?: string;
+				simulateFailure?: boolean;
+				pr?: boolean;
+			},
 		) => {
 			const worktreePoolSize = parseInt(options.worktrees || "3", 10);
+			const enablePr = options.pr ?? true;
 
 			console.log(`🚀 Starting clarity auto for: "${prompt}"`);
 			console.log(`📊 Worktree pool size: ${worktreePoolSize}`);
@@ -76,7 +86,7 @@ export const autoCommand = new Command("auto")
 				// For now, since we don't have the LLM running in this test, we can:
 				// Let it fail gracefully and show an error message
 				// or we could bypass the LLM and provide test data
-				let decompositionResult;
+				let decompositionResult: { tasks: Array<{ id: string }> };
 				try {
 					decompositionResult = await decomposer.decompose(prompt);
 				} catch (error) {
@@ -196,6 +206,7 @@ export const autoCommand = new Command("auto")
 				const prResult = await createGitHubPullRequest(
 					consolidationResult.branch,
 					ledger,
+					enablePr,
 				);
 				if (prResult) {
 					await ledger.log(
@@ -292,10 +303,22 @@ async function runBiomeLint(): Promise<{
 async function createGitHubPullRequest(
 	headBranch: string,
 	ledger: EventLedger,
+	enablePr: boolean = true,
 ): Promise<{
 	number: number;
 	htmlUrl: string;
 } | null> {
+	// Check if PR creation is disabled via --no-pr flag
+	if (!enablePr) {
+		await ledger.log(
+			"github_pr_skipped",
+			{ reason: "user opted out via --no-pr flag" },
+			"info",
+		);
+		console.log("   ⏭️  Skipped PR creation: --no-pr flag set");
+		return null;
+	}
+
 	const github = new GitHubClient();
 
 	// Get repository info from remote
