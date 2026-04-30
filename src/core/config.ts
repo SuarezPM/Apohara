@@ -5,7 +5,7 @@ dotenv.config();
 
 const envSchema = z.object({
 	OPENCODE_API_KEY: z.string().min(1, "OPENCODE_API_KEY is required"),
-	DEEPSEEK_API_KEY: z.string().min(1, "DEEPSEEK_API_KEY is required"),
+	DEEPSEEK_API_KEY: z.string().optional(),
 	NODE_ENV: z
 		.enum(["development", "production", "test"])
 		.default("development"),
