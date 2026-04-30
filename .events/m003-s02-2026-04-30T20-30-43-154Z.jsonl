@@ -1,0 +1,5 @@
+{"id":"0c1aefc6-bd01-4fbd-a2b6-1e4562a9da07","timestamp":"2026-04-30T20:30:43.154Z","type":"dispatch","taskId":"test-task-1","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"e58d29db-08a1-4857-8db7-1cd1f17f58da","timestamp":"2026-04-30T20:30:43.155Z","type":"dispatch","taskId":"test-task-1","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"17572280-f553-4135-8d46-5813fbeb16b4","timestamp":"2026-04-30T20:30:43.155Z","type":"start","taskId":"test-task-1","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"40a66e8f-f875-4139-92c8-d9ab21bfbbe4","timestamp":"2026-04-30T20:30:43.155Z","type":"result","taskId":"test-task-1","role":"execution","provider":"deepseek-v4","retries":0,"durationMs":0,"status":"completed"}
+{"id":"01963cc2-2334-45b3-9541-898c8bd1f21b","timestamp":"2026-04-30T20:30:43.155Z","type":"failure","taskId":"test-task-1","role":"execution","provider":"deepseek-v4","retries":0,"durationMs":0,"error":"undefined is not an object (evaluating 'response.content')","status":"failed"}

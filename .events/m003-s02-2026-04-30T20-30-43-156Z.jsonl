@@ -1,0 +1,10 @@
+{"id":"17fe2682-43ae-44fb-8c98-0367b2193bef","timestamp":"2026-04-30T20:30:43.156Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"d8023be2-dc56-4a70-80a0-544594eedc5e","timestamp":"2026-04-30T20:30:43.156Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"87fb00ef-9721-47ad-8217-c6697f658416","timestamp":"2026-04-30T20:30:43.156Z","type":"start","taskId":"task-a","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"c412d899-d3be-45d4-941b-e275aa11ea22","timestamp":"2026-04-30T20:30:43.156Z","type":"result","taskId":"task-a","role":"execution","provider":"deepseek-v4","retries":0,"durationMs":0,"status":"completed"}
+{"id":"bb4b4da6-fc38-4b8a-880e-c6e156b6e384","timestamp":"2026-04-30T20:30:43.156Z","type":"failure","taskId":"task-a","role":"execution","provider":"deepseek-v4","retries":0,"durationMs":0,"error":"undefined is not an object (evaluating 'response.content')","status":"failed"}
+{"id":"bdc0df97-8cff-42d1-b43a-4f34d135b815","timestamp":"2026-04-30T20:30:43.156Z","type":"dispatch","taskId":"task-b","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"b8569d19-a9e5-4641-b4c9-b865023ac0ee","timestamp":"2026-04-30T20:30:43.156Z","type":"dispatch","taskId":"task-b","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"f0e11449-cedc-4598-b3fc-26bda70bc409","timestamp":"2026-04-30T20:30:43.156Z","type":"start","taskId":"task-b","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"294ff45e-6709-4eef-b133-a50bee8b94a2","timestamp":"2026-04-30T20:30:43.156Z","type":"result","taskId":"task-b","role":"execution","provider":"deepseek-v4","retries":0,"durationMs":0,"status":"completed"}
+{"id":"07519499-f9cd-4b3b-9edd-fe68214f9045","timestamp":"2026-04-30T20:30:43.156Z","type":"failure","taskId":"task-b","role":"execution","provider":"deepseek-v4","retries":0,"durationMs":0,"error":"undefined is not an object (evaluating 'response.content')","status":"failed"}
