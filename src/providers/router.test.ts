@@ -1,5 +1,5 @@
-import { test, expect, beforeEach, describe, vi } from "bun:test";
-import { ProviderRouter, type ProviderId, type LLMMessage } from "./router";
+import { beforeEach, describe, expect, test, vi } from "bun:test";
+import { type LLMMessage, type ProviderId, ProviderRouter } from "./router";
 
 // Mock config to avoid needing real API keys
 vi.mock("../core/config", () => ({
@@ -59,9 +59,7 @@ describe("ProviderRouter", () => {
 		test("increments failure count on retryable errors", async () => {
 			setMockResponse(false, 429, { error: { message: "Rate limited" } });
 
-			const messages: LLMMessage[] = [
-				{ role: "user", content: "Hello" },
-			];
+			const messages: LLMMessage[] = [{ role: "user", content: "Hello" }];
 
 			try {
 				await router.completion({ messages });
@@ -75,9 +73,7 @@ describe("ProviderRouter", () => {
 		test("triggers cooldown after max failures", async () => {
 			setMockResponse(false, 429, { error: { message: "Rate limited" } });
 
-			const messages: LLMMessage[] = [
-				{ role: "user", content: "Hello" },
-			];
+			const messages: LLMMessage[] = [{ role: "user", content: "Hello" }];
 
 			// Trigger 3 failures
 			for (let i = 0; i < 3; i++) {
@@ -105,7 +101,7 @@ describe("ProviderRouter", () => {
 			// (since opencode-go is already tried and might still work)
 			// Actually, let's test: if opencode-go is preferred but on cooldown,
 			// fallback should return deepseek
-			
+
 			// Use fallback with deepseek as current - it should return opencode-go
 			// unless opencode-go is on cooldown
 			const result = router.fallback("deepseek");
@@ -113,7 +109,7 @@ describe("ProviderRouter", () => {
 		});
 
 		test("fallback returns first provider if all on cooldown", () => {
-			// When both providers are unavailable (theoretically), 
+			// When both providers are unavailable (theoretically),
 			// it should still return a provider (fail-fast is better than hang)
 			const fallback = router.fallback();
 			expect(fallback).toBeDefined();
@@ -142,7 +138,9 @@ describe("ProviderRouter", () => {
 		});
 
 		test("does fallback on timeout errors", async () => {
-			setMockResponse(false, 503, { error: { message: "timeout of 30000ms exceeded" } });
+			setMockResponse(false, 503, {
+				error: { message: "timeout of 30000ms exceeded" },
+			});
 
 			const messages: LLMMessage[] = [{ role: "user", content: "test" }];
 
@@ -177,7 +175,9 @@ describe("ProviderRouter", () => {
 		});
 
 		test("throws immediately on 500 server errors (no fallback)", async () => {
-			setMockResponse(false, 500, { error: { message: "Internal Server Error" } });
+			setMockResponse(false, 500, {
+				error: { message: "Internal Server Error" },
+			});
 
 			const messages: LLMMessage[] = [{ role: "user", content: "test" }];
 

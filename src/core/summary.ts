@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { EventLedger } from "./ledger";
 import { StateMachine } from "./state";
 import type { EventLog, OrchestratorState, Task } from "./types";
@@ -70,7 +69,8 @@ export class SummaryGenerator {
 	};
 
 	constructor(options?: SummaryOptions) {
-		const runId = options?.runId || new Date().toISOString().replace(/[:.]/g, "-");
+		const runId =
+			options?.runId || new Date().toISOString().replace(/[:.]/g, "-");
 		this.ledger = new EventLedger(runId);
 
 		this.config = {
@@ -86,7 +86,13 @@ export class SummaryGenerator {
 	 * Generates a complete run summary by reading event logs and state.
 	 */
 	public async generate(): Promise<string> {
-		const runId = this.ledger.getFilePath().split("/").pop()?.replace("run-", "")?.replace(".jsonl", "") || "unknown";
+		const runId =
+			this.ledger
+				.getFilePath()
+				.split("/")
+				.pop()
+				?.replace("run-", "")
+				?.replace(".jsonl", "") || "unknown";
 		const timestamp = new Date().toISOString();
 
 		// Load state
@@ -232,17 +238,17 @@ export class SummaryGenerator {
 				durationMs = end - start;
 			}
 
-			const providerEvent = taskEvents.find(
-				(e) => e.metadata?.provider,
-			);
+			const providerEvent = taskEvents.find((e) => e.metadata?.provider);
 
-			const costEvent = taskEvents.find(
-				(e) => e.metadata?.costUsd,
-			);
+			const costEvent = taskEvents.find((e) => e.metadata?.costUsd);
 
 			results.push({
 				id: task.id,
-				status: task.status as "completed" | "failed" | "pending" | "in_progress",
+				status: task.status as
+					| "completed"
+					| "failed"
+					| "pending"
+					| "in_progress",
 				description: task.description,
 				durationMs,
 				provider: providerEvent?.metadata?.provider as string | undefined,
@@ -299,8 +305,14 @@ export class SummaryGenerator {
 		for (const event of events) {
 			if (event.type === "provider_fallback" || event.type === "fallback") {
 				fallbacks.push({
-					fromProvider: (event.payload.from as string) || event.payload.provider as string || "unknown",
-					toProvider: (event.payload.to as string) || event.payload.fallback as string || "unknown",
+					fromProvider:
+						(event.payload.from as string) ||
+						(event.payload.provider as string) ||
+						"unknown",
+					toProvider:
+						(event.payload.to as string) ||
+						(event.payload.fallback as string) ||
+						"unknown",
 					timestamp: event.timestamp,
 					taskId: event.taskId,
 				});
@@ -313,7 +325,10 @@ export class SummaryGenerator {
 	/**
 	 * Tracks files created and modified from events.
 	 */
-	private trackFiles(events: EventLog[]): { created: string[]; modified: string[] } {
+	private trackFiles(events: EventLog[]): {
+		created: string[];
+		modified: string[];
+	} {
 		const created: string[] = [];
 		const modified: string[] = [];
 
@@ -354,7 +369,7 @@ export class SummaryGenerator {
 
 			existing.taskCount += 1;
 			existing.totalTokens += event.metadata?.tokens?.total || 0;
-			existing.totalCostUsd += event.metadata?.costUsd as number || 0;
+			existing.totalCostUsd += (event.metadata?.costUsd as number) || 0;
 
 			statsMap.set(provider, existing);
 		}
@@ -407,11 +422,20 @@ export class SummaryGenerator {
 			lines.push(`| Task ID | Status | Duration | Provider | Cost |`);
 			lines.push(`|---------|--------|----------|----------|------|`);
 			for (const task of summary.tasks) {
-				const status = task.status === "completed" ? "✅" : task.status === "failed" ? "❌" : "⏳";
-				const duration = task.durationMs ? this.formatDuration(task.durationMs) : "N/A";
+				const status =
+					task.status === "completed"
+						? "✅"
+						: task.status === "failed"
+							? "❌"
+							: "⏳";
+				const duration = task.durationMs
+					? this.formatDuration(task.durationMs)
+					: "N/A";
 				const provider = task.provider || "N/A";
 				const cost = task.costUsd ? `$${task.costUsd.toFixed(4)}` : "N/A";
-				lines.push(`| ${task.id} | ${status} ${task.status} | ${duration} | ${provider} | ${cost} |`);
+				lines.push(
+					`| ${task.id} | ${status} ${task.status} | ${duration} | ${provider} | ${cost} |`,
+				);
 			}
 		}
 		lines.push(``);
@@ -423,9 +447,15 @@ export class SummaryGenerator {
 			lines.push(`## Usage Summary`);
 			lines.push(``);
 			if (summary.tokens) {
-				lines.push(`- **Prompt Tokens:** ${summary.tokens.prompt.toLocaleString()}`);
-				lines.push(`- **Completion Tokens:** ${summary.tokens.completion.toLocaleString()}`);
-				lines.push(`- **Total Tokens:** ${summary.tokens.total.toLocaleString()}`);
+				lines.push(
+					`- **Prompt Tokens:** ${summary.tokens.prompt.toLocaleString()}`,
+				);
+				lines.push(
+					`- **Completion Tokens:** ${summary.tokens.completion.toLocaleString()}`,
+				);
+				lines.push(
+					`- **Total Tokens:** ${summary.tokens.total.toLocaleString()}`,
+				);
 			}
 			if (summary.costUsd) {
 				lines.push(`- **Estimated Cost:** $${summary.costUsd.toFixed(4)}`);
@@ -440,7 +470,9 @@ export class SummaryGenerator {
 			lines.push(`## Fallbacks Activated`);
 			lines.push(``);
 			for (const fb of summary.fallbacks) {
-				lines.push(`- ${fb.timestamp}: ${fb.fromProvider} → ${fb.toProvider}${fb.taskId ? ` (task: ${fb.taskId})` : ""}`);
+				lines.push(
+					`- ${fb.timestamp}: ${fb.fromProvider} → ${fb.toProvider}${fb.taskId ? ` (task: ${fb.taskId})` : ""}`,
+				);
 			}
 			lines.push(``);
 		}
@@ -478,7 +510,9 @@ export class SummaryGenerator {
 			lines.push(`| Provider | Tasks | Tokens | Cost |`);
 			lines.push(`|----------|-------|--------|------|`);
 			for (const stat of summary.providers) {
-				lines.push(`| ${stat.provider} | ${stat.taskCount} | ${stat.totalTokens.toLocaleString()} | $${stat.totalCostUsd.toFixed(4)} |`);
+				lines.push(
+					`| ${stat.provider} | ${stat.taskCount} | ${stat.totalTokens.toLocaleString()} | $${stat.totalCostUsd.toFixed(4)} |`,
+				);
 			}
 			lines.push(``);
 		}
@@ -495,7 +529,9 @@ export class SummaryGenerator {
 	 * Generates a narrative conclusion for the summary.
 	 */
 	private generateNarrative(summary: RunSummary): string {
-		const completed = summary.tasks.filter((t) => t.status === "completed").length;
+		const completed = summary.tasks.filter(
+			(t) => t.status === "completed",
+		).length;
 		const failed = summary.tasks.filter((t) => t.status === "failed").length;
 		const total = summary.tasks.length;
 		const fallbackCount = summary.fallbacks.length;

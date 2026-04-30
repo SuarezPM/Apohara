@@ -1,0 +1,2 @@
+{"id":"7072674a-1a8d-4224-9351-79ba65922c4b","timestamp":"2026-04-30T15:05:20.307Z","type":"auto_command_started","severity":"info","payload":{"prompt":"hello world","worktreePoolSize":3}}
+{"id":"3f2238e7-faf8-4dc1-9b45-4b2bf9179b90","timestamp":"2026-04-30T15:05:24.909Z","type":"auto_command_failed","severity":"error","payload":{"prompt":"hello world","error":"Unable to connect. Is the computer able to access the url?"}}

@@ -1,10 +1,10 @@
+import type { LLMMessage } from "../providers/router";
+import { type ProviderId, ProviderRouter } from "../providers/router";
 import type { DecomposedTask } from "./decomposer";
 import { IsolationEngine, type IsolationResult } from "./isolation";
 import { EventLedger } from "./ledger";
 import { StateMachine } from "./state";
 import type { Task } from "./types";
-import { ProviderRouter, type ProviderId } from "../providers/router";
-import type { LLMMessage } from "../providers/router";
 
 export interface SchedulerConfig {
 	worktreePoolSize: number;
@@ -223,7 +223,12 @@ export class ParallelScheduler {
 	public async executeTaskWithFallback(
 		task: DecomposedTask,
 		messages: LLMMessage[],
-	): Promise<{ output: string; error?: string; fallbackOccurred: boolean; finalProvider?: ProviderId }> {
+	): Promise<{
+		output: string;
+		error?: string;
+		fallbackOccurred: boolean;
+		finalProvider?: ProviderId;
+	}> {
 		let fallbackOccurred = false;
 		let lastError: string | undefined;
 		let finalProvider: ProviderId | undefined;
@@ -231,13 +236,21 @@ export class ParallelScheduler {
 		try {
 			const response = await this.providerRouter.completion({ messages });
 			finalProvider = response.provider;
-			return { output: response.content, fallbackOccurred: false, finalProvider };
+			return {
+				output: response.content,
+				fallbackOccurred: false,
+				finalProvider,
+			};
 		} catch (error) {
 			lastError = error instanceof Error ? error.message : String(error);
-			
+
 			// Check if this was a retryable error that triggered fallback
 			const retryableError = lastError.toLowerCase();
-			if (retryableError.includes("429") || retryableError.includes("timeout") || retryableError.includes("network")) {
+			if (
+				retryableError.includes("429") ||
+				retryableError.includes("timeout") ||
+				retryableError.includes("network")
+			) {
 				fallbackOccurred = true;
 				// Log the fallback in EventLedger
 				await this.ledger.log(
@@ -251,9 +264,12 @@ export class ParallelScheduler {
 					task.id,
 				);
 			}
-			
+
 			// Check if all providers are exhausted
-			if (retryableError.includes("exhausted") || retryableError.includes("unavailable")) {
+			if (
+				retryableError.includes("exhausted") ||
+				retryableError.includes("unavailable")
+			) {
 				await this.ledger.log(
 					"task_exhausted",
 					{
@@ -266,11 +282,11 @@ export class ParallelScheduler {
 				);
 			}
 
-			return { 
-				output: "", 
-				error: lastError, 
+			return {
+				output: "",
+				error: lastError,
 				fallbackOccurred,
-				finalProvider: this.providerRouter.fallback(undefined)
+				finalProvider: this.providerRouter.fallback(undefined),
 			};
 		}
 	}
@@ -286,8 +302,10 @@ export class ParallelScheduler {
 		reason: string,
 	): Promise<void> {
 		// Console notification with the specified format
-		console.warn(`⚠ ${fromProvider} ${reason} → reasignando a ${toProvider}...`);
-		
+		console.warn(
+			`⚠ ${fromProvider} ${reason} → reasignando a ${toProvider}...`,
+		);
+
 		// Log to EventLedger
 		await this.ledger.log(
 			"provider_fallback",

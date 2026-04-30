@@ -5,19 +5,10 @@
       "id": "check-active",
       "description": "Check active tasks",
       "status": "in_progress",
-      "createdAt": "2026-04-30T14:53:42.956Z",
-      "updatedAt": "2026-04-30T14:53:42.956Z"
-    },
-    {
-      "id": "T1",
-      "description": "Independent task 1",
-      "status": "completed",
-      "createdAt": "2026-04-30T14:54:06.802Z",
-      "updatedAt": "2026-04-30T14:54:06.802Z"
+      "createdAt": "2026-04-30T15:04:52.485Z",
+      "updatedAt": "2026-04-30T15:04:52.485Z"
     }
   ],
   "status": "running",
-  "failedProviderTimestamps": {
-    "opencode-go": 1777560846803
-  }
+  "failedProviderTimestamps": {}
 }

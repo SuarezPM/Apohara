@@ -160,19 +160,25 @@ export class ProviderRouter {
 			);
 
 			// Schedule cooldown removal
-			setTimeout(() => {
-				const h = this.providerHealth.get(provider);
-				if (h) {
-					h.isOnCooldown = false;
-					h.failureCount = 0;
-					this.logEvent(
-						"cooldown_expired",
-						{ provider, message: `Provider ${provider} cooldown expired, ready for requests` },
-						"info",
-						{ provider },
-					);
-				}
-			}, this.cooldownMinutes * 60 * 1000);
+			setTimeout(
+				() => {
+					const h = this.providerHealth.get(provider);
+					if (h) {
+						h.isOnCooldown = false;
+						h.failureCount = 0;
+						this.logEvent(
+							"cooldown_expired",
+							{
+								provider,
+								message: `Provider ${provider} cooldown expired, ready for requests`,
+							},
+							"info",
+							{ provider },
+						);
+					}
+				},
+				this.cooldownMinutes * 60 * 1000,
+			);
 		}
 	}
 
@@ -273,7 +279,7 @@ export class ProviderRouter {
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
 				const response = await this.callProvider(currentProvider, req.messages);
-				
+
 				// Success - record and return
 				this.recordProviderSuccess(currentProvider);
 				return response;
