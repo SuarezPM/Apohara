@@ -1,0 +1,2 @@
+{"id":"74949f86-9243-46fd-b436-ffbcb1f00463","timestamp":"2026-04-30T18:53:59.003Z","type":"role_assignment","severity":"info","taskId":"task-b","payload":{"message":"Task assigned to role: execution","taskId":"task-b","role":"execution"},"metadata":{"role":"execution"}}
+{"id":"b3463282-291f-41d8-9ea2-80861d0bdd48","timestamp":"2026-04-30T18:53:59.003Z","type":"provider_selected","severity":"info","payload":{"message":"Provider opencode-go selected for role execution","role":"execution","provider":"opencode-go"},"metadata":{"role":"execution","provider":"opencode-go"}}

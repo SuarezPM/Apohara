@@ -1,0 +1,4 @@
+{"id":"69a89eb1-c52d-4717-8174-178197bca3e5","timestamp":"2026-04-30T18:53:53.072Z","type":"dispatch","taskId":"test-task-1","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"bfb5b0ac-a5e8-4758-822c-78aea81cef9e","timestamp":"2026-04-30T18:53:53.073Z","type":"dispatch","taskId":"test-task-1","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"23f5f325-a092-4ca1-8f20-744cc76d458d","timestamp":"2026-04-30T18:53:53.073Z","type":"start","taskId":"test-task-1","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"868203e1-6d69-4abf-97f1-19f03021b682","timestamp":"2026-04-30T18:53:54.996Z","type":"failure","taskId":"test-task-1","role":"execution","provider":"opencode-go","retries":0,"durationMs":1923,"error":"Unable to connect. Is the computer able to access the url?","status":"failed"}

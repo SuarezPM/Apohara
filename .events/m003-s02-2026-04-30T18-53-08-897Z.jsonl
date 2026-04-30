@@ -1,0 +1,8 @@
+{"id":"8c17c26f-a97e-4660-bb6f-bb02af3b5e1d","timestamp":"2026-04-30T18:53:08.897Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"55165044-09af-494a-8778-1d181ef0a59e","timestamp":"2026-04-30T18:53:08.898Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"d8ba6966-3b53-4f75-ad9e-646bc912fb70","timestamp":"2026-04-30T18:53:08.898Z","type":"start","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"d9acef0f-8352-4daa-9af9-31229b3763c6","timestamp":"2026-04-30T18:53:10.896Z","type":"failure","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"durationMs":1998,"error":"Unable to connect. Is the computer able to access the url?","status":"failed"}
+{"id":"08767083-833e-4dc3-a524-e999829f5fab","timestamp":"2026-04-30T18:53:10.896Z","type":"dispatch","taskId":"task-b","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"cd0433c2-94b0-4ab2-98ca-d12a0f268e2a","timestamp":"2026-04-30T18:53:10.896Z","type":"dispatch","taskId":"task-b","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"7ca793a0-0bcf-458d-b9d2-33db98a2f602","timestamp":"2026-04-30T18:53:10.896Z","type":"start","taskId":"task-b","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"d04096be-7ab2-4d36-a437-dc8eed62cece","timestamp":"2026-04-30T18:53:10.896Z","type":"failure","taskId":"task-b","role":"execution","provider":"opencode-go","retries":0,"durationMs":0,"error":"Was there a typo in the url or port?","status":"failed"}
