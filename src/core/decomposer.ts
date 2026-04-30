@@ -1,0 +1,104 @@
+import { type LLMMessage, ProviderRouter } from "../providers/router";
+
+export interface DecomposedTask {
+	id: string;
+	description: string;
+	estimatedComplexity: "low" | "medium" | "high";
+	dependencies: string[];
+}
+
+export interface DecompositionResult {
+	tasks: DecomposedTask[];
+	originalPrompt: string;
+}
+
+export class TaskDecomposer {
+	private router: ProviderRouter;
+
+	constructor(router?: ProviderRouter) {
+		this.router = router || new ProviderRouter();
+	}
+
+	/**
+	 * Decomposes a high-level prompt into atomic tasks using an LLM.
+	 */
+	public async decompose(prompt: string): Promise<DecompositionResult> {
+		const messages: LLMMessage[] = [
+			{
+				role: "system",
+				content: `You are a task decomposition engine. Given a user request, break it down into atomic, actionable tasks.
+
+Output format: Return a JSON object with a "tasks" array. Each task must have:
+- id: A short kebab-case identifier (e.g., "setup-deps", "impl-core")
+- description: Clear description of what to do
+- estimatedComplexity: "low", "medium", or "high"
+- dependencies: Array of task IDs that must complete before this one
+
+Rules:
+- Tasks should be independently implementable when dependencies are met
+- Prefer many small tasks over few large ones
+- Include setup, implementation, and verification tasks
+- Dependencies must reference valid task IDs
+
+Example:
+{
+  "tasks": [
+    {
+      "id": "setup-project",
+      "description": "Initialize project structure and dependencies",
+      "estimatedComplexity": "low",
+      "dependencies": []
+    },
+    {
+      "id": "impl-core",
+      "description": "Implement the core functionality",
+      "estimatedComplexity": "high",
+      "dependencies": ["setup-project"]
+    }
+  ]
+}`,
+			},
+			{
+				role: "user",
+				content: `Decompose this request into tasks: ${prompt}`,
+			},
+		];
+
+		const response = await this.router.completion({ messages });
+
+		// Parse the LLM response - it should be JSON
+		let parsed: { tasks: DecomposedTask[] };
+		try {
+			// Try to extract JSON from the response (LLM might wrap it in markdown)
+			const content = response.content.trim();
+			const jsonMatch = content.match(/```json\s*([\s\S]*?)```/) ||
+				content.match(/```\s*([\s\S]*?)```/) || [null, content];
+			const jsonStr = jsonMatch[1] || content;
+			parsed = JSON.parse(jsonStr) as { tasks: DecomposedTask[] };
+		} catch (_error) {
+			throw new Error(
+				`Failed to parse LLM decomposition response: ${response.content}`,
+			);
+		}
+
+		// Validate the structure
+		if (!parsed.tasks || !Array.isArray(parsed.tasks)) {
+			throw new Error("Invalid decomposition: missing tasks array");
+		}
+
+		// Validate dependencies reference existing tasks
+		const taskIds = new Set(parsed.tasks.map((t) => t.id));
+		for (const task of parsed.tasks) {
+			for (const dep of task.dependencies) {
+				if (!taskIds.has(dep)) {
+					throw new Error(`Task ${task.id} has invalid dependency: ${dep}`);
+				}
+			}
+		}
+
+		return {
+			tasks: parsed.tasks,
+			originalPrompt: prompt,
+		};
+	}
+}

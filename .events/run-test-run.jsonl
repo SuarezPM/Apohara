@@ -1,0 +1,1 @@
+{"id":"862e2fb4-d5dc-43ba-a6fe-c062b8d39768","timestamp":"2026-04-30T13:03:02.910Z","type":"llm_request","severity":"info","taskId":"T02","payload":{"prompt":"Hello"},"metadata":{"provider":"opencode-go","model":"opencode-go/kimi-k2.5","tokens":{"prompt":10,"completion":5,"total":15},"costUsd":0.001,"durationMs":250}}
