@@ -1,4 +1,5 @@
 import { type LLMMessage, ProviderRouter } from "../providers/router";
+import { routeTaskWithFallback } from "./agent-router";
 import type { TaskRole } from "./types";
 
 export interface DecomposedTask {
@@ -77,7 +78,10 @@ Example:
 			},
 		];
 
-		const response = await this.router.completion({ messages });
+		// Use agent-router for role-based provider selection
+		// Decomposition is a "planning" task, which maps to Gemini
+		const result = await routeTaskWithFallback("planning", { messages }, this.router);
+		const response = result.response;
 
 		// Parse the LLM response - it should be JSON
 		let parsed: { tasks: DecomposedTask[] };

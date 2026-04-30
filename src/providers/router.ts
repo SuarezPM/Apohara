@@ -11,12 +11,12 @@ export interface LLMMessage {
 
 export interface LLMRequest {
 	messages: LLMMessage[];
-	provider?: "opencode-go" | "deepseek"; // Defaults to opencode-go
+	provider?: "opencode-go" | "deepseek" | "gemini" | "perplexity"; // Defaults to opencode-go
 }
 
 export interface LLMResponse {
 	content: string;
-	provider: "opencode-go" | "deepseek";
+	provider: "opencode-go" | "deepseek" | "gemini" | "perplexity";
 	model: string;
 	usage: {
 		promptTokens: number;
@@ -28,12 +28,14 @@ export interface LLMResponse {
 export interface RouterConfig {
 	opencodeApiKey?: string;
 	deepseekApiKey?: string;
+	geminiApiKey?: string;
+	perplexityApiKey?: string;
 	cooldownMinutes?: number;
 	maxFailuresBeforeCooldown?: number;
 	simulateFailure?: boolean; // For demo/testing - triggers 429 on first call
 }
 
-export type ProviderId = "opencode-go" | "deepseek";
+export type ProviderId = "opencode-go" | "deepseek" | "gemini" | "perplexity";
 
 interface ProviderHealth {
 	failureCount: number;
@@ -50,9 +52,15 @@ export class ProviderRouter {
 		"https://api.opencode.com/v1/chat/completions";
 	private readonly DEEPSEEK_API_URL =
 		"https://api.deepseek.com/v1/chat/completions";
+	private readonly GEMINI_API_URL =
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+	private readonly PERPLEXITY_API_URL =
+		"https://api.perplexity.ai/chat/completions";
 
 	private opencodeApiKey: string;
 	private deepseekApiKey: string;
+	private geminiApiKey: string;
+	private perplexityApiKey: string;
 
 	// Health tracking per provider
 	private providerHealth: Map<ProviderId, ProviderHealth> = new Map();
@@ -72,6 +80,8 @@ export class ProviderRouter {
 	constructor(cfg?: RouterConfig) {
 		this.opencodeApiKey = cfg?.opencodeApiKey || config.OPENCODE_API_KEY;
 		this.deepseekApiKey = cfg?.deepseekApiKey || config.DEEPSEEK_API_KEY;
+		this.geminiApiKey = cfg?.geminiApiKey || config.GEMINI_API_KEY;
+		this.perplexityApiKey = cfg?.perplexityApiKey || config.PERPLEXITY_API_KEY;
 		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5; // Default 5 minutes
 		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3; // Default 3 failures
 		this.simulateFailure = cfg?.simulateFailure ?? false;
@@ -83,6 +93,16 @@ export class ProviderRouter {
 			isOnCooldown: false,
 		});
 		this.providerHealth.set("deepseek", {
+			failureCount: 0,
+			lastFailureTime: null,
+			isOnCooldown: false,
+		});
+		this.providerHealth.set("gemini", {
+			failureCount: 0,
+			lastFailureTime: null,
+			isOnCooldown: false,
+		});
+		this.providerHealth.set("perplexity", {
 			failureCount: 0,
 			lastFailureTime: null,
 			isOnCooldown: false,
@@ -198,7 +218,7 @@ export class ProviderRouter {
 	 * Skips providers on cooldown.
 	 */
 	public fallback(fromProvider?: ProviderId): ProviderId {
-		const providers: ProviderId[] = ["opencode-go", "deepseek"];
+		const providers: ProviderId[] = ["opencode-go", "deepseek", "gemini", "perplexity"];
 
 		// Try the other provider first (round-robin)
 		const startIdx = fromProvider
@@ -340,10 +360,18 @@ export class ProviderRouter {
 		provider: ProviderId,
 		messages: LLMMessage[],
 	): Promise<LLMResponse> {
-		if (provider === "opencode-go") {
-			return this.callOpenCode(messages);
+		switch (provider) {
+			case "opencode-go":
+				return this.callOpenCode(messages);
+			case "deepseek":
+				return this.callDeepSeek(messages);
+			case "gemini":
+				return this.callGemini(messages);
+			case "perplexity":
+				return this.callPerplexity(messages);
+			default:
+				throw new Error(`Unknown provider: ${provider}`);
 		}
-		return this.callDeepSeek(messages);
 	}
 
 	private async callOpenCode(messages: LLMMessage[]): Promise<LLMResponse> {
@@ -410,6 +438,74 @@ export class ProviderRouter {
 			content: data.choices?.[0]?.message?.content || "",
 			provider: "deepseek",
 			model: "deepseek-coder",
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callGemini(messages: LLMMessage[]): Promise<LLMResponse> {
+		const response = await fetch(`${this.GEMINI_API_URL}?key=${this.geminiApiKey}`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				contents: messages.map((msg) => ({
+					role: msg.role === "assistant" ? "model" : msg.role,
+					parts: [{ text: msg.content }],
+				})),
+			}),
+			signal: AbortSignal.timeout(30000), // 30 second timeout
+		});
+
+		if (!response.ok) {
+			throw new Error(
+				`Gemini API Error: ${response.status} ${response.statusText}`,
+			);
+		}
+
+		const data = await response.json();
+		const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+		return {
+			content,
+			provider: "gemini",
+			model: "gemini-2.0-flash",
+			usage: {
+				promptTokens: data.usageMetadata?.promptTokenCount || 0,
+				completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
+				totalTokens: data.usageMetadata?.totalTokenCount || 0,
+			},
+		};
+	}
+
+	private async callPerplexity(messages: LLMMessage[]): Promise<LLMResponse> {
+		const response = await fetch(this.PERPLEXITY_API_URL, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.perplexityApiKey}`,
+			},
+			body: JSON.stringify({
+				model: "llama-3.1-sonar-large-128k-chat",
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000), // 30 second timeout
+		});
+
+		if (!response.ok) {
+			throw new Error(
+				`Perplexity API Error: ${response.status} ${response.statusText}`,
+			);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "perplexity",
+			model: "llama-3.1-sonar-large-128k-chat",
 			usage: {
 				promptTokens: data.usage?.prompt_tokens || 0,
 				completionTokens: data.usage?.completion_tokens || 0,
