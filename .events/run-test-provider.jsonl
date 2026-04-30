@@ -1,2 +1,0 @@
-{"id":"f5df76ec-6fba-4c48-a206-39baecbecc38","timestamp":"2026-04-30T19:10:16.225Z","type":"provider_selected","severity":"info","taskId":"task-1","payload":{"message":"Provider selected","role":"execution"},"metadata":{"role":"execution","provider":"opencode-go"}}
-{"id":"817e8ff2-f124-44ab-a10a-c24d9be3494c","timestamp":"2026-04-30T19:10:59.990Z","type":"provider_selected","severity":"info","taskId":"task-1","payload":{"message":"Provider selected","role":"execution"},"metadata":{"role":"execution","provider":"opencode-go"}}

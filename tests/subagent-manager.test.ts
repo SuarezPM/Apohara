@@ -45,10 +45,10 @@ describe("SubagentManager", () => {
 		routeTaskSpy.mockImplementation(
 			async (role: TaskRole) => {
 				const providerMap: Record<TaskRole, ProviderId> = {
-					research: "perplexity",
-					planning: "gemini",
-					execution: "opencode-go",
-					verification: "deepseek",
+					research: "tavily",
+					planning: "moonshot-k2.6",
+					execution: "deepseek-v4",
+					verification: "deepseek-v4",
 				};
 				return {
 					provider: providerMap[role],

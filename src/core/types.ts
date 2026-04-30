@@ -1,27 +1,218 @@
 // Role types for task routing (role: research, planning, execution, verification)
 export type TaskRole = "research" | "planning" | "execution" | "verification";
 
-// All supported LLM provider IDs
+// All supported LLM providers and models
+// Based on user's model list: GLM-5.1, GLM-5, Kimi K2.5, K2.6, MiMo-V2 series, Qwen3.5/3.6 Plus, MiniMax M2.5/M2.7, DeepSeek V4
 export type ProviderId =
-	| "opencode-go"
-	| "deepseek"
-	| "perplexity"
-	| "gemini";
+	| "opencode-go"           // OpenCode Go (Kimi K2.5) - Primary coding
+	| "deepseek-v4"          // DeepSeek V4 Pro/Flash - Reasoning & coding
+	| "deepseek"             // DeepSeek Coder (fallback)
+	| "tavily"               // Tavily - Web search for AI agents
+	| "gemini"               // Gemini 2.0 - Planning
+	| "moonshot-k2.5"        // Kimi K2.5 (Moonshot)
+	| "moonshot-k2.6"        // Kimi K2.6 (Moonshot) - Latest & most powerful
+	| "xiaomi-mimo"          // Xiaomi MiMo V2 series
+	| "qwen3.5-plus"         // Qwen 3.5 Plus (Alibaba)
+	| "qwen3.6-plus"         // Qwen 3.6 Plus (Alibaba) - Latest
+	| "minimax-m2.5"         // MiniMax M2.5
+	| "minimax-m2.7"         // MiniMax M2.7 - Latest from MiniMax
+	| "glm-deepinfra"        // GLM via DeepInfra
+	| "glm-fireworks"        // GLM via Fireworks AI
+	| "glm-zai";             // GLM via Z.ai
 
-// Role-to-provider mapping constants
+// Model capabilities for intelligent routing
+export interface ModelCapability {
+	id: ProviderId;
+	name: string;
+	provider: string; // Company name
+	bestFor: TaskRole[]; // Primary roles this model excels at
+	strengths: string[];
+	contextWindow: number; // Max tokens
+	supportsVision: boolean;
+}
+
+// All available models with their capabilities
+export const MODELS: ModelCapability[] = [
+	// DeepSeek V4 - Most powerful for reasoning and coding
+	{
+		id: "deepseek-v4",
+		name: "DeepSeek V4 Pro",
+		provider: "DeepSeek",
+		bestFor: ["execution", "verification"],
+		strengths: ["code generation", "reasoning", "debugging", "low latency"],
+		contextWindow: 128000,
+		supportsVision: false,
+	},
+	// Kimi K2.6 - Latest and very powerful
+	{
+		id: "moonshot-k2.6",
+		name: "Kimi K2.6",
+		provider: "Moonshot AI",
+		bestFor: ["execution", "planning"],
+		strengths: ["long context", "code generation", "reasoning"],
+		contextWindow: 200000,
+		supportsVision: true,
+	},
+	{
+		id: "moonshot-k2.5",
+		name: "Kimi K2.5",
+		provider: "Moonshot AI",
+		bestFor: ["execution", "planning"],
+		strengths: ["code generation", "reasoning"],
+		contextWindow: 128000,
+		supportsVision: true,
+	},
+	// Qwen 3.6 Plus - Latest from Alibaba
+	{
+		id: "qwen3.6-plus",
+		name: "Qwen 3.6 Plus",
+		provider: "Alibaba Cloud",
+		bestFor: ["planning", "execution"],
+		strengths: ["code generation", "multilingual", "reasoning"],
+		contextWindow: 131072,
+		supportsVision: true,
+	},
+	{
+		id: "qwen3.5-plus",
+		name: "Qwen 3.5 Plus",
+		provider: "Alibaba Cloud",
+		bestFor: ["planning", "execution"],
+		strengths: ["code generation", "cost-effective"],
+		contextWindow: 32768,
+		supportsVision: false,
+	},
+	// MiniMax M2.7 - Latest
+	{
+		id: "minimax-m2.7",
+		name: "MiniMax M2.7",
+		provider: "MiniMax",
+		bestFor: ["execution", "planning"],
+		strengths: ["code generation", "reasoning"],
+		contextWindow: 100000,
+		supportsVision: false,
+	},
+	{
+		id: "minimax-m2.5",
+		name: "MiniMax M2.5",
+		provider: "MiniMax",
+		bestFor: ["execution"],
+		strengths: ["code generation"],
+		contextWindow: 100000,
+		supportsVision: false,
+	},
+	// Xiaomi MiMo
+	{
+		id: "xiaomi-mimo",
+		name: "Xiaomi MiMo V2",
+		provider: "Xiaomi",
+		bestFor: ["execution"],
+		strengths: ["code generation", "efficient"],
+		contextWindow: 32768,
+		supportsVision: false,
+	},
+	// GLM models via different providers
+	{
+		id: "glm-deepinfra",
+		name: "GLM-5 via DeepInfra",
+		provider: "DeepInfra",
+		bestFor: ["planning"],
+		strengths: ["multilingual", "fast"],
+		contextWindow: 128000,
+		supportsVision: true,
+	},
+	{
+		id: "glm-fireworks",
+		name: "GLM-5 via Fireworks",
+		provider: "Fireworks AI",
+		bestFor: ["planning"],
+		strengths: ["multilingual", "fast"],
+		contextWindow: 128000,
+		supportsVision: true,
+	},
+	{
+		id: "glm-zai",
+		name: "GLM-5 via Z.ai",
+		provider: "Z.ai",
+		bestFor: ["planning"],
+		strengths: ["multilingual", "fast"],
+		contextWindow: 128000,
+		supportsVision: true,
+	},
+	// Tavily - Real-time web search for AI agents (replaces Perplexity)
+	{
+		id: "tavily",
+		name: "Tavily Search API",
+		provider: "Tavily",
+		bestFor: ["research"],
+		strengths: ["real-time web search", "web extraction", "research", "up-to-date info", "AI-optimized"],
+		contextWindow: 10000, // Optimizado para resultados de búsqueda
+		supportsVision: false,
+	},
+	// Legacy providers
+	{
+		id: "opencode-go",
+		name: "OpenCode Go (Kimi K2.5)",
+		provider: "OpenCode",
+		bestFor: ["execution"],
+		strengths: ["code generation", "specialized for coding"],
+		contextWindow: 128000,
+		supportsVision: true,
+	},
+	{
+		id: "deepseek",
+		name: "DeepSeek Coder",
+		provider: "DeepSeek",
+		bestFor: ["verification", "execution"],
+		strengths: ["code generation", "debugging"],
+		contextWindow: 16384,
+		supportsVision: false,
+	},
+	{
+		id: "perplexity",
+		name: "Perplexity (deprecated)",
+		provider: "Perplexity",
+		bestFor: [],
+		strengths: ["use tavily instead"],
+		contextWindow: 128000,
+		supportsVision: false,
+	},
+	{
+		id: "gemini",
+		name: "Gemini 2.0 Flash",
+		provider: "Google",
+		bestFor: ["planning", "research"],
+		strengths: ["fast", "multimodal", "grounding"],
+		contextWindow: 1000000,
+		supportsVision: true,
+	},
+];
+
+// Get model capability by ID
+export function getModelById(id: ProviderId): ModelCapability | undefined {
+	return MODELS.find((m) => m.id === id);
+}
+
+// Get best models for a specific role (sorted by capability)
+export function getBestModelsForRole(role: TaskRole): ModelCapability[] {
+	return MODELS.filter((m) => m.bestFor.includes(role))
+		.sort((a, b) => b.contextWindow - a.contextWindow);
+}
+
+// Role-to-provider mapping with intelligent selection
+// Uses the most powerful model for each role based on the model list
 export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
-	research: "perplexity",
-	planning: "gemini",
-	execution: "opencode-go",
-	verification: "deepseek",
+	research: "tavily",        // Tavily for real-time web search/research
+	planning: "moonshot-k2.6",    // Kimi K2.6 for planning (best reasoning)
+	execution: "deepseek-v4",     // DeepSeek V4 for code (most powerful)
+	verification: "deepseek-v4",  // DeepSeek V4 for verification
 };
 
-// Fallback provider order for each role (primary + fallback)
+// Fallback provider order for each role (primary + fallbacks)
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
-	research: ["perplexity", "gemini"],
-	planning: ["gemini", "deepseek"],
-	execution: ["opencode-go", "deepseek"],
-	verification: ["deepseek", "opencode-go"],
+	research: ["tavily", "gemini", "moonshot-k2.6"],
+	planning: ["moonshot-k2.6", "qwen3.6-plus", "gemini", "glm-deepinfra"],
+	execution: ["deepseek-v4", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7"],
+	verification: ["deepseek-v4", "deepseek", "moonshot-k2.5"],
 };
 
 export interface Task {
@@ -45,6 +236,9 @@ export interface EventLog {
 	metadata?: {
 		provider?: ProviderId;
 		model?: string;
+		modelName?: string;        // Full model name (e.g., "DeepSeek V4 Pro")
+		modelProvider?: string;    // Company (e.g., "DeepSeek")
+		contextWindow?: number;     // Max context tokens
 		tokens?: { prompt: number; completion: number; total: number };
 		costUsd?: number;
 		durationMs?: number;
@@ -52,6 +246,7 @@ export interface EventLog {
 		fromProvider?: ProviderId;
 		toProvider?: ProviderId;
 		errorReason?: string;
+		fallbackProviders?: ProviderId[]; // List of fallback providers attempted
 	};
 }
 

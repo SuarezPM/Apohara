@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { config } from "../core/config";
-import type { EventLog, EventSeverity } from "../core/types";
+import type { EventLog, EventSeverity, ProviderId } from "../core/types";
 
 export interface LLMMessage {
 	role: "system" | "user" | "assistant";
@@ -11,12 +11,12 @@ export interface LLMMessage {
 
 export interface LLMRequest {
 	messages: LLMMessage[];
-	provider?: "opencode-go" | "deepseek" | "gemini" | "perplexity"; // Defaults to opencode-go
+	provider?: ProviderId;
 }
 
 export interface LLMResponse {
 	content: string;
-	provider: "opencode-go" | "deepseek" | "gemini" | "perplexity";
+	provider: ProviderId;
 	model: string;
 	usage: {
 		promptTokens: number;
@@ -26,16 +26,89 @@ export interface LLMResponse {
 }
 
 export interface RouterConfig {
+	// OpenCode
 	opencodeApiKey?: string;
+	// DeepSeek
 	deepseekApiKey?: string;
+	// Google
 	geminiApiKey?: string;
-	perplexityApiKey?: string;
+	// Tavily - Real-time web search (replaces Perplexity for research)
+	tavilyApiKey?: string;
+	// Moonshot (Kimi)
+	moonshotApiKey?: string;
+	// Xiaomi (MiMo)
+	xiaomiApiKey?: string;
+	// Alibaba (Qwen)
+	alibabaApiKey?: string;
+	// MiniMax
+	minimaxApiKey?: string;
+	// DeepInfra
+	deepinfraApiKey?: string;
+	// Fireworks
+	fireworksApiKey?: string;
+	// Z.ai
+	zaiApiKey?: string;
+	
 	cooldownMinutes?: number;
 	maxFailuresBeforeCooldown?: number;
-	simulateFailure?: boolean; // For demo/testing - triggers 429 on first call
+	simulateFailure?: boolean;
 }
 
-export type ProviderId = "opencode-go" | "deepseek" | "gemini" | "perplexity";
+// Re-export ProviderId from types for external use
+export type { ProviderId } from "../core/types";
+
+/**
+ * Provider API endpoints - grouped by provider
+ */
+const API_ENDPOINTS = {
+	// OpenCode
+	"opencode-go": "https://api.opencode.com/v1/chat/completions",
+	// DeepSeek
+	deepseek: "https://api.deepseek.com/v1/chat/completions",
+	"deepseek-v4": "https://api.deepseek.com/v1/chat/completions",
+	// Google
+	gemini: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+	// Tavily - Real-time web search for AI agents
+	tavily: "https://api.tavily.com/search",
+	// Moonshot (Kimi)
+	"moonshot-k2.5": "https://api.moonshot.cn/v1/chat/completions",
+	"moonshot-k2.6": "https://api.moonshot.cn/v1/chat/completions",
+	// Xiaomi (MiMo)
+	"xiaomi-mimo": "https://api.mimi.finance/v1/chat/completions",
+	// Alibaba (Qwen)
+	"qwen3.5-plus": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
+	"qwen3.6-plus": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
+	// MiniMax
+	"minimax-m2.5": "https://api.minimax.chat/v1/text/chatcompletion_v2",
+	"minimax-m2.7": "https://api.minimax.chat/v1/text/chatcompletion_v2",
+	// DeepInfra
+	"glm-deepinfra": "https://api.deepinfra.com/v1/chat/completions",
+	// Fireworks
+	"glm-fireworks": "https://api.fireworks.ai/v1/chat/completions",
+	// Z.ai
+	"glm-zai": "https://api.z-ai.cloud/v1/chat/completions",
+};
+
+/**
+ * Model names for each provider
+ */
+const MODEL_NAMES: Record<ProviderId, string> = {
+	"opencode-go": "opencode-go/kimi-k2.5",
+	deepseek: "deepseek-coder",
+	"deepseek-v4": "deepseek-chat",
+	gemini: "gemini-2.0-flash",
+	tavily: "tavily-search",
+	"moonshot-k2.5": "kimi-k2.5",
+	"moonshot-k2.6": "kimi-k2.6",
+	"xiaomi-mimo": "MiMo-V2-8B",
+	"qwen3.5-plus": "qwen-plus",
+	"qwen3.6-plus": "qwen-plus",
+	"minimax-m2.5": "MiniMax-M2.5",
+	"minimax-m2.7": "MiniMax-M2.7",
+	"glm-deepinfra": "THUDM/glm-4-9b-chat",
+	"glm-fireworks": "THUDM/glm-4-9b-chat",
+	"glm-zai": "THUDM/glm-4-9b-chat",
+};
 
 interface ProviderHealth {
 	failureCount: number;
@@ -45,22 +118,26 @@ interface ProviderHealth {
 
 /**
  * Routes requests to LLM providers with automatic fallback on failures.
+ * Supports 15+ models including DeepSeek V4, Kimi K2.6, Qwen 3.6, MiniMax, etc.
  * Tracks provider health and implements cooldown mechanism after consecutive failures.
  */
 export class ProviderRouter {
-	private readonly OPENCODE_API_URL =
-		"https://api.opencode.com/v1/chat/completions";
-	private readonly DEEPSEEK_API_URL =
-		"https://api.deepseek.com/v1/chat/completions";
-	private readonly GEMINI_API_URL =
-		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-	private readonly PERPLEXITY_API_URL =
-		"https://api.perplexity.ai/chat/completions";
-
+	// Provider endpoints
+	private readonly API_URLS = API_ENDPOINTS;
+	
+	// API Keys
 	private opencodeApiKey: string;
 	private deepseekApiKey: string;
 	private geminiApiKey: string;
-	private perplexityApiKey: string;
+	private tavilyApiKey: string;
+	private moonshotApiKey: string;
+	private xiaomiApiKey: string;
+	private alibabaApiKey: string;
+	private minimaxApiKey: string;
+	private deepinfraApiKey: string;
+	private fireworksApiKey: string;
+	private zaiApiKey: string;
+	private tavilyApiKey: string;
 
 	// Health tracking per provider
 	private providerHealth: Map<ProviderId, ProviderHealth> = new Map();
@@ -78,35 +155,39 @@ export class ProviderRouter {
 	private failureSimulated = false;
 
 	constructor(cfg?: RouterConfig) {
+		// Initialize all API keys
 		this.opencodeApiKey = cfg?.opencodeApiKey || config.OPENCODE_API_KEY;
 		this.deepseekApiKey = cfg?.deepseekApiKey || config.DEEPSEEK_API_KEY;
 		this.geminiApiKey = cfg?.geminiApiKey || config.GEMINI_API_KEY;
-		this.perplexityApiKey = cfg?.perplexityApiKey || config.PERPLEXITY_API_KEY;
-		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5; // Default 5 minutes
-		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3; // Default 3 failures
+		this.tavilyApiKey = cfg?.tavilyApiKey || config.TAVILY_API_KEY || "";
+		this.moonshotApiKey = cfg?.moonshotApiKey || config.MOONSHOT_API_KEY || "";
+		this.xiaomiApiKey = cfg?.xiaomiApiKey || config.XIAOMI_API_KEY || "";
+		this.alibabaApiKey = cfg?.alibabaApiKey || config.ALIBABA_API_KEY || "";
+		this.minimaxApiKey = cfg?.minimaxApiKey || config.MINIMAX_API_KEY || "";
+		this.deepinfraApiKey = cfg?.deepinfraApiKey || config.DEEPINFRA_API_KEY || "";
+		this.fireworksApiKey = cfg?.fireworksApiKey || config.FIREWORKS_API_KEY || "";
+		this.zaiApiKey = cfg?.zaiApiKey || config.ZAI_API_KEY || "";
+		this.tavilyApiKey = cfg?.tavilyApiKey || config.TAVILY_API_KEY || "";
+		
+		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5;
+		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3;
 		this.simulateFailure = cfg?.simulateFailure ?? false;
 
 		// Initialize health tracking for each provider
-		this.providerHealth.set("opencode-go", {
-			failureCount: 0,
-			lastFailureTime: null,
-			isOnCooldown: false,
-		});
-		this.providerHealth.set("deepseek", {
-			failureCount: 0,
-			lastFailureTime: null,
-			isOnCooldown: false,
-		});
-		this.providerHealth.set("gemini", {
-			failureCount: 0,
-			lastFailureTime: null,
-			isOnCooldown: false,
-		});
-		this.providerHealth.set("perplexity", {
-			failureCount: 0,
-			lastFailureTime: null,
-			isOnCooldown: false,
-		});
+		const allProviders: ProviderId[] = [
+			"opencode-go", "deepseek", "deepseek-v4", "gemini", "tavily",
+			"moonshot-k2.5", "moonshot-k2.6", "xiaomi-mimo",
+			"qwen3.5-plus", "qwen3.6-plus", "minimax-m2.5", "minimax-m2.7",
+			"glm-deepinfra", "glm-fireworks", "glm-zai"
+		];
+		
+		for (const provider of allProviders) {
+			this.providerHealth.set(provider, {
+				failureCount: 0,
+				lastFailureTime: null,
+				isOnCooldown: false,
+			});
+		}
 
 		// Initialize ledger path
 		const runId = new Date().toISOString().replace(/[:.]/g, "-");
@@ -216,9 +297,18 @@ export class ProviderRouter {
 	/**
 	 * Gets the next available provider using round-robin fallback.
 	 * Skips providers on cooldown.
+	 * Prioritizes more capable models in the fallback chain.
 	 */
 	public fallback(fromProvider?: ProviderId): ProviderId {
-		const providers: ProviderId[] = ["opencode-go", "deepseek", "gemini", "perplexity"];
+		// Priority order: most capable first, then fallbacks
+		const providers: ProviderId[] = [
+			// Execution role - most powerful coding models first
+			"deepseek-v4", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7",
+			// Planning/Research
+			"moonshot-k2.5", "gemini", "tavily", "qwen3.5-plus",
+			// Legacy fallbacks
+			"deepseek", "glm-deepinfra", "glm-fireworks", "glm-zai", "xiaomi-mimo", "minimax-m2.5"
+		];
 
 		// Try the other provider first (round-robin)
 		const startIdx = fromProvider
@@ -365,10 +455,32 @@ export class ProviderRouter {
 				return this.callOpenCode(messages);
 			case "deepseek":
 				return this.callDeepSeek(messages);
+			case "deepseek-v4":
+				return this.callDeepSeekV4(messages);
 			case "gemini":
 				return this.callGemini(messages);
-			case "perplexity":
-				return this.callPerplexity(messages);
+			case "tavily":
+				return this.callTavily(messages);
+			case "moonshot-k2.5":
+				return this.callMoonshot(messages, "kimi-k2.5");
+			case "moonshot-k2.6":
+				return this.callMoonshot(messages, "kimi-k2.6");
+			case "xiaomi-mimo":
+				return this.callXiaomi(messages);
+			case "qwen3.5-plus":
+				return this.callQwen(messages, "qwen-plus");
+			case "qwen3.6-plus":
+				return this.callQwen(messages, "qwen-plus");
+			case "minimax-m2.5":
+				return this.callMiniMax(messages, "MiniMax-M2.5");
+			case "minimax-m2.7":
+				return this.callMiniMax(messages, "MiniMax-M2.7");
+			case "glm-deepinfra":
+				return this.callDeepInfra(messages, "THUDM/glm-4-9b-chat");
+			case "glm-fireworks":
+				return this.callFireworks(messages, "THUDM/glm-4-9b-chat");
+			case "glm-zai":
+				return this.callZai(messages, "THUDM/glm-4-9b-chat");
 			default:
 				throw new Error(`Unknown provider: ${provider}`);
 		}
@@ -381,7 +493,7 @@ export class ProviderRouter {
 			throw new Error("OpenCode Go API Error: 429 Rate Limit Exceeded");
 		}
 
-		const response = await fetch(this.OPENCODE_API_URL, {
+		const response = await fetch(this.API_URLS["opencode-go"], {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -414,7 +526,7 @@ export class ProviderRouter {
 	}
 
 	private async callDeepSeek(messages: LLMMessage[]): Promise<LLMResponse> {
-		const response = await fetch(this.DEEPSEEK_API_URL, {
+		const response = await fetch(this.API_URLS.deepseek, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -447,7 +559,7 @@ export class ProviderRouter {
 	}
 
 	private async callGemini(messages: LLMMessage[]): Promise<LLMResponse> {
-		const response = await fetch(`${this.GEMINI_API_URL}?key=${this.geminiApiKey}`, {
+		const response = await fetch(`${this.API_URLS.gemini}?key=${this.geminiApiKey}`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -481,31 +593,339 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callPerplexity(messages: LLMMessage[]): Promise<LLMResponse> {
-		const response = await fetch(this.PERPLEXITY_API_URL, {
+	/**
+	 * Tavily Search - Real-time web search for AI agents
+	 * Takes first user message as search query
+	 */
+	private async callTavily(messages: LLMMessage[]): Promise<LLMResponse> {
+		if (!this.tavilyApiKey) {
+			throw new Error("Tavily API key not configured. Get one at https://app.tavily.com/");
+		}
+
+		// Extract query from user message
+		const userMessage = messages.find(m => m.role === "user");
+		const query = userMessage?.content || messages[0]?.content || "";
+		
+		if (!query) {
+			throw new Error("Tavily search requires a query");
+		}
+
+		const response = await fetch(this.API_URLS.tavily, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.perplexityApiKey}`,
+				Authorization: `Bearer ${this.tavilyApiKey}`,
 			},
 			body: JSON.stringify({
-				model: "llama-3.1-sonar-large-128k-chat",
-				messages,
+				query,
+				max_results: 10,
+				include_answer: true,
+				include_raw_content: false,
+				include_images: false,
 			}),
-			signal: AbortSignal.timeout(30000), // 30 second timeout
+			signal: AbortSignal.timeout(30000),
 		});
 
 		if (!response.ok) {
-			throw new Error(
-				`Perplexity API Error: ${response.status} ${response.statusText}`,
-			);
+			throw new Error(`Tavily API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		
+		// Format results for LLM consumption
+		const results = data.results || [];
+		const answer = data.answer || "";
+		
+		// Format as structured content
+		let content = "";
+		if (answer) {
+			content = `Summary: ${answer}\n\n`;
+		}
+		content += "Search Results:\n";
+		results.forEach((result: any, index: number) => {
+			content += `${index + 1}. ${result.title}: ${result.content}\nURL: ${result.url}\n\n`;
+		});
+
+		return {
+			content,
+			provider: "tavily",
+			model: "tavily-search",
+			usage: {
+				promptTokens: query.length,
+				completionTokens: content.length,
+				totalTokens: query.length + content.length,
+			},
+		};
+	}
+
+	private async callDeepSeekV4(messages: LLMMessage[]): Promise<LLMResponse> {
+		const response = await fetch(this.API_URLS["deepseek-v4"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.deepseekApiKey}`,
+			},
+			body: JSON.stringify({
+				model: "deepseek-chat",
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`DeepSeek V4 API Error: ${response.status} ${response.statusText}`);
 		}
 
 		const data = await response.json();
 		return {
 			content: data.choices?.[0]?.message?.content || "",
-			provider: "perplexity",
-			model: "llama-3.1-sonar-large-128k-chat",
+			provider: "deepseek-v4",
+			model: "deepseek-chat",
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callMoonshot(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+		if (!this.moonshotApiKey) {
+			throw new Error("Moonshot API key not configured");
+		}
+		
+		const response = await fetch(this.API_URLS["moonshot-k2.5"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.moonshotApiKey}`,
+			},
+			body: JSON.stringify({
+				model,
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Moonshot (Kimi) API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "moonshot-k2.6",
+			model,
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callXiaomi(messages: LLMMessage[]): Promise<LLMResponse> {
+		if (!this.xiaomiApiKey) {
+			throw new Error("Xiaomi API key not configured");
+		}
+		
+		const response = await fetch(this.API_URLS["xiaomi-mimo"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.xiaomiApiKey}`,
+			},
+			body: JSON.stringify({
+				model: "MiMo-V2-8B",
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Xiaomi MiMo API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "xiaomi-mimo",
+			model: "MiMo-V2-8B",
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callQwen(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+		if (!this.alibabaApiKey) {
+			throw new Error("Alibaba API key not configured");
+		}
+		
+		const response = await fetch(this.API_URLS["qwen3.6-plus"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.alibabaApiKey}`,
+			},
+			body: JSON.stringify({
+				model,
+				input: { messages },
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Qwen (Alibaba) API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.output?.choices?.[0]?.message?.content || data.output?.text || "",
+			provider: "qwen3.6-plus",
+			model,
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callMiniMax(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+		if (!this.minimaxApiKey) {
+			throw new Error("MiniMax API key not configured");
+		}
+		
+		const response = await fetch(this.API_URLS["minimax-m2.7"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.minimaxApiKey}`,
+			},
+			body: JSON.stringify({
+				model,
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`MiniMax API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "minimax-m2.7",
+			model,
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callDeepInfra(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+		if (!this.deepinfraApiKey) {
+			throw new Error("DeepInfra API key not configured");
+		}
+		
+		const response = await fetch(this.API_URLS["glm-deepinfra"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.deepinfraApiKey}`,
+			},
+			body: JSON.stringify({
+				model,
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`DeepInfra API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "glm-deepinfra",
+			model,
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callFireworks(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+		if (!this.fireworksApiKey) {
+			throw new Error("Fireworks API key not configured");
+		}
+		
+		const response = await fetch(this.API_URLS["glm-fireworks"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.fireworksApiKey}`,
+			},
+			body: JSON.stringify({
+				model,
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Fireworks AI API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "glm-fireworks",
+			model,
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callZai(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+		if (!this.zaiApiKey) {
+			throw new Error("Z.ai API key not configured");
+		}
+		
+		const response = await fetch(this.API_URLS["glm-zai"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.zaiApiKey}`,
+			},
+			body: JSON.stringify({
+				model,
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Z.ai API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "glm-zai",
+			model,
 			usage: {
 				promptTokens: data.usage?.prompt_tokens || 0,
 				completionTokens: data.usage?.completion_tokens || 0,

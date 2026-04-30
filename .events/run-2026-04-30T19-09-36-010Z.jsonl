@@ -1,2 +1,0 @@
-{"id":"9f458684-3699-424c-ba6e-aa630ee5b1c1","timestamp":"2026-04-30T19:09:36.010Z","type":"role_assignment","severity":"info","taskId":"task-1","payload":{"message":"Task assigned to role: research","taskId":"task-1","role":"research"},"metadata":{"role":"research"}}
-{"id":"df64ccfe-8181-4949-b7f7-1a3b1257bf9f","timestamp":"2026-04-30T19:09:36.010Z","type":"provider_selected","severity":"info","payload":{"message":"Provider perplexity selected for role research","role":"research","provider":"perplexity"},"metadata":{"role":"research","provider":"perplexity"}}

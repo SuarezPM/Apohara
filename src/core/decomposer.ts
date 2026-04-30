@@ -2,6 +2,21 @@ import { type LLMMessage, ProviderRouter } from "../providers/router";
 import { routeTaskWithFallback } from "./agent-router";
 import type { TaskRole } from "./types";
 
+// Dynamic import for MCP client to avoid build issues when not available
+let mcpRegistry: any = null;
+
+async function getMCPRegistry() {
+	if (!mcpRegistry) {
+		try {
+			const { mcpRegistry: registry } = await import("../lib/mcp-client");
+			mcpRegistry = registry;
+		} catch {
+			// MCP client not available
+		}
+	}
+	return mcpRegistry;
+}
+
 export interface DecomposedTask {
 	id: string;
 	description: string;

@@ -48,7 +48,7 @@ describe("E2E Swarm Integration Tests", () => {
 			for (const role of roles) {
 				const provider = ROLE_TO_PROVIDER[role];
 				expect(provider).toBeDefined();
-				expect(["opencode-go", "deepseek", "gemini", "perplexity"]).toContain(provider);
+				expect(["tavily", "gemini", "moonshot-k2.6", "deepseek-v4"]).toContain(provider);
 			}
 		});
 
@@ -66,16 +66,16 @@ describe("E2E Swarm Integration Tests", () => {
 
 		it("should provide role-to-provider constants", () => {
 			// Verify the constants are correct
-			expect(ROLE_TO_PROVIDER.research).toBe("perplexity");
-			expect(ROLE_TO_PROVIDER.planning).toBe("gemini");
-			expect(ROLE_TO_PROVIDER.execution).toBe("opencode-go");
-			expect(ROLE_TO_PROVIDER.verification).toBe("deepseek");
+			expect(ROLE_TO_PROVIDER.research).toBe("tavily");
+			expect(ROLE_TO_PROVIDER.planning).toBe("moonshot-k2.6");
+			expect(ROLE_TO_PROVIDER.execution).toBe("deepseek-v4");
+			expect(ROLE_TO_PROVIDER.verification).toBe("deepseek-v4");
 			
 			// Verify fallback chains
-			expect(ROLE_FALLBACK_ORDER.research).toEqual(["perplexity", "gemini"]);
-			expect(ROLE_FALLBACK_ORDER.planning).toEqual(["gemini", "deepseek"]);
-			expect(ROLE_FALLBACK_ORDER.execution).toEqual(["opencode-go", "deepseek"]);
-			expect(ROLE_FALLBACK_ORDER.verification).toEqual(["deepseek", "opencode-go"]);
+			expect(ROLE_FALLBACK_ORDER.research).toEqual(["tavily", "gemini", "moonshot-k2.6"]);
+			expect(ROLE_FALLBACK_ORDER.planning).toEqual(["moonshot-k2.6", "qwen3.6-plus", "gemini", "glm-deepinfra"]);
+			expect(ROLE_FALLBACK_ORDER.execution).toEqual(["deepseek-v4", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7"]);
+			expect(ROLE_FALLBACK_ORDER.verification).toEqual(["deepseek-v4", "deepseek", "moonshot-k2.5"]);
 		});
 	});
 
@@ -102,10 +102,10 @@ describe("E2E Swarm Integration Tests", () => {
 			expect(typeof execResult.requiresFallback).toBe("boolean");
 		});
 
-		it("should route planning to gemini or fallback", async () => {
+		it("should route planning to moonshot-k2.6 or fallback", async () => {
 			const result = await routeTask("planning");
-			// If GEMINI_API_KEY is set, maps to gemini, otherwise falls back
-			expect(["gemini", "deepseek"]).toContain(result.provider);
+			// If MOONSHOT_API_KEY is set, maps to moonshot-k2.6, otherwise falls back
+			expect(["moonshot-k2.6", "gemini", "qwen3.6-plus"]).toContain(result.provider);
 		});
 
 		it("should work with verify token function", () => {
@@ -213,7 +213,7 @@ describe("E2E Swarm Integration Tests", () => {
 				{ message: "Test assignment" },
 				"info",
 				taskId,
-				{ role: "planning", provider: "gemini" }
+				{ role: "planning", provider: "moonshot-k2.6" }
 			);
 			
 			const filePath = ledger.getFilePath();
@@ -222,7 +222,7 @@ describe("E2E Swarm Integration Tests", () => {
 			
 			expect(event.taskId).toBe(taskId);
 			expect(event.metadata?.role).toBe("planning");
-			expect(event.metadata?.provider).toBe("gemini");
+			expect(event.metadata?.provider).toBe("moonshot-k2.6");
 			
 			await rm(filePath, { force: true });
 		});
@@ -279,10 +279,10 @@ describe("E2E Swarm Integration Tests", () => {
 
 		it("should have correct fallback chain definitions", () => {
 			// Verify the fallback chains are defined correctly
-			expect(ROLE_FALLBACK_ORDER.research).toEqual(["perplexity", "gemini"]);
-			expect(ROLE_FALLBACK_ORDER.planning).toEqual(["gemini", "deepseek"]);
-			expect(ROLE_FALLBACK_ORDER.execution).toEqual(["opencode-go", "deepseek"]);
-			expect(ROLE_FALLBACK_ORDER.verification).toEqual(["deepseek", "opencode-go"]);
+			expect(ROLE_FALLBACK_ORDER.research).toEqual(["tavily", "gemini", "moonshot-k2.6"]);
+			expect(ROLE_FALLBACK_ORDER.planning).toEqual(["moonshot-k2.6", "qwen3.6-plus", "gemini", "glm-deepinfra"]);
+			expect(ROLE_FALLBACK_ORDER.execution).toEqual(["deepseek-v4", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7"]);
+			expect(ROLE_FALLBACK_ORDER.verification).toEqual(["deepseek-v4", "deepseek", "moonshot-k2.5"]);
 		});
 	});
 
@@ -326,10 +326,10 @@ describe("E2E Swarm Integration Tests", () => {
 
 		it("should use correct provider constants", () => {
 			// The role-to-provider mapping is defined in types.ts
-			expect(ROLE_TO_PROVIDER.execution).toBe("opencode-go");
-			expect(ROLE_TO_PROVIDER.research).toBe("perplexity");
-			expect(ROLE_TO_PROVIDER.planning).toBe("gemini");
-			expect(ROLE_TO_PROVIDER.verification).toBe("deepseek");
+			expect(ROLE_TO_PROVIDER.execution).toBe("deepseek-v4");
+			expect(ROLE_TO_PROVIDER.research).toBe("tavily");
+			expect(ROLE_TO_PROVIDER.planning).toBe("moonshot-k2.6");
+			expect(ROLE_TO_PROVIDER.verification).toBe("deepseek-v4");
 		});
 	});
 });
