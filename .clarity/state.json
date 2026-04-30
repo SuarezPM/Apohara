@@ -7,8 +7,17 @@
       "status": "in_progress",
       "createdAt": "2026-04-30T14:53:42.956Z",
       "updatedAt": "2026-04-30T14:53:42.956Z"
+    },
+    {
+      "id": "T1",
+      "description": "Independent task 1",
+      "status": "completed",
+      "createdAt": "2026-04-30T14:54:06.802Z",
+      "updatedAt": "2026-04-30T14:54:06.802Z"
     }
   ],
   "status": "running",
-  "failedProviderTimestamps": {}
+  "failedProviderTimestamps": {
+    "opencode-go": 1777560846803
+  }
 }

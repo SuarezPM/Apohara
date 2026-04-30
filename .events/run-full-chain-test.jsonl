@@ -1,0 +1,3 @@
+{"id":"ea663532-b500-4026-9c3e-75d073d14a61","timestamp":"2026-04-30T14:54:06.804Z","type":"fallback_cooldown","severity":"warning","payload":{"provider":"opencode-go"}}
+{"id":"4e3306e9-8c7a-458d-bf67-47e53fa7473d","timestamp":"2026-04-30T14:54:06.804Z","type":"provider_fallback","severity":"warning","payload":{"from":"opencode-go","to":"deepseek"}}
+{"id":"5c32b06e-c081-4a90-ba48-5de12e683e20","timestamp":"2026-04-30T14:54:06.804Z","type":"task_exhausted","severity":"error","payload":{"providers":[]}}

@@ -1,0 +1,1 @@
+{"id":"dadddbec-8119-4f49-8b82-ac6250e2d4ec","timestamp":"2026-04-30T14:54:06.801Z","type":"provider_fallback","severity":"warning","payload":{"fromProvider":"opencode-go","toProvider":"deepseek","error":"429 Rate Limit"}}
