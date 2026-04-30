@@ -1,10 +1,12 @@
 import { type LLMMessage, ProviderRouter } from "../providers/router";
+import type { TaskRole } from "./types";
 
 export interface DecomposedTask {
 	id: string;
 	description: string;
 	estimatedComplexity: "low" | "medium" | "high";
 	dependencies: string[];
+	role: TaskRole;
 }
 
 export interface DecompositionResult {
@@ -33,6 +35,11 @@ Output format: Return a JSON object with a "tasks" array. Each task must have:
 - description: Clear description of what to do
 - estimatedComplexity: "low", "medium", or "high"
 - dependencies: Array of task IDs that must complete before this one
+- role: One of "research", "planning", "execution", or "verification". 
+  - "research": Tasks that gather information, search docs, or explore codebase
+  - "planning": Tasks that decompose milestones, create plans, or design architecture
+  - "execution": Tasks that implement code, write files, or modify the codebase
+  - "verification": Tasks that test, review, audit, or validate implementations
 
 Rules:
 - Tasks should be independently implementable when dependencies are met
@@ -93,6 +100,14 @@ Example:
 				if (!taskIds.has(dep)) {
 					throw new Error(`Task ${task.id} has invalid dependency: ${dep}`);
 				}
+			}
+			// Default role to "execution" if not provided (backwards compatibility)
+			if (!task.role) {
+				task.role = "execution";
+			}
+			// Validate role is a valid TaskRole
+			if (!["research", "planning", "execution", "verification"].includes(task.role)) {
+				task.role = "execution";
 			}
 		}
 

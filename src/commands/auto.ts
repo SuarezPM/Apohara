@@ -2,11 +2,13 @@ import { spawn } from "bun";
 import { Command } from "commander";
 import { Consolidator } from "../core/consolidator";
 import { TaskDecomposer } from "../core/decomposer";
+import { routeTask, routeTaskWithFallback } from "../core/agent-router";
 import { IsolationEngine } from "../core/isolation";
 import { EventLedger } from "../core/ledger";
 import { ParallelScheduler } from "../core/scheduler";
 import { StateMachine } from "../core/state";
 import { SummaryGenerator } from "../core/summary";
+import type { DecomposedTask } from "../core/decomposer";
 import { GitHubClient } from "../providers/github";
 import { ProviderRouter } from "../providers/router";
 
@@ -86,7 +88,7 @@ export const autoCommand = new Command("auto")
 				// For now, since we don't have the LLM running in this test, we can:
 				// Let it fail gracefully and show an error message
 				// or we could bypass the LLM and provide test data
-				let decompositionResult: { tasks: Array<{ id: string }> };
+				let decompositionResult: { tasks: DecomposedTask[] };
 				try {
 					decompositionResult = await decomposer.decompose(prompt);
 				} catch (error) {
