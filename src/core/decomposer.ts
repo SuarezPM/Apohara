@@ -125,9 +125,64 @@ Example:
 			}
 		}
 
+		// Detect dependency cycles using DFS
+		const cycle = this.detectCycle(parsed.tasks);
+		if (cycle) {
+			throw new Error(
+				`Dependency cycle detected: ${cycle.join(" -> ")}. ` +
+				"Please ensure dependencies form a DAG (Directed Acyclic Graph).",
+			);
+		}
+
 		return {
 			tasks: parsed.tasks,
 			originalPrompt: prompt,
 		};
+	}
+
+	/**
+	 * Detects cycles in the dependency graph using DFS.
+	 * Returns the cyclic path if a cycle is found, otherwise null.
+	 */
+	private detectCycle(tasks: DecomposedTask[]): string[] | null {
+		const graph = new Map<string, string[]>();
+		for (const task of tasks) {
+			graph.set(task.id, task.dependencies);
+		}
+
+		const visited = new Set<string>();
+		const recursionStack = new Set<string>();
+		const path: string[] = [];
+
+		const dfs = (taskId: string, currentPath: string[]): string[] | null => {
+			visited.add(taskId);
+			recursionStack.add(taskId);
+			currentPath.push(taskId);
+
+			const deps = graph.get(taskId) || [];
+			for (const dep of deps) {
+				if (!visited.has(dep)) {
+					const cycle = dfs(dep, currentPath);
+					if (cycle) return cycle;
+				} else if (recursionStack.has(dep)) {
+					// Found a cycle - return path from the cycle start to the end
+					const cycleStart = currentPath.indexOf(dep);
+					return [...currentPath.slice(cycleStart), dep];
+				}
+			}
+
+			recursionStack.delete(taskId);
+			currentPath.pop();
+			return null;
+		};
+
+		for (const task of tasks) {
+			if (!visited.has(task.id)) {
+				const cycle = dfs(task.id, []);
+				if (cycle) return cycle;
+			}
+		}
+
+		return null;
 	}
 }

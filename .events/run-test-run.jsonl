@@ -1,0 +1,3 @@
+{"id":"c0a39a14-a47c-4e0c-88f0-160dae718f9c","timestamp":"2026-04-30T19:03:28.798Z","type":"summary_generated","severity":"info","payload":{"summaryPath":".clarity/runs/2026-04-30T12-00-00/summary.md","taskCount":1}}
+{"id":"6c5d9626-cd1c-4f03-b708-203227b22384","timestamp":"2026-04-30T19:03:28.802Z","type":"merge_conflict","severity":"warning","payload":{"worktree":"lane-0","stderr":"fatal: no es un repositorio git (ni ningún padre en el punto de montaje /)\nParando a la frontera del sistema de archivos (GIT_DISCOVERY_ACROSS_FILESYSTEM no establecido).\n"}}
+{"id":"e498cc2d-6ca5-4208-826f-d103f980fef6","timestamp":"2026-04-30T19:03:28.802Z","type":"test_event","severity":"info","payload":{"test":true}}
