@@ -1,2 +1,0 @@
-{"id":"d572fa28-c5e0-4314-9d86-278296ff173f","timestamp":"2026-04-30T13:15:59.451Z","type":"auto_command_started","severity":"info","payload":{"prompt":"create a hello world program","worktreePoolSize":2}}
-{"id":"58d698f7-2ae7-432e-94cd-2e2b964c609d","timestamp":"2026-04-30T13:16:04.509Z","type":"auto_command_failed","severity":"error","payload":{"prompt":"create a hello world program","error":"Unable to connect. Is the computer able to access the url?"}}
