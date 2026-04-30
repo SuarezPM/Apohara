@@ -7,6 +7,7 @@ export interface DecomposedTask {
 	estimatedComplexity: "low" | "medium" | "high";
 	dependencies: string[];
 	role: TaskRole;
+	files?: string[];
 }
 
 export interface DecompositionResult {
