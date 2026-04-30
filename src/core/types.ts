@@ -29,4 +29,6 @@ export interface OrchestratorState {
 	tasks: Task[];
 	status: "idle" | "running" | "paused" | "error";
 	lastError?: string;
+	// Provider cooldown tracking for state persistence
+	failedProviderTimestamps?: Record<string, number>; // providerId -> timestamp of last failure
 }

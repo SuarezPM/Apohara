@@ -16,17 +16,27 @@ export const autoCommand = new Command("auto")
 		"Number of worktree lanes (default: 3)",
 		"3",
 	)
-	.action(async (prompt: string, options: { worktrees?: string }) => {
+	.option(
+		"-s, --simulate-failure",
+		"Simulate a 429 rate limit error on the first provider for demo/testing (default: false)",
+		false,
+	)
+	.action(async (prompt: string, options: { worktrees?: string; simulateFailure?: boolean }) => {
 		const worktreePoolSize = parseInt(options.worktrees || "3", 10);
 
 		console.log(`🚀 Starting clarity auto for: "${prompt}"`);
 		console.log(`📊 Worktree pool size: ${worktreePoolSize}`);
+		if (options.simulateFailure) {
+			console.log(`⚠️  SIMULATE-FAILURE MODE ENABLED - First provider will return 429`);
+		}
 
 		// 1) Initialize core components
 		const stateMachine = new StateMachine();
 		const ledger = new EventLedger();
 		const isolationEngine = new IsolationEngine();
-		const router = new ProviderRouter();
+		const router = new ProviderRouter({
+			simulateFailure: options.simulateFailure ?? false,
+		});
 		const decomposer = new TaskDecomposer(router);
 		const scheduler = new ParallelScheduler(
 			isolationEngine,

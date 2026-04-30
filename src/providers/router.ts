@@ -30,6 +30,7 @@ export interface RouterConfig {
 	deepseekApiKey?: string;
 	cooldownMinutes?: number;
 	maxFailuresBeforeCooldown?: number;
+	simulateFailure?: boolean; // For demo/testing - triggers 429 on first call
 }
 
 export type ProviderId = "opencode-go" | "deepseek";
@@ -64,11 +65,16 @@ export class ProviderRouter {
 	private ledgerPath: string;
 	private ledgerInitialized = false;
 
+	// Simulate failure flag for demo/testing
+	private simulateFailure = false;
+	private failureSimulated = false;
+
 	constructor(cfg?: RouterConfig) {
 		this.opencodeApiKey = cfg?.opencodeApiKey || config.OPENCODE_API_KEY;
 		this.deepseekApiKey = cfg?.deepseekApiKey || config.DEEPSEEK_API_KEY;
 		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5; // Default 5 minutes
 		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3; // Default 3 failures
+		this.simulateFailure = cfg?.simulateFailure ?? false;
 
 		// Initialize health tracking for each provider
 		this.providerHealth.set("opencode-go", {
@@ -335,6 +341,12 @@ export class ProviderRouter {
 	}
 
 	private async callOpenCode(messages: LLMMessage[]): Promise<LLMResponse> {
+		// Simulate 429 rate limit for demo purposes
+		if (this.simulateFailure && !this.failureSimulated) {
+			this.failureSimulated = true;
+			throw new Error("OpenCode Go API Error: 429 Rate Limit Exceeded");
+		}
+
 		const response = await fetch(this.OPENCODE_API_URL, {
 			method: "POST",
 			headers: {

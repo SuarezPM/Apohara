@@ -31,6 +31,7 @@ export class StateMachine {
 			currentTaskId: null,
 			tasks: [],
 			status: "idle",
+			failedProviderTimestamps: {},
 		};
 	}
 
@@ -73,5 +74,39 @@ export class StateMachine {
 		// This ensures we never end up with a partially written or corrupted state.json
 		await writeFile(this.tmpPath, data, "utf-8");
 		await rename(this.tmpPath, this.filePath);
+	}
+
+	/**
+	 * Records a provider failure timestamp for cooldown tracking.
+	 */
+	public async recordProviderFailure(providerId: string): Promise<void> {
+		await this.update((state) => ({
+			...state,
+			failedProviderTimestamps: {
+				...state.failedProviderTimestamps,
+				[providerId]: Date.now(),
+			},
+		}));
+	}
+
+	/**
+	 * Gets the timestamp of the last failure for a provider.
+	 */
+	public getProviderLastFailure(providerId: string): number | null {
+		return this.state.failedProviderTimestamps?.[providerId] ?? null;
+	}
+
+	/**
+	 * Clears the cooldown for a provider.
+	 */
+	public async clearProviderCooldown(providerId: string): Promise<void> {
+		await this.update((state) => {
+			const newTimestamps = { ...state.failedProviderTimestamps };
+			delete newTimestamps[providerId];
+			return {
+				...state,
+				failedProviderTimestamps: newTimestamps,
+			};
+		});
 	}
 }
