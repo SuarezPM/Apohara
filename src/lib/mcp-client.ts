@@ -111,7 +111,8 @@ export class MCPClient extends EventEmitter {
 	/**
 	 * Send a JSON-RPC request to the MCP server
 	 */
-	private sendRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private sendRequest(method: string, params: Record<string, unknown>): Promise<any> {
 		return new Promise((resolve, reject) => {
 			if (!this.process?.stdin) {
 				reject(new Error("MCP process not connected"));

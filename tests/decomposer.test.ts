@@ -2,25 +2,21 @@ import { describe, it, expect, beforeEach, vi } from "bun:test";
 import { TaskDecomposer, type DecompositionResult } from "../src/core/decomposer";
 import { ProviderRouter, type LLMResponse } from "../src/providers/router";
 
-// Mock the ProviderRouter
-vi.mock("../src/providers/router", () => {
-	return {
-		ProviderRouter: vi.fn().mockImplementation(() => ({
-			completion: vi.fn(),
-		})),
-	};
-});
+// NOTE: We intentionally do NOT mock ProviderRouter here because we need
+// to test the real integration between TaskDecomposer and ProviderRouter
+// The mock was causing issues with other test files that import the real class
 
 describe("TaskDecomposer Integration", () => {
 	let decomposer: TaskDecomposer;
 	let mockRouter: ProviderRouter;
+	let mockCompletion: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
-		mockRouter = new ProviderRouter({
-			opencodeApiKey: "test-key",
-			deepseekApiKey: "test-key",
-		});
-		decomposer = new TaskDecomposer(mockRouter as unknown as ProviderRouter);
+		mockCompletion = vi.fn();
+		mockRouter = {
+			completion: mockCompletion,
+		} as unknown as ProviderRouter;
+		decomposer = new TaskDecomposer(mockRouter);
 	});
 
 	it("should decompose a prompt into atomic tasks", async () => {

@@ -83,28 +83,6 @@ export function getProviderInfo(provider: ProviderId): { name: string; provider:
 }
 
 /**
- * Result of a routeTask call including provider and validation info.
- */
-export interface RouteResult {
-	provider: ProviderId;
-	requiresFallback: boolean;
-	fallbackProviders: ProviderId[];
-}
-
-/**
- * Validates that the required API token exists for a provider.
- * Returns true if token is valid, false otherwise.
- */
-export function validateToken(provider: ProviderId): boolean {
-	const validator = TOKEN_VALIDATORS[provider];
-	if (!validator) {
-		console.warn(`No token validator for provider: ${provider}`);
-		return false;
-	}
-	return validator();
-}
-
-/**
  * Logs role assignment and provider selection events to the ledger.
  */
 async function logProviderEvent(

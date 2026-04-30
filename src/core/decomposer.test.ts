@@ -1,21 +1,20 @@
-import { describe, test, expect, jest, beforeEach } from "bun:test";
+import { describe, test, expect, vi, beforeEach } from "vitest";
 import { TaskDecomposer, type DecomposedTask, type DecompositionResult } from "./decomposer";
 import type { TaskRole } from "./types";
 
 // Mock the routeTaskWithFallback function - it returns { provider, response }
-jest.mock("./agent-router", () => ({
-	routeTaskWithFallback: jest.fn(),
+vi.mock("./agent-router", () => ({
+	routeTaskWithFallback: vi.fn(),
 }));
 
 import { routeTaskWithFallback } from "./agent-router";
 
-const mockRouteTaskWithFallback = routeTaskWithFallback as jest.MockedFunction<
-	typeof routeTaskWithFallback
->;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockRouteTaskWithFallback = routeTaskWithFallback as any;
 
 describe("TaskDecomposer", () => {
 	beforeEach(() => {
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 	});
 
 	// Test 1: files field serialization/deserialization

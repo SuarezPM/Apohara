@@ -11,6 +11,9 @@ import type { ProviderId, TaskRole } from "./types";
 import { routeTask, type RouteResult } from "./agent-router";
 import { ProviderRouter } from "../providers/router";
 import { EventLedger } from "./ledger";
+import { Mem0Client, type MemorySearchResult } from "../lib/mem0-client";
+import { InngestClient } from "../lib/inngest-client";
+import type { DecomposedTask } from "./decomposer";
 
 /**
  * Configuration for SubagentManager
@@ -196,14 +199,15 @@ export class SubagentManager {
 	}
 
 	/**
-	 * Gets tasks whose dependencies are all satisfied.
+	 * Gets tasks whose dependencies are all satisfied and haven't been dispatched yet.
 	 */
 	private getReadyTasks(
 		tasks: TrackedTask[],
 		completed: Set<string>,
 	): TrackedTask[] {
 		return tasks.filter((task) => {
-			if (task.result) return false; // Already executed
+			if (task.result) return false; // Already completed
+			if (task.startedAt) return false; // Already dispatched/in-progress
 			for (const dep of task.dependencies) {
 				if (!completed.has(dep)) return false;
 			}
@@ -221,6 +225,35 @@ export class SubagentManager {
 		const startTime = Date.now();
 		const { timeoutMs, maxRetries } = this.config;
 		let lastError: string | undefined;
+
+		// Optional Mem0 client for persistent memory
+		let mem0: Mem0Client | undefined;
+		try {
+			mem0 = new Mem0Client();
+		} catch {
+			// Mem0 not available
+		}
+
+		// Retrieve relevant memories before execution
+		let relevantMemories: MemorySearchResult[] = [];
+		if (mem0?.isConfigured()) {
+			try {
+				relevantMemories = await mem0.retrieveForTask(task.description);
+				if (relevantMemories.length > 0) {
+					console.log(`[SubagentManager] Found ${relevantMemories.length} relevant memories for ${task.id}`);
+				}
+			} catch (err) {
+				console.log(`[SubagentManager] Mem0 retrieval error: ${(err as Error).message}`);
+			}
+		}
+
+		// Optional Inngest client for durable execution
+		let inngest: InngestClient | undefined;
+		try {
+			inngest = new InngestClient();
+		} catch {
+			// Inngest not available
+		}
 
 		// AbortController for timeout
 		const controller = new AbortController();
@@ -246,18 +279,34 @@ export class SubagentManager {
 					`🔄 Agent ${task.id} running... (${elapsed}s elapsed, ${timeoutMs / 1000}s timeout)`,
 				);
 
-				// Execute via ProviderRouter
-				const response = await this.providerRouter.completion({
-					messages: [
-						{
-							role: "system" as const,
-							content: `You are a task execution agent. Your role is: ${task.role}. Execute the following task: ${task.description}`,
-						},
-						{ role: "user" as const, content: task.description },
-					],
-					provider,
-					signal: controller.signal,
-				});
+				// Execute via ProviderRouter (with optional Inngest durability wrapper)
+				const executeWithRetry = async () => {
+					return await this.providerRouter.completion({
+						messages: [
+							{
+								role: "system" as const,
+								content: `You are a task execution agent. Your role is: ${task.role}. Execute the following task: ${task.description}`,
+							},
+							{ role: "user" as const, content: task.description },
+						],
+						provider,
+						signal: controller.signal,
+					});
+				};
+
+				let response: { content: string };
+				if (inngest?.isConfigured()) {
+					// Use Inngest for event tracking only — retry logic is in the outer loop
+					console.log(`[SubagentManager] Using Inngest durable execution for ${task.id}`);
+					response = await inngest.executeStep(
+						`task-${task.id}`,
+						executeWithRetry,
+						{ maxAttempts: 1, retryInterval: 0 }
+					);
+				} else {
+					// Use local execution (retry handled by loop)
+					response = await executeWithRetry();
+				}
 
 				clearTimeout(timeoutId);
 				const durationMs = Date.now() - startTime;
@@ -274,6 +323,20 @@ export class SubagentManager {
 					durationMs,
 					status: "completed",
 				});
+
+				// Store decision in Mem0 for future sessions
+				if (mem0?.isConfigured()) {
+					try {
+						await mem0.storeTaskDecision(
+							task.id,
+							`Used ${provider} for ${task.role} role task: ${task.description.substring(0, 100)}...`,
+							task.role,
+						);
+						console.log(`[SubagentManager] Stored decision for ${task.id} in Mem0`);
+					} catch (err) {
+						console.log(`[SubagentManager] Mem0 store error: ${(err as Error).message}`);
+					}
+				}
 
 				return {
 					taskId: task.id,
@@ -435,6 +498,9 @@ export class SubagentManager {
 				const total = tasks.length;
 				const timeoutSec = this.config.timeoutMs / 1000;
 				console.log(`📋 Agent ${running}/${total} running... (${timeoutSec}s timeout)`);
+
+				// Mark task as dispatched to prevent double-dispatch on next loop iteration
+				task.startedAt = Date.now();
 
 				// Execute the task
 				const worktree = await this.worktreeManager.acquire();

@@ -56,7 +56,7 @@ export class GitHubClient {
 			type,
 			severity,
 			payload,
-			metadata: { provider: "github" as const },
+			metadata: {},
 		};
 
 		const line = `${JSON.stringify(event)}\n`;

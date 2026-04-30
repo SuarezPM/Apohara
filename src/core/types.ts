@@ -168,15 +168,6 @@ export const MODELS: ModelCapability[] = [
 		supportsVision: false,
 	},
 	{
-		id: "perplexity",
-		name: "Perplexity (deprecated)",
-		provider: "Perplexity",
-		bestFor: [],
-		strengths: ["use tavily instead"],
-		contextWindow: 128000,
-		supportsVision: false,
-	},
-	{
 		id: "gemini",
 		name: "Gemini 2.0 Flash",
 		provider: "Google",

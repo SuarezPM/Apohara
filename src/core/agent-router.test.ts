@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import type { ProviderId, TaskRole, RouteResult } from "./agent-router";
 
 // Mock the config module to avoid loading actual .env during tests
 vi.mock("../core/config", () => ({
@@ -112,20 +113,21 @@ describe("Agent Router", () => {
 	describe("type exports", () => {
 		it("should export ProviderId type", () => {
 			// This tests that the type is exported
-			const provider: agentRouter.ProviderId = "opencode-go";
+			const provider: ProviderId = "opencode-go";
 			expect(provider).toBe("opencode-go");
 		});
 
 		it("should export TaskRole type", () => {
 			// This tests that the type is exported
-			const role: agentRouter.TaskRole = "research";
+			const role: TaskRole = "research";
 			expect(role).toBe("research");
 		});
 
 		it("should export RouteResult interface", () => {
 			// This tests that the interface is exported
-			const result: agentRouter.RouteResult = {
+			const result: RouteResult = {
 				provider: "gemini",
+				model: undefined,
 				requiresFallback: true,
 				fallbackProviders: ["gemini", "deepseek"],
 			};

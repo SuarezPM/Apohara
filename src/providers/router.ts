@@ -12,6 +12,7 @@ export interface LLMMessage {
 export interface LLMRequest {
 	messages: LLMMessage[];
 	provider?: ProviderId;
+	signal?: AbortSignal;
 }
 
 export interface LLMResponse {
@@ -137,7 +138,6 @@ export class ProviderRouter {
 	private deepinfraApiKey: string;
 	private fireworksApiKey: string;
 	private zaiApiKey: string;
-	private tavilyApiKey: string;
 
 	// Health tracking per provider
 	private providerHealth: Map<ProviderId, ProviderHealth> = new Map();
@@ -157,8 +157,8 @@ export class ProviderRouter {
 	constructor(cfg?: RouterConfig) {
 		// Initialize all API keys
 		this.opencodeApiKey = cfg?.opencodeApiKey || config.OPENCODE_API_KEY;
-		this.deepseekApiKey = cfg?.deepseekApiKey || config.DEEPSEEK_API_KEY;
-		this.geminiApiKey = cfg?.geminiApiKey || config.GEMINI_API_KEY;
+		this.deepseekApiKey = cfg?.deepseekApiKey || config.DEEPSEEK_API_KEY || "";
+		this.geminiApiKey = cfg?.geminiApiKey || config.GEMINI_API_KEY || "";
 		this.tavilyApiKey = cfg?.tavilyApiKey || config.TAVILY_API_KEY || "";
 		this.moonshotApiKey = cfg?.moonshotApiKey || config.MOONSHOT_API_KEY || "";
 		this.xiaomiApiKey = cfg?.xiaomiApiKey || config.XIAOMI_API_KEY || "";

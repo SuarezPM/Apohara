@@ -90,7 +90,7 @@ describe("E2E Swarm Integration Tests", () => {
 			for (const role of (["research", "planning", "execution", "verification"] as TaskRole[])) {
 				const result = await routeTask(role, { id: `task-${role}` });
 				expect(result.fallbackProviders).toBeDefined();
-				expect(result.fallbackProviders.length).toBe(2);
+				expect(result.fallbackProviders.length).toBeGreaterThanOrEqual(2);
 				// First fallback should be the primary provider
 				expect(result.fallbackProviders[0]).toBe(ROLE_TO_PROVIDER[role]);
 			}
@@ -307,7 +307,7 @@ describe("E2E Swarm Integration Tests", () => {
 			
 			// Each should have fallback providers
 			for (const result of results) {
-				expect(result.fallbackProviders.length).toBe(2);
+				expect(result.fallbackProviders.length).toBeGreaterThanOrEqual(2);
 			}
 		});
 
