@@ -1,5 +1,32 @@
+// Role types for task routing (role: research, planning, execution, verification)
+export type TaskRole = "research" | "planning" | "execution" | "verification";
+
+// All supported LLM provider IDs
+export type ProviderId =
+	| "opencode-go"
+	| "deepseek"
+	| "perplexity"
+	| "gemini";
+
+// Role-to-provider mapping constants
+export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
+	research: "perplexity",
+	planning: "gemini",
+	execution: "opencode-go",
+	verification: "deepseek",
+};
+
+// Fallback provider order for each role (primary + fallback)
+export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
+	research: ["perplexity", "gemini"],
+	planning: ["gemini", "deepseek"],
+	execution: ["opencode-go", "deepseek"],
+	verification: ["deepseek", "opencode-go"],
+};
+
 export interface Task {
 	id: string;
+	role?: TaskRole;
 	description: string;
 	status: "pending" | "in_progress" | "completed" | "failed";
 	createdAt: Date;
@@ -16,11 +43,15 @@ export interface EventLog {
 	taskId?: string;
 	payload: Record<string, unknown>;
 	metadata?: {
-		provider?: "opencode-go" | "deepseek";
+		provider?: ProviderId;
 		model?: string;
 		tokens?: { prompt: number; completion: number; total: number };
 		costUsd?: number;
 		durationMs?: number;
+		role?: TaskRole;
+		fromProvider?: ProviderId;
+		toProvider?: ProviderId;
+		errorReason?: string;
 	};
 }
 
