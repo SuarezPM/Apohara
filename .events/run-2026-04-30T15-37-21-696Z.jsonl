@@ -1,0 +1,1 @@
+{"id":"dc19391f-2b64-43ae-8196-c55f049d4c9c","timestamp":"2026-04-30T15:37:21.697Z","type":"github_auth_success","severity":"info","payload":{"message":"Successfully authenticated as testuser","user":"testuser","authenticated":true},"metadata":{"provider":"github"}}

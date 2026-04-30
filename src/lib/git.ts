@@ -138,7 +138,7 @@ export function isValidRepoName(repoName: string): boolean {
 	}
 
 	// Repository names cannot contain certain characters
-	if (/[~^:?*\[\\]/.test(repoName)) {
+	if (/[~^:?*[\\]/.test(repoName)) {
 		return false;
 	}
 

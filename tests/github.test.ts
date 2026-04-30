@@ -221,4 +221,157 @@ describe("GitHubClient", () => {
 			);
 		});
 	});
+
+	describe("createPullRequest", () => {
+		test("creates PR successfully", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () =>
+					Promise.resolve({
+						number: 42,
+						html_url: "https://github.com/owner/repo/pull/42",
+						state: "open",
+						title: "Test PR",
+						head: { ref: "feature-branch", sha: "abc123" },
+						base: { ref: "main" },
+					}),
+			} as Response);
+
+			const result = await client.createPullRequest({
+				owner: "owner",
+				repo: "repo",
+				title: "Test PR",
+				body: "This is a test PR",
+				head: "feature-branch",
+				base: "main",
+			});
+
+			expect(result.number).toBe(42);
+			expect(result.htmlUrl).toBe("https://github.com/owner/repo/pull/42");
+			expect(result.state).toBe("open");
+			expect(result.title).toBe("Test PR");
+			expect(result.head.ref).toBe("feature-branch");
+			expect(result.base.ref).toBe("main");
+
+			// Verify the API was called correctly
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			const [url, options] = mockFetch.mock.calls[0];
+			expect(url).toBe("https://api.github.com/repos/owner/repo/pulls");
+			expect(options.method).toBe("POST");
+			expect(options.headers).toMatchObject({
+				"Content-Type": "application/json",
+			});
+			expect(JSON.parse(options.body as string)).toEqual({
+				title: "Test PR",
+				body: "This is a test PR",
+				head: "feature-branch",
+				base: "main",
+			});
+		});
+
+		test("creates PR without body", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				status: 201,
+				json: () =>
+					Promise.resolve({
+						number: 1,
+						html_url: "https://github.com/owner/repo/pull/1",
+						state: "open",
+						title: "Minimal PR",
+						head: { ref: "branch", sha: "def456" },
+						base: { ref: "main" },
+					}),
+			} as Response);
+
+			const result = await client.createPullRequest({
+				owner: "owner",
+				repo: "repo",
+				title: "Minimal PR",
+				head: "branch",
+				base: "main",
+			});
+
+			expect(result.number).toBe(1);
+			expect(result.title).toBe("Minimal PR");
+
+			// Verify body is empty string when not provided
+			const [, options] = mockFetch.mock.calls[0];
+			expect(JSON.parse(options.body as string).body).toBe("");
+		});
+
+		test("throws error on 401 response", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 401,
+				statusText: "Unauthorized",
+				headers: new Map(),
+			} as Response);
+
+			await expect(
+				client.createPullRequest({
+					owner: "owner",
+					repo: "repo",
+					title: "Test PR",
+					head: "feature-branch",
+					base: "main",
+				}),
+			).rejects.toThrow("401 Unauthorized");
+		});
+
+		test("throws error on 404 (base branch not found)", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 404,
+				statusText: "Not Found",
+				text: () => Promise.resolve("Base branch not found"),
+				headers: new Map(),
+			} as unknown as Response);
+
+			await expect(
+				client.createPullRequest({
+					owner: "owner",
+					repo: "repo",
+					title: "Test PR",
+					head: "feature-branch",
+					base: "nonexistent-branch",
+				}),
+			).rejects.toThrow("404 Not Found");
+		});
+
+		test("throws error on 422 (validation failed)", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 422,
+				statusText: "Unprocessable Entity",
+				text: () => Promise.resolve("Validation Failed"),
+				headers: new Map(),
+			} as unknown as Response);
+
+			await expect(
+				client.createPullRequest({
+					owner: "owner",
+					repo: "repo",
+					title: "Test PR",
+					head: "nonexistent-branch",
+					base: "main",
+				}),
+			).rejects.toThrow("422");
+		});
+
+		test("throws error on network failure", async () => {
+			mockFetch.mockRejectedValueOnce(new Error("Connection timeout"));
+
+			await expect(
+				client.createPullRequest({
+					owner: "owner",
+					repo: "repo",
+					title: "Test PR",
+					head: "feature-branch",
+					base: "main",
+				}),
+			).rejects.toThrow("Connection timeout");
+		});
+	});
 });

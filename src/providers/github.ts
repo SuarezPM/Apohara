@@ -1,7 +1,7 @@
+import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { execSync } from "node:child_process";
 import { config } from "../core/config";
 import type { EventLog, EventSeverity } from "../core/types";
 
@@ -80,7 +80,8 @@ export class GitHubClient {
 		if (!this.token || this.token.trim() === "") {
 			return {
 				valid: false,
-				error: "GITHUB_TOKEN is not configured. Set GITHUB_TOKEN environment variable.",
+				error:
+					"GITHUB_TOKEN is not configured. Set GITHUB_TOKEN environment variable.",
 			};
 		}
 
@@ -93,10 +94,11 @@ export class GitHubClient {
 
 		// Check if it looks like a GitHub token (starts with gho_, ghp_, gh_, ghs_)
 		const validPrefixes = ["gho_", "ghp_", "gh_", "ghs_"];
-		if (!validPrefixes.some((prefix) => this.token!.startsWith(prefix))) {
+		if (!validPrefixes.some((prefix) => this.token?.startsWith(prefix))) {
 			return {
 				valid: false,
-				error: "GITHUB_TOKEN does not appear to be a valid GitHub token format (should start with gho_, ghp_, gh_, or ghs_).",
+				error:
+					"GITHUB_TOKEN does not appear to be a valid GitHub token format (should start with gho_, ghp_, gh_, or ghs_).",
 			};
 		}
 
@@ -117,13 +119,13 @@ export class GitHubClient {
 
 		const url = `${this.API_BASE}${endpoint}`;
 		const headers: Record<string, string> = {
-			"Accept": "application/vnd.github.v3+json",
+			Accept: "application/vnd.github.v3+json",
 			"User-Agent": "Clarity-Code/1.0",
 			...((options.headers as Record<string, string>) || {}),
 		};
 
 		// Add auth header
-		headers["Authorization"] = `Bearer ${this.token}`;
+		headers.Authorization = `Bearer ${this.token}`;
 
 		const response = await fetch(url, {
 			...options,
@@ -133,12 +135,16 @@ export class GitHubClient {
 
 		// Handle different error types with structured logging
 		if (response.status === 401) {
-			await this.logEvent("github_auth_failure", {
-				message: "GitHub API authentication failed (401 Unauthorized)",
-				endpoint,
-				cause: "Invalid or expired token",
-				action: "Check that GITHUB_TOKEN is valid and not expired",
-			}, "error");
+			await this.logEvent(
+				"github_auth_failure",
+				{
+					message: "GitHub API authentication failed (401 Unauthorized)",
+					endpoint,
+					cause: "Invalid or expired token",
+					action: "Check that GITHUB_TOKEN is valid and not expired",
+				},
+				"error",
+			);
 			throw new Error(
 				"GitHub Authentication Error: 401 Unauthorized. Token may be invalid or expired.",
 			);
@@ -153,47 +159,63 @@ export class GitHubClient {
 				const resetTime = rateLimitReset
 					? new Date(Number(rateLimitReset) * 1000).toISOString()
 					: "unknown";
-				await this.logEvent("github_rate_limit", {
-					message: "GitHub API rate limit exceeded (403)",
-					endpoint,
-					rateLimitRemaining: rateLimitRemaining,
-					rateLimitReset: resetTime,
-					cause: "API rate limit exceeded",
-					action: "Wait until the rate limit resets or use a different token",
-				}, "error");
+				await this.logEvent(
+					"github_rate_limit",
+					{
+						message: "GitHub API rate limit exceeded (403)",
+						endpoint,
+						rateLimitRemaining: rateLimitRemaining,
+						rateLimitReset: resetTime,
+						cause: "API rate limit exceeded",
+						action: "Wait until the rate limit resets or use a different token",
+					},
+					"error",
+				);
 				throw new Error(
 					`GitHub API Error: 403 Rate Limit Exceeded. Resets at ${resetTime}`,
 				);
 			}
 
-			await this.logEvent("github_forbidden", {
-				message: "GitHub API request forbidden (403)",
-				endpoint,
-				cause: "Insufficient permissions or API access blocked",
-				action: "Check token scopes and repository access",
-			}, "error");
+			await this.logEvent(
+				"github_forbidden",
+				{
+					message: "GitHub API request forbidden (403)",
+					endpoint,
+					cause: "Insufficient permissions or API access blocked",
+					action: "Check token scopes and repository access",
+				},
+				"error",
+			);
 			throw new Error(
 				"GitHub API Error: 403 Forbidden. Check token scopes and repository access.",
 			);
 		}
 
 		if (response.status === 404) {
-			await this.logEvent("github_not_found", {
-				message: "GitHub API resource not found (404)",
-				endpoint,
-				cause: "Repository or resource does not exist",
-			}, "warning");
+			await this.logEvent(
+				"github_not_found",
+				{
+					message: "GitHub API resource not found (404)",
+					endpoint,
+					cause: "Repository or resource does not exist",
+				},
+				"warning",
+			);
 			throw new Error(`GitHub API Error: 404 Not Found - ${endpoint}`);
 		}
 
 		if (!response.ok) {
 			const errorText = await response.text().catch(() => "Unknown error");
-			await this.logEvent("github_api_error", {
-				message: `GitHub API error: ${response.status} ${response.statusText}`,
-				endpoint,
-				status: response.status,
-				error: errorText,
-			}, "error");
+			await this.logEvent(
+				"github_api_error",
+				{
+					message: `GitHub API error: ${response.status} ${response.statusText}`,
+					endpoint,
+					status: response.status,
+					error: errorText,
+				},
+				"error",
+			);
 			throw new Error(
 				`GitHub API Error: ${response.status} ${response.statusText}`,
 			);
@@ -265,7 +287,9 @@ export class GitHubClient {
 			}
 
 			// HTTPS format: https://github.com/owner/repo.git
-			match = remoteUrl.match(/https:\/\/github\.com\/([^/]+)\/([^/.]+?)(?:\.git)?$/);
+			match = remoteUrl.match(
+				/https:\/\/github\.com\/([^/]+)\/([^/.]+?)(?:\.git)?$/,
+			);
 			if (match) {
 				return {
 					owner: match[1],
@@ -293,20 +317,28 @@ export class GitHubClient {
 	}> {
 		const tokenValidation = this.validateToken();
 		if (!tokenValidation.valid) {
-			await this.logEvent("github_auth_validation_failed", {
-				message: tokenValidation.error,
-				authenticated: false,
-			}, "error");
+			await this.logEvent(
+				"github_auth_validation_failed",
+				{
+					message: tokenValidation.error,
+					authenticated: false,
+				},
+				"error",
+			);
 			throw new Error(`GitHub Authentication Error: ${tokenValidation.error}`);
 		}
 
 		try {
 			const user = await this.getCurrentUser();
-			await this.logEvent("github_auth_success", {
-				message: `Successfully authenticated as ${user.login}`,
-				user: user.login,
-				authenticated: true,
-			}, "info");
+			await this.logEvent(
+				"github_auth_success",
+				{
+					message: `Successfully authenticated as ${user.login}`,
+					user: user.login,
+					authenticated: true,
+				},
+				"info",
+			);
 
 			return {
 				login: user.login,
@@ -315,10 +347,14 @@ export class GitHubClient {
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			await this.logEvent("github_auth_error", {
-				message: `Authentication failed: ${message}`,
-				authenticated: false,
-			}, "error");
+			await this.logEvent(
+				"github_auth_error",
+				{
+					message: `Authentication failed: ${message}`,
+					authenticated: false,
+				},
+				"error",
+			);
 			throw error;
 		}
 	}
@@ -360,6 +396,88 @@ export class GitHubClient {
 				...remote,
 				repoInfo: null,
 			};
+		}
+	}
+
+	/**
+	 * Creates a pull request on GitHub.
+	 * Calls POST /repos/{owner}/{repo}/pulls
+	 */
+	public async createPullRequest(options: {
+		owner: string;
+		repo: string;
+		title: string;
+		body?: string;
+		head: string;
+		base: string;
+	}): Promise<{
+		number: number;
+		htmlUrl: string;
+		state: string;
+		title: string;
+		head: { ref: string; sha: string };
+		base: { ref: string };
+	}> {
+		const { owner, repo, title, body, head, base } = options;
+
+		try {
+			const pr = await this.apiRequest<{
+				number: number;
+				html_url: string;
+				state: string;
+				title: string;
+				head: { ref: string; sha: string };
+				base: { ref: string };
+			}>(`/repos/${owner}/${repo}/pulls`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					title,
+					body: body ?? "",
+					head,
+					base,
+				}),
+			});
+
+			await this.logEvent(
+				"github_pr_created",
+				{
+					message: `PR #${pr.number} created: "${pr.title}"`,
+					prNumber: pr.number,
+					prUrl: pr.html_url,
+					head: head,
+					base: base,
+					repository: `${owner}/${repo}`,
+				},
+				"info",
+			);
+
+			return {
+				number: pr.number,
+				htmlUrl: pr.html_url,
+				state: pr.state,
+				title: pr.title,
+				head: pr.head,
+				base: pr.base,
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			await this.logEvent(
+				"github_pr_error",
+				{
+					message: `Failed to create PR: ${message}`,
+					cause: message,
+					endpoint: `/repos/${owner}/${repo}/pulls`,
+					action: "Check that the head branch exists and you have push access",
+					repository: `${owner}/${repo}`,
+					head,
+					base,
+				},
+				"error",
+			);
+			throw error;
 		}
 	}
 }

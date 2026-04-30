@@ -1,0 +1,1 @@
+{"id":"c3e127d9-86a7-4c58-b4b1-03854479b1d5","timestamp":"2026-04-30T15:49:09.556Z","type":"github_forbidden","severity":"error","payload":{"message":"GitHub API request forbidden (403)","endpoint":"/repos/owner/private","cause":"Insufficient permissions or API access blocked","action":"Check token scopes and repository access"},"metadata":{"provider":"github"}}
