@@ -41,6 +41,7 @@ Output format: Return a JSON object with a "tasks" array. Each task must have:
   - "planning": Tasks that decompose milestones, create plans, or design architecture
   - "execution": Tasks that implement code, write files, or modify the codebase
   - "verification": Tasks that test, review, audit, or validate implementations
+- files: Array of file paths likely to be created or modified (e.g., "src/main.ts", "tests/integration.test.ts"). Be specific but reasonable. Empty array if no files needed.
 
 Rules:
 - Tasks should be independently implementable when dependencies are met
@@ -55,13 +56,17 @@ Example:
       "id": "setup-project",
       "description": "Initialize project structure and dependencies",
       "estimatedComplexity": "low",
-      "dependencies": []
+      "dependencies": [],
+      "role": "execution",
+      "files": ["package.json", "tsconfig.json", "src/index.ts"]
     },
     {
       "id": "impl-core",
       "description": "Implement the core functionality",
       "estimatedComplexity": "high",
-      "dependencies": ["setup-project"]
+      "dependencies": ["setup-project"],
+      "role": "execution",
+      "files": ["src/core/handler.ts", "src/types.ts"]
     }
   ]
 }`,
@@ -109,6 +114,14 @@ Example:
 			// Validate role is a valid TaskRole
 			if (!["research", "planning", "execution", "verification"].includes(task.role)) {
 				task.role = "execution";
+			}
+			// Handle estimated files gracefully - default to empty array if missing or invalid
+			if (!task.files || !Array.isArray(task.files)) {
+				task.files = [];
+			}
+			// Map estimatedFiles to files if LLM uses different field name
+			if ((task as any).estimatedFiles && !task.files?.length) {
+				task.files = (task as any).estimatedFiles;
 			}
 		}
 
