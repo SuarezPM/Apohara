@@ -23,7 +23,7 @@ export const dashboardCommand = new Command("dashboard")
 			env.CLARITY_RUN_ID = options.run;
 		}
 
-		const proc = spawn(["bun", "run", "src/tui/app.tsx"], {
+		const proc = spawn(["bun", "run", "src/tui/cli.tsx"], {
 			stdio: ["inherit", "inherit", "inherit"],
 			env,
 		});

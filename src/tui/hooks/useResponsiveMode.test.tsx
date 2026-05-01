@@ -7,13 +7,13 @@ describe("useResponsiveMode", () => {
 
 	beforeEach(() => {
 		listeners = new Map();
-		vi.spyOn(process.stdout, "on").mockImplementation((event: string, fn: () => void) => {
-			if (!listeners.has(event)) listeners.set(event, new Set());
-			listeners.get(event)!.add(fn);
+		vi.spyOn(process.stdout, "on").mockImplementation((event: string | symbol, fn: () => void) => {
+			if (!listeners.has(event as string)) listeners.set(event as string, new Set());
+			listeners.get(event as string)!.add(fn);
 			return process.stdout;
 		});
-		vi.spyOn(process.stdout, "off").mockImplementation((event: string, fn: () => void) => {
-			listeners.get(event)?.delete(fn);
+		vi.spyOn(process.stdout, "off").mockImplementation((event: string | symbol, fn: () => void) => {
+			listeners.get(event as string)?.delete(fn);
 			return process.stdout;
 		});
 	});

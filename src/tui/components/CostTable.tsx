@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Box, Text } from "ink";
+import { useActiveRun } from "../hooks/useDashboard.tsx";
 import { useCostTable } from "../hooks/useCostTable.tsx";
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
 
@@ -18,13 +19,30 @@ function formatTokens(n: number): string {
 	return n.toString();
 }
 
+function countTasksByProvider(events: import("../types.ts").EventLog[], provider: string): number {
+	return events.filter(
+		(e) =>
+			e.metadata?.provider === provider &&
+			(e.type === "task_scheduled" || e.type === "task_started"),
+	).length;
+}
+
 /**
- * Renders a cost breakdown table by provider.
+ * Renders a cost breakdown table by provider with task counts.
  * Adapts to terminal width: compact/minimal show fewer columns.
  */
 export function CostTable({ mode: modeProp }: CostTableProps) {
 	const { rows, totalCostUsd, totalTokens } = useCostTable();
 	const mode = modeProp ?? useResponsiveMode();
+	const activeRun = useActiveRun();
+
+	const enrichedRows = useMemo(() => {
+		if (!activeRun) return rows.map((r) => ({ ...r, taskCount: 0 }));
+		return rows.map((row) => ({
+			...row,
+			taskCount: countTasksByProvider(activeRun.events, row.provider),
+		}));
+	}, [rows, activeRun]);
 
 	if (mode === "minimal") {
 		return (
@@ -35,23 +53,26 @@ export function CostTable({ mode: modeProp }: CostTableProps) {
 	}
 
 	return (
-		<Box flexDirection="column">
+		<Box flexDirection="column" marginTop={1}>
 			<Box marginBottom={1}>
 				<Text bold>Cost Breakdown</Text>
 				<Text dimColor> Total: {formatCost(totalCostUsd)}</Text>
 			</Box>
-			{rows.length === 0 ? (
+			{enrichedRows.length === 0 ? (
 				<Text dimColor>No cost data yet</Text>
 			) : (
 				<>
 					{mode === "normal" && (
 						<Box>
 							<Text bold dimColor>
-								Provider{"         "}Cost{"       "}Tokens
+								{"Provider"}{"         "}
+								{"Tareas"}{" "}
+								{"Cost"}{"       "}
+								{"Tokens"}
 							</Text>
 						</Box>
 					)}
-					{rows.map((row) => (
+					{enrichedRows.map((row) => (
 						<Box key={row.provider}>
 							{mode === "compact" ? (
 								<Text>
@@ -60,6 +81,7 @@ export function CostTable({ mode: modeProp }: CostTableProps) {
 							) : (
 								<Text>
 									{row.provider.padEnd(16)}{" "}
+									{String(row.taskCount).padStart(6)}{" "}
 									{formatCost(row.costUsd).padStart(10)}{" "}
 									{formatTokens(row.tokensTotal).padStart(8)}
 								</Text>
@@ -70,7 +92,8 @@ export function CostTable({ mode: modeProp }: CostTableProps) {
 						<Box marginTop={1}>
 							<Text bold>
 								{"Total"}{" "}
-								{formatCost(totalCostUsd).padStart(24)}{" "}
+								{String(enrichedRows.reduce((s, r) => s + r.taskCount, 0)).padStart(20)}{" "}
+								{formatCost(totalCostUsd).padStart(10)}{" "}
 								{formatTokens(totalTokens).padStart(8)}
 							</Text>
 						</Box>

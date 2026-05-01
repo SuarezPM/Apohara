@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useActiveRun } from "./useDashboard.tsx";
-import type { ProviderId } from "../../core/types.ts";
+import type { ProviderId, EventLog } from "../../core/types.ts";
 
 export interface CostRow {
 	provider: ProviderId;

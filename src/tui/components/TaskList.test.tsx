@@ -85,8 +85,8 @@ describe("TaskList", () => {
 				<TaskList mode="normal" />
 			</Wrapper>,
 		);
-		expect(output).toContain("✓"); // completed
-		expect(output).toContain("○"); // pending
+		expect(output).toContain("✅"); // completed
+		expect(output).toContain("⏳"); // pending
 	});
 
 	it("shows 'No tasks yet' when empty", () => {

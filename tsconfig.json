@@ -3,6 +3,8 @@
 		"target": "ES2023",
 		"module": "esnext",
 		"moduleResolution": "bundler",
+		"jsx": "react-jsx",
+		"allowImportingTsExtensions": true,
 		"strict": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
