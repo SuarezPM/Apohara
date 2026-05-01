@@ -6,6 +6,12 @@ import * as path from "node:path";
 import { ProviderRouter } from "../../src/providers/router";
 import { routeTask } from "../../src/core/agent-router";
 import { rm, mkdir, readdir, readFile } from "node:fs/promises";
+import { RunManager } from "../../src/tui/lib/run-manager";
+import { extractTasks } from "../../src/tui/hooks/useTaskList";
+import { extractCosts } from "../../src/tui/hooks/useCostTable";
+import { extractAgents } from "../../src/tui/components/AgentStatus";
+import { SummaryGenerator } from "../../src/core/summary";
+import type { EventLog } from "../../src/core/types";
 
 const execAsync = promisify(execSync);
 
@@ -316,5 +322,404 @@ describe("E2E: agent-router provider selection", () => {
 		const metadata = firstFallback!.metadata as Record<string, unknown>;
 		expect(metadata.fromProvider).toBeDefined();
 		expect(metadata.toProvider).toBeDefined();
+	});
+});
+
+// ── Synthetic Run Helper ───────────────────────────────────────────────────
+
+function buildSyntheticEvents(): EventLog[] {
+	const baseTime = new Date("2024-01-15T10:00:00.000Z").getTime();
+	const ts = (offsetMs: number) => new Date(baseTime + offsetMs).toISOString();
+
+	return [
+		{
+			id: "ev-start",
+			timestamp: ts(0),
+			type: "auto_command_started",
+			severity: "info",
+			payload: { command: "auto", prompt: "Build a hello-world API" },
+		} as EventLog,
+		{
+			id: "ev-2",
+			timestamp: ts(100),
+			type: "task_scheduled",
+			severity: "info",
+			taskId: "T01",
+			payload: { description: "Research APIs", name: "Research APIs" },
+			metadata: { provider: "tavily", role: "research" },
+		} as EventLog,
+		{
+			id: "ev-3",
+			timestamp: ts(200),
+			type: "provider_selected",
+			severity: "info",
+			taskId: "T01",
+			payload: {},
+			metadata: {
+				provider: "tavily",
+				role: "research",
+				costUsd: 0.02,
+				tokens: { prompt: 100, completion: 50, total: 150 },
+			},
+		} as EventLog,
+		{
+			id: "ev-4",
+			timestamp: ts(300),
+			type: "task_scheduled",
+			severity: "info",
+			taskId: "T02",
+			payload: { description: "Plan architecture", name: "Plan architecture" },
+			metadata: { provider: "moonshot-k2.6", role: "planning" },
+		} as EventLog,
+		{
+			id: "ev-5",
+			timestamp: ts(400),
+			type: "provider_selected",
+			severity: "info",
+			taskId: "T02",
+			payload: {},
+			metadata: {
+				provider: "moonshot-k2.6",
+				role: "planning",
+				costUsd: 0.03,
+				tokens: { prompt: 200, completion: 100, total: 300 },
+			},
+		} as EventLog,
+		{
+			id: "ev-6",
+			timestamp: ts(500),
+			type: "task_scheduled",
+			severity: "info",
+			taskId: "T03",
+			payload: { description: "Implement API", name: "Implement API" },
+			metadata: { provider: "deepseek-v4", role: "execution" },
+		} as EventLog,
+		{
+			id: "ev-7",
+			timestamp: ts(600),
+			type: "provider_selected",
+			severity: "info",
+			taskId: "T03",
+			payload: {},
+			metadata: {
+				provider: "deepseek-v4",
+				role: "execution",
+				costUsd: 0.05,
+				tokens: { prompt: 300, completion: 150, total: 450 },
+			},
+		} as EventLog,
+		{
+			id: "ev-8",
+			timestamp: ts(700),
+			type: "task_scheduled",
+			severity: "info",
+			taskId: "T04",
+			payload: { description: "Verify tests", name: "Verify tests" },
+			metadata: { provider: "opencode-go", role: "execution" },
+		} as EventLog,
+		{
+			id: "ev-9",
+			timestamp: ts(800),
+			type: "provider_selected",
+			severity: "info",
+			taskId: "T04",
+			payload: {},
+			metadata: {
+				provider: "opencode-go",
+				role: "execution",
+				costUsd: 0.01,
+				tokens: { prompt: 50, completion: 25, total: 75 },
+			},
+		} as EventLog,
+		{
+			id: "ev-10",
+			timestamp: ts(900),
+			type: "provider_fallback",
+			severity: "warning",
+			taskId: "T04",
+			payload: { from: "opencode-go", to: "minimax-m2.7" },
+			metadata: {
+				fromProvider: "opencode-go",
+				toProvider: "minimax-m2.7",
+				errorReason: "429 Too Many Requests",
+			},
+		} as EventLog,
+		{
+			id: "ev-11",
+			timestamp: ts(1000),
+			type: "provider_selected",
+			severity: "info",
+			taskId: "T04",
+			payload: {},
+			metadata: {
+				provider: "minimax-m2.7",
+				role: "execution",
+				costUsd: 0.04,
+				tokens: { prompt: 80, completion: 40, total: 120 },
+			},
+		} as EventLog,
+		{
+			id: "ev-12",
+			timestamp: ts(1100),
+			type: "task_completed",
+			severity: "info",
+			taskId: "T01",
+			payload: { result: "done" },
+			metadata: { provider: "tavily" },
+		} as EventLog,
+		{
+			id: "ev-13",
+			timestamp: ts(1200),
+			type: "task_completed",
+			severity: "info",
+			taskId: "T02",
+			payload: { result: "done" },
+			metadata: { provider: "moonshot-k2.6" },
+		} as EventLog,
+		{
+			id: "ev-14",
+			timestamp: ts(1300),
+			type: "task_completed",
+			severity: "info",
+			taskId: "T03",
+			payload: { result: "done" },
+			metadata: { provider: "deepseek-v4" },
+		} as EventLog,
+		{
+			id: "ev-15",
+			timestamp: ts(1400),
+			type: "task_completed",
+			severity: "info",
+			taskId: "T04",
+			payload: { result: "done" },
+			metadata: { provider: "minimax-m2.7" },
+		} as EventLog,
+		{
+			id: "ev-end",
+			timestamp: ts(1500),
+			type: "auto_command_completed",
+			severity: "info",
+			payload: { result: "success" },
+		} as EventLog,
+	];
+}
+
+async function createSyntheticRun(eventsDir: string, runId: string): Promise<string> {
+	const filePath = path.join(eventsDir, `run-${runId}.jsonl`);
+	await mkdir(eventsDir, { recursive: true });
+	const events = buildSyntheticEvents();
+	const lines = events.map((e) => JSON.stringify(e)).join("\n");
+	await fs.writeFile(filePath, lines + "\n", "utf-8");
+	return filePath;
+}
+
+// ── E2E: RunManager synthetic pipeline ─────────────────────────────────────
+
+describe("E2E: RunManager synthetic pipeline", () => {
+	let tmpDir: string;
+	let manager: RunManager;
+
+	beforeEach(async () => {
+		tmpDir = await createTempDir("runmanager");
+	});
+
+	afterEach(async () => {
+		manager?.close();
+		await cleanupTempDir(tmpDir);
+	});
+
+	it("parses a synthetic JSONL file and detects the run", async () => {
+		const runId = `synth-${Date.now()}`;
+		await createSyntheticRun(tmpDir, runId);
+		manager = new RunManager({ eventsDir: tmpDir });
+		await manager.start();
+		const runs = manager.getRuns();
+		expect(runs.length).toBe(1);
+		expect(runs[0].id).toBe(`run-${runId}`);
+		expect(runs[0].events.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("extracts task_scheduled and task_completed events correctly", async () => {
+		const runId = `synth-${Date.now()}`;
+		await createSyntheticRun(tmpDir, runId);
+		manager = new RunManager({ eventsDir: tmpDir });
+		await manager.start();
+		const run = manager.getRunById(`run-${runId}`);
+		expect(run).toBeDefined();
+		const scheduled = run!.events.filter((e) => e.type === "task_scheduled");
+		const completed = run!.events.filter((e) => e.type === "task_completed");
+		expect(scheduled.length).toBe(4);
+		expect(completed.length).toBe(4);
+	});
+
+	it("extracts provider_fallback events with from/to providers", async () => {
+		const runId = `synth-${Date.now()}`;
+		await createSyntheticRun(tmpDir, runId);
+		manager = new RunManager({ eventsDir: tmpDir });
+		await manager.start();
+		const run = manager.getRunById(`run-${runId}`);
+		expect(run).toBeDefined();
+		const fallbacks = run!.events.filter((e) => e.type === "provider_fallback");
+		expect(fallbacks.length).toBe(1);
+		const fb = fallbacks[0];
+		expect(fb.metadata?.fromProvider).toBe("opencode-go");
+		expect(fb.metadata?.toProvider).toBe("minimax-m2.7");
+	});
+});
+
+// ── E2E: Hook and component data pipeline ──────────────────────────────────
+
+describe("E2E: Hook and component data pipeline", () => {
+	const events = buildSyntheticEvents();
+
+	it("useTaskList extracts correct task list from synthetic events", () => {
+		const result = extractTasks(events);
+		expect(result.length).toBe(4);
+		const ids = result.map((t) => t.id).sort();
+		expect(ids).toEqual(["T01", "T02", "T03", "T04"]);
+		expect(result.every((t) => t.status === "completed")).toBe(true);
+	});
+
+	it("useCostTable aggregates costs from synthetic events", () => {
+		const result = extractCosts(events);
+		expect(result.rows.length).toBe(5);
+		expect(result.totalCostUsd).toBe(0.15);
+		expect(result.totalTokens).toBe(1095);
+		const tavily = result.rows.find((r) => r.provider === "tavily");
+		expect(tavily).toBeDefined();
+		expect(tavily!.costUsd).toBe(0.02);
+	});
+
+	it("AgentStatus detects fallback events in synthetic run data", () => {
+		const result = extractAgents(events);
+		expect(result.agents.length).toBe(5);
+		expect(result.fallbackCount).toBe(1);
+		expect(result.latestFallback).toBeDefined();
+		expect(result.latestFallback!.from).toBe("opencode-go");
+		expect(result.latestFallback!.to).toBe("minimax-m2.7");
+		expect(result.latestFallback!.reason).toBe("429 Too Many Requests");
+	});
+
+	it("ProgressBar calculates correct completion percentage from synthetic events", () => {
+		const tasks = extractTasks(events);
+		const completed = tasks.filter((t) => t.status === "completed").length;
+		const total = tasks.length;
+		const percentage = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+		expect(percentage).toBe(100);
+	});
+});
+
+// ── E2E: SummaryGenerator metrics ──────────────────────────────────────────
+
+describe("E2E: SummaryGenerator metrics", () => {
+	let eventFile: string;
+	let runId: string;
+
+	beforeEach(async () => {
+		runId = `test-synth-${Date.now()}`;
+		const eventsDir = path.join(process.cwd(), ".events");
+		eventFile = await createSyntheticRun(eventsDir, runId);
+	});
+
+	afterEach(async () => {
+		await rm(eventFile, { force: true }).catch(() => {});
+		const outputDir = path.join(process.cwd(), ".clarity", "runs", runId);
+		await rm(outputDir, { recursive: true, force: true }).catch(() => {});
+	});
+
+	it("extracts >=1 fallback events", async () => {
+		const generator = new SummaryGenerator({
+			runId,
+			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+		});
+		const summaryPath = await generator.generate();
+		const markdown = await readFile(summaryPath, "utf-8");
+		expect(markdown).toContain("## Fallbacks Activated");
+	});
+
+	it("counts >=4 unique providers", async () => {
+		const generator = new SummaryGenerator({
+			runId,
+			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+		});
+		const summaryPath = await generator.generate();
+		const markdown = await readFile(summaryPath, "utf-8");
+		// Verify provider stats table contains at least 4 providers
+		expect(markdown).toContain("tavily");
+		expect(markdown).toContain("moonshot-k2.6");
+		expect(markdown).toContain("deepseek-v4");
+		expect(markdown).toContain("minimax-m2.7");
+	});
+
+	it("calculates total cost < $0.50 for synthetic demo data", async () => {
+		const generator = new SummaryGenerator({
+			runId,
+			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+		});
+		const summaryPath = await generator.generate();
+		const markdown = await readFile(summaryPath, "utf-8");
+		expect(markdown).toContain("Estimated Cost:");
+		const costMatch = markdown.match(/Estimated Cost:[^$]*\$([0-9.]+)/);
+		expect(costMatch).not.toBeNull();
+		const cost = parseFloat(costMatch![1]);
+		expect(cost).toBeLessThan(0.5);
+	});
+
+	it("produces markdown containing fallback section", async () => {
+		const generator = new SummaryGenerator({
+			runId,
+			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+		});
+		const summaryPath = await generator.generate();
+		const markdown = await readFile(summaryPath, "utf-8");
+		expect(markdown).toContain("## Fallbacks Activated");
+		expect(markdown).toContain("opencode-go → minimax-m2.7");
+	});
+});
+
+// ── E2E: Multi-run support ─────────────────────────────────────────────────
+
+describe("E2E: Multi-run support", () => {
+	let tmpDir: string;
+	let manager: RunManager;
+
+	beforeEach(async () => {
+		tmpDir = await createTempDir("multirun");
+	});
+
+	afterEach(async () => {
+		manager?.close();
+		await cleanupTempDir(tmpDir);
+	});
+
+	it("RunManager handles two simultaneous JSONL runs", async () => {
+		await createSyntheticRun(tmpDir, "run-a");
+		await createSyntheticRun(tmpDir, "run-b");
+		manager = new RunManager({ eventsDir: tmpDir });
+		await manager.start();
+		const runs = manager.getRuns();
+		expect(runs.length).toBe(2);
+		const ids = runs.map((r) => r.id).sort();
+		expect(ids).toEqual(["run-run-a", "run-run-b"]);
+	});
+});
+
+// ── E2E: Demo script structure ─────────────────────────────────────────────
+
+describe("E2E: Demo script structure", () => {
+	it("demo script exists and is executable", async () => {
+		const scriptPath = path.join(process.cwd(), "scripts", "demo-dashboard.sh");
+		const stats = await fs.stat(scriptPath);
+		expect(stats.isFile()).toBe(true);
+		expect(stats.mode & 0o111).toBeGreaterThan(0);
+	});
+
+	it("contains all required metric verification checks", async () => {
+		const scriptPath = path.join(process.cwd(), "scripts", "demo-dashboard.sh");
+		const content = await fs.readFile(scriptPath, "utf-8");
+		expect(content).toContain("uniqueProviders");
+		expect(content).toContain("fallbackCount");
+		expect(content).toContain("TOTAL_COST");
+		expect(content).toContain("0.50");
 	});
 });

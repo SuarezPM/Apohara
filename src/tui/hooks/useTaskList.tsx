@@ -31,7 +31,7 @@ function getStatusFromEventType(type: string): TaskStatus {
 	}
 }
 
-function extractTasks(events: EventLog[]): TaskItem[] {
+export function extractTasks(events: EventLog[]): TaskItem[] {
 	// Track latest state per taskId
 	const taskMap = new Map<string, TaskItem>();
 

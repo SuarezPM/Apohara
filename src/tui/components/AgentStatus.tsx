@@ -16,7 +16,7 @@ interface AgentInfo {
 	lastSeen: string; // ISO timestamp
 }
 
-function extractAgents(events: import("../../core/types.ts").EventLog[]): {
+export function extractAgents(events: import("../../core/types.ts").EventLog[]): {
 	agents: AgentInfo[];
 	fallbackCount: number;
 	latestFallback?: { from: ProviderId; to: ProviderId; reason?: string };
