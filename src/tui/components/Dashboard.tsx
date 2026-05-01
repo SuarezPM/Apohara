@@ -1,9 +1,9 @@
-import React from "react";
 import { Box, Text } from "ink";
+import type React from "react";
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
-import { Timer } from "./Timer.tsx";
+import type { DebugCounters, ResponsiveMode } from "../types.ts";
 import { ProgressBar } from "./ProgressBar.tsx";
-import type { ResponsiveMode, DebugCounters } from "../types.ts";
+import { Timer } from "./Timer.tsx";
 
 export interface DashboardProps {
 	/** Content rendered in the body area */
@@ -18,9 +18,27 @@ export interface DashboardProps {
 	debugCounters?: DebugCounters;
 	/** Whether debug mode is active */
 	debugMode?: boolean;
+	/** Active run ID to display in header */
+	runId?: string;
+	/** Total number of runs */
+	totalRuns?: number;
+	/** Current active run index (0-based) */
+	activeRunIndex?: number;
 }
 
-function Header({ startedAt, mode }: { startedAt?: string; mode: ResponsiveMode }) {
+function Header({
+	startedAt,
+	mode,
+	runId,
+	totalRuns,
+	activeRunIndex,
+}: {
+	startedAt?: string;
+	mode: ResponsiveMode;
+	runId?: string;
+	totalRuns?: number;
+	activeRunIndex?: number;
+}) {
 	if (mode === "minimal") {
 		return (
 			<Box>
@@ -33,6 +51,11 @@ function Header({ startedAt, mode }: { startedAt?: string; mode: ResponsiveMode 
 		<Box justifyContent="space-between">
 			<Box>
 				<Text bold>Clarity Dashboard</Text>
+				{runId && totalRuns && totalRuns > 1 && (
+					<Text dimColor>
+						Run: {runId} ({(activeRunIndex ?? 0) + 1}/{totalRuns})
+					</Text>
+				)}
 			</Box>
 			{startedAt && (
 				<Box>
@@ -75,9 +98,8 @@ function Footer({
 			{debugMode && debugCounters && (
 				<Box marginTop={1}>
 					<Text dimColor>
-						Debug: malformed={debugCounters.malformedLines} unknown={
-							debugCounters.unknownEventTypes
-						}
+						Debug: malformed={debugCounters.malformedLines} unknown=
+						{debugCounters.unknownEventTypes}
 					</Text>
 				</Box>
 			)}
@@ -103,12 +125,21 @@ export function Dashboard({
 	totalTasks = 0,
 	debugCounters,
 	debugMode = false,
+	runId,
+	totalRuns,
+	activeRunIndex,
 }: DashboardProps) {
 	const mode = useResponsiveMode();
 
 	return (
 		<Box flexDirection="column" paddingX={1}>
-			<Header startedAt={startedAt} mode={mode} />
+			<Header
+				startedAt={startedAt}
+				mode={mode}
+				runId={runId}
+				totalRuns={totalRuns}
+				activeRunIndex={activeRunIndex}
+			/>
 			<Box flexDirection="column" marginY={1}>
 				{children}
 			</Box>

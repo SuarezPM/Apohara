@@ -110,11 +110,19 @@ describe("Dashboard", () => {
 		expect(output).not.toContain("50%");
 	});
 
-	it("uses narrower progress bar in compact mode", () => {
-		setColumns(80);
+	it("shows run indicator when runId and totalRuns > 1", () => {
+		setColumns(120);
 		const output = renderToString(
-			<Dashboard completedTasks={10} totalTasks={10} />,
+			<Dashboard runId="abc-123" totalRuns={5} activeRunIndex={1} />,
 		);
-		expect(output).toContain("100%");
+		expect(output).toContain("Run: abc-123 (2/5)");
+	});
+
+	it("does not show run indicator when only one run exists", () => {
+		setColumns(120);
+		const output = renderToString(
+			<Dashboard runId="abc-123" totalRuns={1} activeRunIndex={0} />,
+		);
+		expect(output).not.toContain("Run:");
 	});
 });

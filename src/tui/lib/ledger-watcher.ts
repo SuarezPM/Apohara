@@ -1,5 +1,5 @@
-import { watch, createReadStream } from "node:fs";
-import { stat, readdir } from "node:fs/promises";
+import { createReadStream, watch } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import type { EventLog } from "../../core/types";
@@ -39,13 +39,16 @@ export class LedgerWatcher {
 
 		const watcherFactory = this.options.watchImpl || watch;
 		try {
-			this.watcher = watcherFactory(this.options.eventsDir, (eventType, filename) => {
-				if (this.closed) return;
-				if (!filename) return;
-				if (!filename.endsWith(".jsonl")) return;
-				const filePath = join(this.options.eventsDir, filename);
-				this.read(filePath).catch((err) => this.emitError(err));
-			});
+			this.watcher = watcherFactory(
+				this.options.eventsDir,
+				(_eventType, filename) => {
+					if (this.closed) return;
+					if (!filename) return;
+					if (!filename.endsWith(".jsonl")) return;
+					const filePath = join(this.options.eventsDir, filename);
+					this.read(filePath).catch((err) => this.emitError(err));
+				},
+			);
 			this.watcher.on("error", (err) => {
 				if (this.closed) return;
 				this.emitError(err);
@@ -65,7 +68,9 @@ export class LedgerWatcher {
 			this.watcher = null;
 		}
 		if (this.options.debug) {
-			console.error(`[LedgerWatcher] Fallback to polling for ${this.options.eventsDir}`);
+			console.error(
+				`[LedgerWatcher] Fallback to polling for ${this.options.eventsDir}`,
+			);
 		}
 		this.pollInterval = setInterval(() => {
 			this.scan().catch((err) => this.emitError(err));
@@ -75,8 +80,12 @@ export class LedgerWatcher {
 	private async scan(): Promise<void> {
 		let entries: string[];
 		try {
-			const dirents = await readdir(this.options.eventsDir, { withFileTypes: true });
-			entries = dirents.filter((e) => e.isFile() && e.name.endsWith(".jsonl")).map((e) => e.name);
+			const dirents = await readdir(this.options.eventsDir, {
+				withFileTypes: true,
+			});
+			entries = dirents
+				.filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
+				.map((e) => e.name);
 		} catch (err) {
 			this.emitError(err as Error);
 			return;
@@ -87,7 +96,11 @@ export class LedgerWatcher {
 			const state = this.fileStates.get(filePath);
 			try {
 				const stats = await stat(filePath);
-				if (!state || stats.mtimeMs > state.mtimeMs || stats.size > state.size) {
+				if (
+					!state ||
+					stats.mtimeMs > state.mtimeMs ||
+					stats.size > state.size
+				) {
 					if (!state) {
 						this.options.onFileAdded?.(filePath);
 					}
@@ -95,6 +108,15 @@ export class LedgerWatcher {
 				}
 			} catch (err) {
 				this.emitError(err as Error);
+			}
+		}
+
+		// Detect previously tracked files that have disappeared
+		for (const [filePath, _state] of this.fileStates) {
+			const name = filePath.split(/[/\\]/).pop() ?? "";
+			if (!entries.includes(name)) {
+				this.emitError(new Error(`File removed: ${filePath}`));
+				this.fileStates.delete(filePath);
 			}
 		}
 	}

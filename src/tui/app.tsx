@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { render, useInput, useApp, Box, Text } from "ink";
-import { Dashboard } from "./components/Dashboard.tsx";
-import { TaskList } from "./components/TaskList.tsx";
+import { join } from "node:path";
+import { Box, render, Text, useApp, useInput } from "ink";
+import { useEffect, useRef, useState } from "react";
 import { AgentStatus } from "./components/AgentStatus.tsx";
 import { CostTable } from "./components/CostTable.tsx";
-import { DashboardProvider, useDashboard, useActiveRun } from "./hooks/useDashboard.tsx";
-import type { Run, EventLog } from "./types.ts";
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { Dashboard } from "./components/Dashboard.tsx";
+import { TaskList } from "./components/TaskList.tsx";
+import {
+	DashboardProvider,
+	useActiveRun,
+	useDashboard,
+} from "./hooks/useDashboard.tsx";
+import { RunManager } from "./lib/run-manager.ts";
 
 const EVENTS_DIR = join(process.cwd(), ".events");
 
@@ -17,54 +20,6 @@ interface AppState {
 	debugCounters: { malformedLines: number; unknownEventTypes: number };
 	loading: boolean;
 	error?: string;
-}
-
-async function loadRuns(): Promise<Run[]> {
-	try {
-		const files = await readdir(EVENTS_DIR);
-		const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
-
-		const runs: Run[] = [];
-		for (const file of jsonlFiles) {
-			const runId = file.replace(/^run-/, "").replace(/\.jsonl$/, "");
-			const content = await readFile(join(EVENTS_DIR, file), "utf-8");
-			const lines = content.split("\n").filter((l) => l.trim());
-			const events: EventLog[] = [];
-			let malformedLines = 0;
-			let unknownEventTypes = 0;
-
-			for (const line of lines) {
-				try {
-					const event = JSON.parse(line) as EventLog;
-					if (!event.type || !event.timestamp) {
-						malformedLines++;
-						continue;
-					}
-					events.push(event);
-				} catch {
-					malformedLines++;
-				}
-			}
-
-			const startedAt =
-				events.length > 0
-					? events[0].timestamp
-					: new Date().toISOString();
-
-			runs.push({
-				id: runId,
-				startedAt,
-				events,
-			});
-		}
-
-		return runs.sort(
-			(a, b) =>
-				new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
-		);
-	} catch {
-		return [];
-	}
 }
 
 function DashboardApp() {
@@ -79,31 +34,41 @@ function DashboardApp() {
 		loading: true,
 	});
 
+	const managerRef = useRef<RunManager | null>(null);
+
 	useEffect(() => {
-		loadRuns()
-			.then((runs) => {
-				let malformedLines = 0;
-				let unknownEventTypes = 0;
-				for (const run of runs) {
-					for (const event of run.events) {
-						if (!event.type) malformedLines++;
-						// Track unknown event types if needed
-					}
-				}
-				dispatch({ type: "SET_RUNS", payload: runs });
+		const manager = new RunManager({
+			eventsDir: EVENTS_DIR,
+			onRunsChanged: (runs) => {
+				// Reverse so newest run is first (matches previous loadRuns behavior)
+				dispatch({ type: "SET_RUNS", payload: [...runs].reverse() });
+				setAppState((prev) => ({ ...prev, loading: false }));
+			},
+			onCountersChanged: (counters) => {
+				setAppState((prev) => ({ ...prev, debugCounters: counters }));
+			},
+			onError: (err) => {
 				setAppState((prev) => ({
 					...prev,
 					loading: false,
-					debugCounters: { malformedLines, unknownEventTypes },
+					error: err.message,
 				}));
-			})
-			.catch((err) => {
-				setAppState((prev) => ({
-					...prev,
-					loading: false,
-					error: err instanceof Error ? err.message : String(err),
-				}));
-			});
+			},
+			debug: process.env.DEBUG === "true" || process.env.DEBUG === "1",
+		});
+
+		managerRef.current = manager;
+		manager.start().catch((err) => {
+			setAppState((prev) => ({
+				...prev,
+				loading: false,
+				error: err instanceof Error ? err.message : String(err),
+			}));
+		});
+
+		return () => {
+			manager.close();
+		};
 	}, [dispatch]);
 
 	useInput((input, key) => {
@@ -127,7 +92,8 @@ function DashboardApp() {
 			});
 		}
 		if (key.tab || key.rightArrow || key.downArrow) {
-			const nextIndex = (state.activeRunIndex + 1) % Math.max(state.runs.length, 1);
+			const nextIndex =
+				(state.activeRunIndex + 1) % Math.max(state.runs.length, 1);
 			dispatch({ type: "SET_ACTIVE_RUN", payload: nextIndex });
 			if (appState.debugMode) {
 				console.error(`[debug] activeRunIndex=${nextIndex}`);
@@ -170,8 +136,10 @@ function DashboardApp() {
 		);
 	}
 
-	const completedTasks = activeRun?.events.filter((e) => e.type === "task_completed").length ?? 0;
-	const totalTasks = activeRun?.events.filter((e) => e.type === "task_scheduled").length ?? 0;
+	const completedTasks =
+		activeRun?.events.filter((e) => e.type === "task_completed").length ?? 0;
+	const totalTasks =
+		activeRun?.events.filter((e) => e.type === "task_scheduled").length ?? 0;
 
 	return (
 		<Dashboard
@@ -180,6 +148,9 @@ function DashboardApp() {
 			totalTasks={totalTasks}
 			debugMode={appState.debugMode}
 			debugCounters={appState.debugCounters}
+			runId={activeRun?.id}
+			totalRuns={state.runs.length}
+			activeRunIndex={state.activeRunIndex}
 		>
 			<TaskList />
 			<AgentStatus />
@@ -189,17 +160,8 @@ function DashboardApp() {
 }
 
 function App() {
-	const runId = process.env.CLARITY_RUN_ID;
-	const initialRuns = runId
-		? [{
-				id: runId,
-				startedAt: new Date().toISOString(),
-				events: [],
-			}]
-		: undefined;
-
 	return (
-		<DashboardProvider initialRuns={initialRuns}>
+		<DashboardProvider>
 			<DashboardApp />
 		</DashboardProvider>
 	);
