@@ -19,7 +19,7 @@ describe('CLI Router', () => {
 
 	it('should show version', async () => {
 		const { stdout } = await execAsync('bun run src/cli.ts --version');
-		expect(stdout).toContain('1.0.0');
+		expect(stdout).toContain('0.1.0');
 	});
 });
 
