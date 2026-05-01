@@ -173,4 +173,54 @@ describe("Install and Run E2E Test", () => {
 			await kill();
 		}
 	});
+
+	it("5. Worktree isolation test - verifies git worktrees provide file isolation", async () => {
+		const worktreeDirA = path.join(tempDir, "worktree-a");
+		const worktreeDirB = path.join(tempDir, "worktree-b");
+		const mainRepo = path.join(tempDir, "main-repo");
+
+		// Setup: Create a main git repository
+		await fs.mkdir(mainRepo, { recursive: true });
+		
+		await execAsync("git init", { cwd: mainRepo });
+		await execAsync("git config user.email 'test@test.com'", { cwd: mainRepo });
+		await execAsync("git config user.name 'Test'", { cwd: mainRepo });
+		
+		// Create initial commit
+		await fs.writeFile(path.join(mainRepo, "README.md"), "# Main Repo");
+		await execAsync("git add README.md", { cwd: mainRepo });
+		await execAsync("git commit -m 'Initial commit'", { cwd: mainRepo });
+
+		// Create worktree A using direct git commands (faster and more reliable)
+		await execAsync(`git worktree add -b branch-a ${worktreeDirA}`, { cwd: mainRepo });
+		
+		// Create worktree B
+		await execAsync(`git worktree add -b branch-b ${worktreeDirB}`, { cwd: mainRepo });
+
+		// Write a file to worktree A
+		const fileInA = path.join(worktreeDirA, "unique-file-a.txt");
+		await fs.writeFile(fileInA, "This file exists only in worktree A");
+		
+		// Verify file exists in worktree A
+		expect(await fileExists(fileInA)).toBe(true);
+
+		// Verify file does NOT exist in worktree B (isolation check)
+		const fileInB = path.join(worktreeDirB, "unique-file-a.txt");
+		expect(await fileExists(fileInB)).toBe(false);
+
+		// Write a different file to worktree B
+		const fileInB2 = path.join(worktreeDirB, "unique-file-b.txt");
+		await fs.writeFile(fileInB2, "This file exists only in worktree B");
+		
+		// Verify it's only in worktree B
+		expect(await fileExists(fileInB2)).toBe(true);
+		expect(await fileExists(path.join(worktreeDirA, "unique-file-b.txt"))).toBe(false);
+
+		// Cleanup: Remove worktrees using git worktree remove
+		await execAsync(`git worktree remove --force ${worktreeDirA}`, { cwd: mainRepo });
+		await execAsync(`git worktree remove --force ${worktreeDirB}`, { cwd: mainRepo });
+		
+		// Clean up the main repo branch references
+		await execAsync("git branch -D branch-a branch-b", { cwd: mainRepo }).catch(() => {});
+	});
 });
