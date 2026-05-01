@@ -1,5 +1,7 @@
 import type { EventLog } from "../core/types.ts";
 
+export type { EventLog };
+
 /**
  * A run represents a single execution session — a collection of events
  * produced during one agent iteration.
@@ -26,7 +28,8 @@ export type DashboardAction =
 	| { type: "SET_RUNS"; payload: Run[] }
 	| { type: "SET_ACTIVE_RUN"; payload: number }
 	| { type: "ADD_RUN"; payload: Run }
-	| { type: "APPEND_EVENT"; payload: { runId: string; event: EventLog } };
+	| { type: "APPEND_EVENT"; payload: { runId: string; event: EventLog } }
+	| { type: "APPEND_EVENTS"; payload: { runId: string; events: EventLog[] } };
 
 /**
  * Terminal display modes derived from viewport width.

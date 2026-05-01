@@ -21,6 +21,13 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
 			);
 			return { ...state, runs };
 		}
+		case "APPEND_EVENTS": {
+			const { runId, events } = action.payload;
+			const runs = state.runs.map((run) =>
+				run.id === runId ? { ...run, events: [...run.events, ...events] } : run,
+			);
+			return { ...state, runs };
+		}
 		default:
 			return state;
 	}

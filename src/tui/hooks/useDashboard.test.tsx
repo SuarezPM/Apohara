@@ -90,6 +90,40 @@ describe("useDashboard", () => {
 		});
 		expect(result.current.state.runs[0].events).toHaveLength(1);
 	});
+
+	it("dispatches APPEND_EVENTS for batch updates", () => {
+		const { result } = renderHook(() => useDashboard(), { wrapper });
+		act(() => {
+			result.current.dispatch({ type: "ADD_RUN", payload: mockRun });
+		});
+		act(() => {
+			result.current.dispatch({
+				type: "APPEND_EVENTS",
+				payload: {
+					runId: "run-1",
+					events: [
+						{
+							id: "evt-1",
+							timestamp: "2026-04-30T12:00:00Z",
+							type: "test",
+							severity: "info",
+							payload: {},
+						},
+						{
+							id: "evt-2",
+							timestamp: "2026-04-30T12:01:00Z",
+							type: "test",
+							severity: "info",
+							payload: {},
+						},
+					],
+				},
+			});
+		});
+		expect(result.current.state.runs[0].events).toHaveLength(2);
+		expect(result.current.state.runs[0].events[0].id).toBe("evt-1");
+		expect(result.current.state.runs[0].events[1].id).toBe("evt-2");
+	});
 });
 
 describe("useActiveRun", () => {
