@@ -1,7 +1,4 @@
-import * as dotenv from "dotenv";
 import { z } from "zod";
-
-dotenv.config();
 
 const envSchema = z.object({
 	// Primary execution provider (OpenCode Go)

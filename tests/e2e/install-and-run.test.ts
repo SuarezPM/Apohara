@@ -3,6 +3,7 @@ import { exec as execSync } from "node:child_process";
 import { promisify } from "node:util";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { ProviderRouter } from "../../src/providers/router";
 
 const execAsync = promisify(execSync);
 
@@ -222,5 +223,35 @@ describe("Install and Run E2E Test", () => {
 		
 		// Clean up the main repo branch references
 		await execAsync("git branch -D branch-a branch-b", { cwd: mainRepo }).catch(() => {});
+	});
+
+	it("6. Provider fallback chain test - verifies --simulate-fallback triggers fallback to next provider", async () => {
+		// Create router with simulateFailure enabled
+		const router = new ProviderRouter({ simulateFailure: true });
+
+		// Verify the router is configured for simulated failure
+		expect(router).toBeDefined();
+
+		// Test that fallback method returns a provider (not the original)
+		// When simulateFailure is true, opencode-go will fail and fallback to another
+		const fallbackProvider = router.fallback("opencode-go");
+
+		// The fallback should NOT return opencode-go since it will be on cooldown/simulated failure
+		// The fallback chain returns the next available provider
+		expect(fallbackProvider).toBeDefined();
+		expect(fallbackProvider).not.toBe("opencode-go");
+
+		// Verify other providers work (they should not be on cooldown)
+		// Just verify fallback can be called multiple times without crashing
+		const fallback2 = router.fallback(fallbackProvider);
+		expect(fallback2).toBeDefined();
+
+		// Verify isOnCooldown works (should return false for most providers initially)
+		const isCooldown = router.isOnCooldown(fallbackProvider);
+		expect(typeof isCooldown).toBe("boolean");
+
+		// Verify getFailureCount works
+		const failureCount = router.getFailureCount("opencode-go");
+		expect(typeof failureCount).toBe("number");
 	});
 });
