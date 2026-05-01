@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { spawn } from "bun";
+import { spawn } from "../lib/spawn";
 import { EventLedger } from "./ledger";
 import type { OrchestratorState } from "./types";
 
@@ -399,8 +399,8 @@ The changes have been consolidated into branch \`${params.branchName}\`.
 		});
 
 		const exitCode = await proc.exited;
-		const stdout = await new Response(proc.stdout).text();
-		const stderr = await new Response(proc.stderr).text();
+		const stdout = await proc.stdout.text();
+		const stderr = await proc.stderr.text();
 
 		return { exitCode, stdout, stderr };
 	}

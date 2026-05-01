@@ -1,4 +1,4 @@
-import { spawn } from "bun";
+import { spawn } from "../lib/spawn";
 import { Command } from "commander";
 import { Consolidator } from "../core/consolidator";
 import { TaskDecomposer } from "../core/decomposer";
@@ -282,8 +282,8 @@ async function runBiomeLint(): Promise<{
 	});
 
 	const exitCode = await proc.exited;
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
+	const stdout = await proc.stdout.text();
+	const stderr = await proc.stderr.text();
 
 	// Parse the output to find number of fixed issues
 	// Biome outputs things like "Fixed 5 issues"
