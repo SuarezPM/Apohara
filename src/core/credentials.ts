@@ -4,10 +4,20 @@ import * as path from "node:path";
 import * as os from "node:os";
 import type { OAuthTokenStore } from "../lib/oauth-token-store";
 
+// Dynamic imports to avoid circular dependencies
+let geminiOAuth: typeof import("../lib/oauth/gemini") | null = null;
+
+async function getGeminiOAuth() {
+	if (!geminiOAuth) {
+		geminiOAuth = await import("../lib/oauth/gemini");
+	}
+	return geminiOAuth;
+}
+
 const FREE_PROVIDERS = new Set(["kiro-ai", "iflow-ai"]);
 
 // OAuth providers that use token-based auth
-const OAUTH_PROVIDERS = new Set(["claude-ai", "anthropic"]);
+const OAUTH_PROVIDERS = new Set(["claude-ai", "anthropic", "gemini-ai"]);
 
 function getCredentialsPath(): string {
 	const xdgConfig = process.env.XDG_CONFIG_HOME;
@@ -119,6 +129,22 @@ const tokenStores = new Map<string, OAuthTokenStore>();
  * Uses lazy initialization to avoid circular dependencies
  */
 function getTokenStore(provider: string): OAuthTokenStore {
+	// Handle gemini-ai specially using the gemini OAuth module
+	if (provider === "gemini-ai") {
+		let store = tokenStores.get(provider);
+		if (!store) {
+			const { createGeminiTokenStore } = require("../lib/oauth-token-store");
+			
+			// Load client ID and secret from credentials
+			// For Google OAuth, we need client credentials
+			// This will be handled via the gemini OAuth module directly for login
+			// For token refresh, we need proper configuration
+			store = createGeminiTokenStore("" /* clientId will be loaded on refresh */);
+			tokenStores.set(provider, store);
+		}
+		return store;
+	}
+
 	let store = tokenStores.get(provider);
 	if (!store) {
 		// Import the token store class dynamically
@@ -207,6 +233,17 @@ export async function resolveOAuthToken(provider: string): Promise<string | null
 		return null;
 	}
 
+	// Handle gemini-ai specially using the gemini OAuth module
+	if (provider === "gemini-ai") {
+		try {
+			const gemini = await getGeminiOAuth();
+			return await gemini.getGeminiAccessToken();
+		} catch (error) {
+			console.error(`[credentials] Failed to resolve OAuth token for ${provider}:`, error);
+			return null;
+		}
+	}
+
 	try {
 		const store = getTokenStore(provider);
 		const token = await store.getToken();
@@ -225,6 +262,16 @@ export async function hasOAuthToken(provider: string): Promise<boolean> {
 		return false;
 	}
 
+	// Handle gemini-ai specially
+	if (provider === "gemini-ai") {
+		try {
+			const gemini = await getGeminiOAuth();
+			return await gemini.hasValidGeminiCredentials();
+		} catch {
+			return false;
+		}
+	}
+
 	try {
 		const store = getTokenStore(provider);
 		return store.hasToken();
@@ -239,6 +286,16 @@ export async function hasOAuthToken(provider: string): Promise<boolean> {
 export async function getOAuthTokenInfo(provider: string): Promise<Record<string, unknown>> {
 	if (!OAUTH_PROVIDERS.has(provider)) {
 		return { provider, oauth_supported: false };
+	}
+
+	// Handle gemini-ai specially
+	if (provider === "gemini-ai") {
+		try {
+			const gemini = await getGeminiOAuth();
+			return await gemini.getGeminiTokenInfo();
+		} catch {
+			return { provider, error: "Failed to get token info" };
+		}
 	}
 
 	try {

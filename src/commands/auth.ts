@@ -328,15 +328,47 @@ export const authCommand = new Command("auth")
 // Login subcommand
 authCommand
 	.command("login <provider>")
-	.description("Login to an OAuth provider (e.g., claude)")
+	.description("Login to an OAuth provider (e.g., claude, gemini)")
 	.action(async (provider: string) => {
 		console.log(`[Auth] Login command invoked for provider: ${provider}`);
 
 		if (provider === "claude") {
 			await loginClaude();
+		} else if (provider === "gemini") {
+			// Import and use gemini OAuth
+			const { loginWithGoogleOAuth, saveApoharaToken, loadClientId } = await import("../lib/oauth/gemini.js");
+			
+			console.log("[Auth] Starting Gemini OAuth login...");
+			
+			// Load client ID from credentials
+			const credPath = process.env.XDG_CONFIG_HOME
+				? path.join(process.env.XDG_CONFIG_HOME, "apohara", "credentials.json")
+				: path.join(os.homedir(), ".apohara", "credentials.json");
+			
+			let clientId = "";
+			try {
+				const content = await fs.readFile(credPath, "utf-8");
+				const parsed = JSON.parse(content);
+				clientId = parsed["gemini-oauth-client-id"] || "";
+			} catch {
+				// No credentials file
+			}
+			
+			if (!clientId) {
+				console.error("❌ No client ID configured. Please add 'gemini-oauth-client-id' to credentials.json");
+				console.log("   Run: apohara config --set gemini-oauth-client-id=YOUR_CLIENT_ID");
+				process.exit(1);
+			}
+
+			// Perform OAuth flow
+			const token = await loginWithGoogleOAuth(clientId);
+			await saveApoharaToken(token);
+			
+			console.log(`✅ Gemini authentication successful!`);
+			console.log(`   Expires at: ${new Date(token.expires_at).toLocaleString()}`);
 		} else {
 			console.error(`❌ Unknown provider: ${provider}`);
-			console.log("   Supported providers: claude");
+			console.log("   Supported providers: claude, gemini");
 			process.exit(1);
 		}
 	});
@@ -347,5 +379,32 @@ authCommand
 	.description("Show authentication status (default: claude)")
 	.action(async (provider?: string) => {
 		const targetProvider = provider || "claude";
+		
+		if (targetProvider === "gemini") {
+			// Show gemini status using the gemini OAuth module
+			const { getGeminiTokenInfo } = await import("../lib/oauth/gemini.js");
+			
+			try {
+				const info = await getGeminiTokenInfo();
+				
+				console.log("\n📋 Gemini Authentication Status:");
+				console.log(`   Source: ${info.source || "none"}`);
+				
+				if (info.present) {
+					console.log(`   Token type: ${info.token_type}`);
+					console.log(`   Expires at: ${info.expires_at}`);
+					console.log(`   Status: ${info.is_expired ? "❌ Expired" : "✅ Valid"}`);
+					console.log(`   Refresh token: ${info.has_refresh_token ? "✅ Available" : "❌ Not available"}`);
+				} else {
+					console.log(`   Status: ❌ Not authenticated`);
+					console.log(`   Run: apohara auth login gemini`);
+				}
+				console.log("");
+			} catch (error) {
+				console.error("[Auth] Failed to get Gemini status:", error);
+			}
+			return;
+		}
+		
 		await showStatus(targetProvider);
 	});
