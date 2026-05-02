@@ -23,6 +23,106 @@ function sanitizeKey(key: string | undefined): string {
 }
 
 /**
+ * Validation result with details.
+ */
+interface ValidationResult {
+	valid: boolean;
+	error?: string;
+}
+
+/**
+ * Validates API key format for different providers.
+ * Anthropic requires sk-ant-api03-* keys (not sk-ant-oat01-* OAuth tokens).
+ * OpenCode Go and Google AI Studio have specific format requirements.
+ */
+function validateApiKey(keyName: string, value: string): ValidationResult {
+	if (!value) {
+		// Empty is allowed (user can skip)
+		return { valid: true };
+	}
+
+	switch (keyName) {
+		case "ANTHROPIC_API_KEY":
+			// Anthropic keys start with sk-ant-api03-
+			if (!value.startsWith("sk-ant-api03-")) {
+				return {
+					valid: false,
+					error: `Invalid Anthropic API key format. Keys must start with 'sk-ant-api03-'. Note: OAuth tokens (sk-ant-oat01-*) are not supported.`,
+				};
+			}
+			// Check minimum length
+			if (value.length < 40) {
+				return {
+					valid: false,
+					error: `Invalid Anthropic API key: too short (minimum 40 characters).`,
+				};
+			}
+			break;
+
+		case "OPENCODE_API_KEY":
+			// OpenCode Go keys typically start with oc- or opencode-
+			if (!value.startsWith("oc-") && !value.startsWith("opencode-")) {
+				return {
+					valid: false,
+					error: `Invalid OpenCode API key format. Keys must start with 'oc-' or 'opencode-'.`,
+				};
+			}
+			if (value.length < 20) {
+				return {
+					valid: false,
+					error: `Invalid OpenCode API key: too short (minimum 20 characters).`,
+				};
+			}
+			break;
+
+		case "OPENAI_API_KEY":
+			// OpenAI keys start with sk- or sk-proj-
+			if (!value.startsWith("sk-") && !value.startsWith("sk-proj-")) {
+				return {
+					valid: false,
+					error: `Invalid OpenAI API key format. Keys must start with 'sk-' or 'sk-proj-'.`,
+				};
+			}
+			if (value.length < 40) {
+				return {
+					valid: false,
+					error: `Invalid OpenAI API key: too short (minimum 40 characters).`,
+				};
+			}
+			break;
+
+		case "DEEPSEEK_API_KEY":
+			// DeepSeek keys typically start with sk- or deepseek-
+			if (!value.startsWith("sk-") && !value.startsWith("deepseek-")) {
+				return {
+					valid: false,
+					error: `Invalid DeepSeek API key format. Keys must start with 'sk-' or 'deepseek-'.`,
+				};
+			}
+			if (value.length < 20) {
+				return {
+					valid: false,
+					error: `Invalid DeepSeek API key: too short (minimum 20 characters).`,
+				};
+			}
+			break;
+
+		// For any future keys (e.g., GOOGLE_AI_STUDIO_API_KEY would be similar)
+		default:
+			// Basic length check for unknown providers
+			if (value.length < 10) {
+				return {
+					valid: false,
+					error: `Invalid API key for ${keyName}: too short (minimum 10 characters).`,
+				};
+			}
+			break;
+	}
+
+	return { valid: true };
+}
+
+/**
  * Prompts user for input using readline.
  */
 async function prompt(label: string, defaultValue?: string): Promise<string> {
@@ -173,7 +273,7 @@ async function runWizard(): Promise<void> {
 	const credentials = { ...existing };
 
 	for (const field of fields) {
-		const value = field.secure
+		let value = field.secure
 			? await promptSecure(
 					field.label,
 					existing[field.key as keyof typeof CREDENTIALS_TEMPLATE],
@@ -182,6 +282,27 @@ async function runWizard(): Promise<void> {
 					field.label,
 					existing[field.key as keyof typeof CREDENTIALS_TEMPLATE],
 				);
+
+		// Validate API key format before storing
+		const validation = validateApiKey(field.key, value);
+		if (!validation.valid) {
+			console.log(`\n⚠️  ${validation.error}`);
+			const retry = await confirm("Try again?", false);
+			if (retry) {
+				value = field.secure
+					? await promptSecure(field.label, "")
+					: await prompt(field.label, "");
+				// Re-validate after retry
+				const retryValidation = validateApiKey(field.key, value);
+				if (!retryValidation.valid) {
+					console.log(`\n❌ Invalid key format. Skipping ${field.label}.`);
+					value = "";
+				}
+			} else {
+				value = "";
+			}
+		}
+
 		credentials[field.key as keyof typeof CREDENTIALS_TEMPLATE] = value;
 	}
 
@@ -229,6 +350,13 @@ export const configCommand = new Command("config")
 				console.log(
 					`Valid keys: ${Object.keys(CREDENTIALS_TEMPLATE).join(", ")}`,
 				);
+				process.exit(1);
+			}
+
+			// Validate API key format before saving
+			const validation = validateApiKey(key, value);
+			if (!validation.valid) {
+				console.error(`❌ ${validation.error}`);
 				process.exit(1);
 			}
 
