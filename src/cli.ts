@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { autoCommand } from "./commands/auto.js";
+import { authCommand } from "./commands/auth.js";
 import { configCommand } from "./commands/config.js";
 import { dashboardCommand } from "./commands/dashboard.js";
 import { uninstallCommand } from "./commands/uninstall.js";
@@ -16,6 +17,7 @@ const program = new Command();
 program.name("apohara").description("Apohara CLI").version(packageJson.version);
 
 program.addCommand(configCommand);
+program.addCommand(authCommand);
 program.addCommand(autoCommand);
 program.addCommand(dashboardCommand);
 program.addCommand(uninstallCommand);
