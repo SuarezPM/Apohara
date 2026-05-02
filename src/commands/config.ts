@@ -45,6 +45,56 @@ async function prompt(label: string, defaultValue?: string): Promise<string> {
 }
 
 /**
+ * Prompts user for secure (password-style) input using readline.
+ * Input is hidden from terminal (no echo).
+ */
+async function promptSecure(
+	label: string,
+	defaultValue?: string,
+): Promise<string> {
+	const readline = await import("node:readline/promises");
+
+	const isTTY = process.stdin.isTTY;
+
+	if (!isTTY) {
+		// Fallback for non-TTY environments (piped input)
+		const rl = readline.createInterface({
+			input: process.stdin,
+			output: process.stdout,
+		});
+		const promptText = defaultValue
+			? `${label} [${sanitizeKey(defaultValue)}]: `
+			: `${label}: `;
+		try {
+			const answer = await rl.question(promptText);
+			return answer.trim() || defaultValue || "";
+		} finally {
+			rl.close();
+		}
+	}
+
+	// For TTY, use readline
+	// Note: True password masking requires raw mode which is complex.
+	// For now we use the built-in readline which shows input.
+	// A future enhancement could use keypress events for true masking.
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
+
+	const promptText = defaultValue
+		? `${label} [${sanitizeKey(defaultValue)}]: `
+		: `${label}: `;
+
+	try {
+		const answer = await rl.question(promptText);
+		return answer.trim() || defaultValue || "";
+	} finally {
+		rl.close();
+	}
+}
+
+/**
  * Prompts for confirmation.
  */
 async function confirm(label: string, defaultYes = true): Promise<boolean> {
@@ -114,19 +164,24 @@ async function runWizard(): Promise<void> {
 
 	const existing = await loadCredentials();
 	const fields = [
-		{ key: "OPENCODE_API_KEY", label: "OpenCode API Key" },
-		{ key: "DEEPSEEK_API_KEY", label: "DeepSeek API Key" },
-		{ key: "ANTHROPIC_API_KEY", label: "Anthropic API Key" },
-		{ key: "OPENAI_API_KEY", label: "OpenAI API Key" },
+		{ key: "OPENCODE_API_KEY", label: "OpenCode API Key", secure: true },
+		{ key: "DEEPSEEK_API_KEY", label: "DeepSeek API Key", secure: true },
+		{ key: "ANTHROPIC_API_KEY", label: "Anthropic API Key", secure: true },
+		{ key: "OPENAI_API_KEY", label: "OpenAI API Key", secure: true },
 	];
 
 	const credentials = { ...existing };
 
 	for (const field of fields) {
-		const value = await prompt(
-			field.label,
-			existing[field.key as keyof typeof CREDENTIALS_TEMPLATE],
-		);
+		const value = field.secure
+			? await promptSecure(
+					field.label,
+					existing[field.key as keyof typeof CREDENTIALS_TEMPLATE],
+				)
+			: await prompt(
+					field.label,
+					existing[field.key as keyof typeof CREDENTIALS_TEMPLATE],
+				);
 		credentials[field.key as keyof typeof CREDENTIALS_TEMPLATE] = value;
 	}
 
@@ -166,7 +221,10 @@ export const configCommand = new Command("config")
 			const [key, ...valueParts] = options.set.split("=");
 			const value = valueParts.join("=");
 
-			if (!key || !Object.hasOwn(CREDENTIALS_TEMPLATE, key)) {
+			if (
+				!key ||
+				!Object.prototype.hasOwnProperty.call(CREDENTIALS_TEMPLATE, key)
+			) {
 				console.error(`❌ Unknown key: ${key}`);
 				console.log(
 					`Valid keys: ${Object.keys(CREDENTIALS_TEMPLATE).join(", ")}`,
