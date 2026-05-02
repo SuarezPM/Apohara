@@ -10,6 +10,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@fastify/jwt": "8",
     "fastify": "^4.28.0"
   },
   "devDependencies": {

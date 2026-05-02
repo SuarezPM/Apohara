@@ -1,6 +1,32 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
+import jwt from '@fastify/jwt';
+import { ProviderRouter, RouterConfig, LLMResponse } from '../../../src/providers/router.js';
+import { EventLedger } from '../../../src/core/ledger.js';
 
 const fastify = Fastify({ logger: true });
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  }
+}
+
+// Setup Event Ledger
+const ledger = new EventLedger();
+
+// Register JWT
+fastify.register(jwt, {
+  secret: 'supersecret'
+});
+
+// Decorate request with authenticate
+fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
+  try {
+    await request.jwtVerify();
+  } catch (err) {
+    reply.send(err);
+  }
+});
 
 // Health endpoint - returns 200 OK
 fastify.get('/health', async (request, reply) => {
@@ -29,6 +55,54 @@ fastify.get('/api/items', async (request, reply) => {
   };
 });
 
+// POST /auth/login
+fastify.post('/auth/login', async (request, reply) => {
+  const { username, password } = request.body as any;
+
+  let response: LLMResponse;
+  
+  if (process.env.USE_STUB_PROVIDER === 'true') {
+    response = {
+      content: "1 hour",
+      provider: "stub" as any,
+      model: "stub-model",
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    };
+    await ledger.log('provider_selected', { provider: 'stub', message: 'Using stub provider' }, 'info', undefined, { provider: 'stub' as any });
+  } else {
+    const config: RouterConfig = {
+      simulateFailure: process.env.SIMULATE_FAILURE === 'true'
+    };
+    const router = new ProviderRouter(config);
+    response = await router.completion({
+      messages: [{ role: 'user', content: 'What is a good expiry time for a JWT token? Answer with a short duration.' }]
+    });
+    await ledger.log('provider_selected', { provider: response.provider, message: 'Provider returned JWT expiry recommendation' }, 'info', undefined, { provider: response.provider });
+  }
+
+  // sign token
+  const token = fastify.jwt.sign({ 
+    username, 
+    metadata: response.content 
+  });
+
+  return { token, provider: response.provider, model: response.model };
+});
+
+// GET /api/protected
+fastify.get('/api/protected', {
+  onRequest: [fastify.authenticate]
+}, async (request, reply) => {
+  const user = request.user as any;
+  return {
+    user: user.username,
+    message: 'This is a protected resource',
+    providerUsed: user.metadata
+  };
+});
+
+export const app = fastify;
+
 const start = async () => {
   try {
     await fastify.listen({ port: 3000, host: '0.0.0.0' });
@@ -39,4 +113,6 @@ const start = async () => {
   }
 };
 
-start();
+if (process.env.NODE_ENV !== 'test') {
+  start();
+}
