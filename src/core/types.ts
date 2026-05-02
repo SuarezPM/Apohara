@@ -1,5 +1,5 @@
-// Role types for task routing (role: research, planning, execution, verification)
-export type TaskRole = "research" | "planning" | "execution" | "verification";
+// Role types for task routing (role: research, planning, execution, verification, arbiter)
+export type TaskRole = "research" | "planning" | "execution" | "verification" | "arbiter";
 
 // All supported LLM providers and models
 // Based on user's model list: GLM-5.1, GLM-5, Kimi K2.5, K2.6, MiMo-V2 series, Qwen3.5/3.6 Plus, MiniMax M2.5/M2.7, DeepSeek V4
@@ -261,6 +261,7 @@ export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
 	planning: "groq",          // Groq for planning (fast, reliable, available)
 	execution: "groq",         // Groq for execution (fast inference)
 	verification: "groq",      // Groq for verification
+	arbiter: "groq",           // Groq for arbiter (ultra-fast, cheap, structural comparison)
 };
 
 // Fallback provider order for each role (primary + fallbacks)
@@ -269,6 +270,7 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 	planning: ["anthropic-api", "gemini-api", "groq", "moonshot-k2.6", "qwen3.6-plus", "moonshot-k2.5", "qwen3.5-plus", "kiro-ai", "deepseek", "mistral"],
 	execution: ["anthropic-api", "opencode-go", "groq", "deepseek-v4", "moonshot-k2.6", "minimax-m2.7", "qwen3.6-plus", "kiro-ai", "deepseek", "mistral", "openai"],
 	verification: ["anthropic-api", "gemini-api", "groq", "deepseek-v4", "moonshot-k2.6", "kiro-ai", "deepseek", "openai"],
+	arbiter: ["groq", "kiro-ai", "mistral", "qwen3.5-plus"],
 };
 
 export interface Task {

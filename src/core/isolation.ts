@@ -1,4 +1,5 @@
 import { spawn } from "../lib/spawn";
+export { Isolator, type SandboxExecOptions, type SandboxExecResult, type PermissionTier } from "./sandbox";
 
 export interface IsolationResult {
 	status: "success" | "error";

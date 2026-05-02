@@ -1,3 +1,0 @@
-{"id":"09a038d4-e95c-4b41-af17-c229c33d9560","timestamp":"2026-05-02T15:38:58.088Z","type":"provider_selected","severity":"info","payload":{"provider":"deepseek","message":"Routing request to deepseek"},"metadata":{"provider":"deepseek"}}
-{"id":"661f5176-8fd3-4f15-8fa3-96d054b78fa2","timestamp":"2026-05-02T15:38:58.088Z","type":"provider_selected","severity":"info","payload":{"provider":"opencode-go","message":"Routing request to opencode-go"},"metadata":{"provider":"opencode-go"}}
-{"id":"a662053f-91e1-4013-8cef-c5a37387271a","timestamp":"2026-05-02T15:38:58.088Z","type":"provider_selected","severity":"info","payload":{"provider":"deepseek","message":"Routing request to deepseek"},"metadata":{"provider":"deepseek"}}

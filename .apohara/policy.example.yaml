@@ -1,0 +1,40 @@
+# Apohara Security & Verification Policy
+# Copy to ~/.apohara/policy.yaml and customize
+
+# Cross-Verification Mesh Configuration
+mesh:
+  enabled: true
+  mode: "structural"  # structural | semantic
+  max_extra_cost_pct: 15  # Circuit breaker: disable mesh if verification costs exceed this % of session base
+  min_complexity: "high"  # Minimum task complexity to trigger mesh: low | medium | high | critical
+
+# Sandbox Configuration
+sandbox:
+  enabled: true
+  permission_default: "workspace_write"  # readonly | workspace_write | danger_full_access
+  timeout_seconds: 120
+  memory_limit_mb: 512
+  cpu_limit_percent: 50
+
+  # Syscalls blocked by seccomp
+  blocked_syscalls:
+    - execveat
+    - ptrace
+    - mount
+    - umount2
+    - reboot
+    - open_by_handle_at
+    - init_module
+    - finit_module
+    - delete_module
+    - kexec_load
+    - kexec_file_load
+    - bpf
+    - perf_event_open
+    - userfaultfd
+
+# Event Ledger Configuration
+ledger:
+  enabled: true
+  path: ".events"
+  retention_days: 30
