@@ -26,6 +26,29 @@ export interface SpawnResult {
 }
 
 /**
+ * Collects all data from a stream into a buffer.
+ * Resolves when the stream ends or the process exits.
+ */
+function collectStream(stream: NodeJS.ReadableStream | null): Promise<Buffer> {
+	return new Promise((resolve, reject) => {
+		if (!stream) {
+			resolve(Buffer.alloc(0));
+			return;
+		}
+		const chunks: Buffer[] = [];
+		stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+		stream.on("end", () => resolve(Buffer.concat(chunks)));
+		stream.on("error", reject);
+		// Also resolve on close in case end doesn't fire
+		stream.on("close", () => {
+			if (chunks.length >= 0) {
+				resolve(Buffer.concat(chunks));
+			}
+		});
+	});
+}
+
+/**
  * Mimics Bun.spawn API using Node.js child_process.
  * Usage: spawn(["git", "status"], { stdout: "pipe", stderr: "pipe" })
  */
@@ -55,6 +78,10 @@ export function spawn(
 
 	const child = nodeSpawn(args[0], args.slice(1), spawnOptions);
 
+	// Start collecting stdout and stderr immediately
+	const stdoutPromise = collectStream(child.stdout);
+	const stderrPromise = collectStream(child.stderr);
+
 	// Create a promise that resolves when the process exits
 	const exitedPromise = new Promise<number>((resolve, reject) => {
 		child.on("exit", (code) => {
@@ -68,56 +95,16 @@ export function spawn(
 	return {
 		exited: exitedPromise,
 		stdout: {
-			read: () => {
-				return new Promise<Buffer>((resolve, reject) => {
-					const chunks: Buffer[] = [];
-					child.stdout?.on("data", (chunk) => {
-						chunks.push(Buffer.from(chunk));
-					});
-					child.stdout?.on("end", () => {
-						resolve(Buffer.concat(chunks));
-					});
-					child.stdout?.on("error", reject);
-				});
-			},
+			read: () => stdoutPromise,
 			text: async (): Promise<string> => {
-				const buffer = await new Promise<Buffer>((resolve, reject) => {
-					const chunks: Buffer[] = [];
-					child.stdout?.on("data", (chunk) => {
-						chunks.push(Buffer.from(chunk));
-					});
-					child.stdout?.on("end", () => {
-						resolve(Buffer.concat(chunks));
-					});
-					child.stdout?.on("error", reject);
-				});
+				const buffer = await stdoutPromise;
 				return buffer.toString("utf-8");
 			},
 		},
 		stderr: {
-			read: () => {
-				return new Promise<Buffer>((resolve, reject) => {
-					const chunks: Buffer[] = [];
-					child.stderr?.on("data", (chunk) => {
-						chunks.push(Buffer.from(chunk));
-					});
-					child.stderr?.on("end", () => {
-						resolve(Buffer.concat(chunks));
-					});
-					child.stderr?.on("error", reject);
-				});
-			},
+			read: () => stderrPromise,
 			text: async (): Promise<string> => {
-				const buffer = await new Promise<Buffer>((resolve, reject) => {
-					const chunks: Buffer[] = [];
-					child.stderr?.on("data", (chunk) => {
-						chunks.push(Buffer.from(chunk));
-					});
-					child.stderr?.on("end", () => {
-						resolve(Buffer.concat(chunks));
-					});
-					child.stderr?.on("error", reject);
-				});
+				const buffer = await stderrPromise;
 				return buffer.toString("utf-8");
 			},
 		},

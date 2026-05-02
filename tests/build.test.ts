@@ -15,7 +15,7 @@ describe('Build Distribution', () => {
 
 	it('should run under node and show help', async () => {
 		const { stdout } = await execAsync('node dist/cli.js --help');
-		expect(stdout).toContain('Clarity CLI');
+		expect(stdout).toContain('Apohara CLI');
 		expect(stdout).toContain('config');
 		expect(stdout).toContain('auto');
 		expect(stdout).toContain('dashboard');

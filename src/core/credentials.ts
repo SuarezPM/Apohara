@@ -1,0 +1,182 @@
+import { readFileSync } from "node:fs";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
+import type { OAuthTokenStore } from "../lib/oauth-token-store";
+
+const FREE_PROVIDERS = new Set(["kiro-ai", "iflow-ai"]);
+
+// OAuth providers that use token-based auth
+const OAUTH_PROVIDERS = new Set(["claude-ai", "anthropic"]);
+
+function getCredentialsPath(): string {
+	const xdgConfig = process.env.XDG_CONFIG_HOME;
+	if (xdgConfig) {
+		return path.join(xdgConfig, "apohara", "credentials.json");
+	}
+	return path.join(os.homedir(), ".apohara", "credentials.json");
+}
+
+function readCredentialsFileSync(): Record<string, unknown> | null {
+	try {
+		const content = readFileSync(getCredentialsPath(), "utf-8");
+		return JSON.parse(content) as Record<string, unknown>;
+	} catch {
+		return null;
+	}
+}
+
+interface CredentialsFile {
+	[provider: string]: { apiKey?: string } | string;
+}
+
+function extractKey(entry: unknown): string | null {
+	if (typeof entry === "string" && entry.length > 0) {
+		return entry;
+	}
+	if (entry && typeof entry === "object" && "apiKey" in entry) {
+		const key = (entry as { apiKey?: string }).apiKey;
+		if (typeof key === "string" && key.length > 0) {
+			return key;
+		}
+	}
+	return null;
+}
+
+/**
+ * Resolves the API key for a given provider using the following precedence:
+ * 1. ~/.apohara/credentials.json
+ * 2. Environment variable (PROVIDER_API_KEY uppercase with underscores)
+ * 3. Free-tier anonymous token
+ * 4. null if not found
+ */
+export async function resolveCredential(provider: string): Promise<string | null> {
+	// 1. Try credentials file
+	try {
+		const credPath = getCredentialsPath();
+		const content = await fs.readFile(credPath, "utf-8");
+		const parsed: CredentialsFile = JSON.parse(content);
+
+		const entry = parsed[provider];
+		const key = extractKey(entry);
+		if (key) return key;
+	} catch {
+		// File doesn't exist or is invalid — fall through
+	}
+
+	// 2. Try environment variable
+	const envKey = provider.toUpperCase().replace(/-/g, "_") + "_API_KEY";
+	const envValue = process.env[envKey];
+	if (envValue && envValue.length > 0) {
+		return envValue;
+	}
+
+	// 3. Free-tier providers don't need auth
+	if (FREE_PROVIDERS.has(provider)) {
+		return "anonymous";
+	}
+
+	// 4. Not found
+	return null;
+}
+
+/**
+ * Synchronous version for contexts where async is not available.
+ * Checks credentials file, then environment variables, then free-tier.
+ */
+export function resolveCredentialSync(provider: string): string | null {
+	// 1. Try credentials file (sync)
+	const parsed = readCredentialsFileSync();
+	if (parsed) {
+		const entry = parsed[provider];
+		const key = extractKey(entry);
+		if (key) return key;
+	}
+
+	// 2. Try environment variable
+	const envKey = provider.toUpperCase().replace(/-/g, "_") + "_API_KEY";
+	const envValue = process.env[envKey];
+	if (envValue && envValue.length > 0) {
+		return envValue;
+	}
+
+	// 3. Free-tier providers don't need auth
+	if (FREE_PROVIDERS.has(provider)) {
+		return "anonymous";
+	}
+
+	return null;
+}
+
+// Lazy-loaded OAuth token stores
+const tokenStores = new Map<string, OAuthTokenStore>();
+
+/**
+ * Get or create an OAuth token store for a provider
+ * Uses lazy initialization to avoid circular dependencies
+ */
+function getTokenStore(provider: string): OAuthTokenStore {
+	let store = tokenStores.get(provider);
+	if (!store) {
+		// Import the token store class dynamically
+		const { OAuthTokenStore: OAuthStore } = require("../lib/oauth-token-store");
+		store = new OAuthStore({ provider });
+		tokenStores.set(provider, store);
+	}
+	return store;
+}
+
+/**
+ * Resolves an OAuth access token for a given provider
+ * Uses the OAuth token store to get valid tokens with auto-refresh
+ *
+ * @param provider - The OAuth provider (e.g., "claude-ai", "anthropic")
+ * @returns The access token string, or null if not available
+ */
+export async function resolveOAuthToken(provider: string): Promise<string | null> {
+	// Only attempt OAuth for known OAuth providers
+	if (!OAUTH_PROVIDERS.has(provider)) {
+		return null;
+	}
+
+	try {
+		const store = getTokenStore(provider);
+		const token = await store.getToken();
+		return token?.access_token ?? null;
+	} catch (error) {
+		console.error(`[credentials] Failed to resolve OAuth token for ${provider}:`, error);
+		return null;
+	}
+}
+
+/**
+ * Checks if OAuth token is available and valid for a provider
+ */
+export async function hasOAuthToken(provider: string): Promise<boolean> {
+	if (!OAUTH_PROVIDERS.has(provider)) {
+		return false;
+	}
+
+	try {
+		const store = getTokenStore(provider);
+		return store.hasToken();
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Gets sanitized OAuth token info for logging
+ */
+export async function getOAuthTokenInfo(provider: string): Promise<Record<string, unknown>> {
+	if (!OAUTH_PROVIDERS.has(provider)) {
+		return { provider, oauth_supported: false };
+	}
+
+	try {
+		const store = getTokenStore(provider);
+		return store.getSanitizedInfo();
+	} catch {
+		return { provider, error: "Failed to get token info" };
+	}
+}

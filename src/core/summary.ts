@@ -75,8 +75,8 @@ export class SummaryGenerator {
 
 		this.config = {
 			eventsDir: options?.eventsDir || ".events",
-			stateFilePath: options?.stateFilePath || ".clarity/state.json",
-			outputDir: options?.outputDir || ".clarity/runs",
+			stateFilePath: options?.stateFilePath || ".apohara/state.json",
+			outputDir: options?.outputDir || ".apohara/runs",
 		};
 
 		this.stateMachine = new StateMachine(this.config.stateFilePath);
@@ -422,7 +422,7 @@ export class SummaryGenerator {
 
 		// Header
 		const date = new Date(summary.timestamp).toISOString();
-		lines.push(`# Clarity Auto Run Summary`);
+		lines.push(`# Apohara Auto Run Summary`);
 		lines.push(``);
 		lines.push(`**Run ID:** ${summary.runId}`);
 		lines.push(`**Timestamp:** ${date}`);

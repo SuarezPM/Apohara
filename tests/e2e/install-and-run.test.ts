@@ -90,7 +90,7 @@ describe("Install and Run E2E Test", () => {
 	});
 
 	it("1. Install from tarball - uses npm pack tarball, installs globally", async () => {
-		const tarballPath = path.join(process.cwd(), "clarity-code-0.1.0.tgz");
+		const tarballPath = path.join(process.cwd(), "apohara-0.1.0.tgz");
 		
 		// Verify tarball exists
 		expect(await fileExists(tarballPath)).toBe(true);
@@ -127,9 +127,9 @@ describe("Install and Run E2E Test", () => {
 		}
 	});
 
-	it("3. Run clarity auto test - executes clarity auto on the Fastify example", async () => {
+	it("3. Run apohara auto test - executes apohara auto on the Fastify example", async () => {
 		if (!hasKey) {
-			console.log("⚠️  Skipping clarity auto test - no API key found in .env");
+			console.log("⚠️  Skipping apohara auto test - no API key found in .env");
 			return;
 		}
 

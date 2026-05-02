@@ -1,11 +1,11 @@
 {
-	"name": "clarity-code",
+	"name": "apohara",
 	"version": "0.1.0",
 	"module": "index.ts",
 	"type": "module",
 	"main": "dist/cli.js",
 	"bin": {
-		"clarity": "./dist/cli.js"
+		"apohara": "./dist/cli.js"
 	},
 	"files": [
 		"dist",
@@ -13,11 +13,11 @@
 		"scripts"
 	],
 	"optionalDependencies": {
-		"@clarity-code/cli-darwin-x64": "0.1.0",
-		"@clarity-code/cli-darwin-arm64": "0.1.0",
-		"@clarity-code/cli-linux-x64": "0.1.0",
-		"@clarity-code/cli-linux-arm64": "0.1.0",
-		"@clarity-code/cli-win32-x64": "0.1.0"
+		"@apohara/cli-darwin-x64": "0.1.0",
+		"@apohara/cli-darwin-arm64": "0.1.0",
+		"@apohara/cli-linux-x64": "0.1.0",
+		"@apohara/cli-linux-arm64": "0.1.0",
+		"@apohara/cli-win32-x64": "0.1.0"
 	},
 	"scripts": {
 		"postinstall": "node scripts/postinstall.js",

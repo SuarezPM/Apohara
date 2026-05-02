@@ -144,7 +144,7 @@ describe("E2E: ProviderRouter simulateFailure", () => {
 	});
 });
 
-describe("E2E: clarity auto --simulate-failure", () => {
+describe("E2E: apohara auto --simulate-failure", () => {
 	const testDir = process.cwd();
 	let apiKeyAvailable = false;
 	let preRunEventFiles: string[] = [];
@@ -164,7 +164,7 @@ describe("E2E: clarity auto --simulate-failure", () => {
 				await rm(path.join(eventsDir, f), { force: true }).catch(() => {});
 			}
 		}
-		const runsDir = path.join(testDir, ".clarity", "runs");
+		const runsDir = path.join(testDir, ".apohara", "runs");
 		const runs = await readdir(runsDir).catch(() => []);
 		for (const run of runs.slice(-3)) {
 			await rm(path.join(runsDir, run), { recursive: true, force: true }).catch(() => {});
@@ -195,7 +195,7 @@ describe("E2E: clarity auto --simulate-failure", () => {
 
 		// Directly exercise the ProviderRouter with simulateFailure to verify
 		// provider_fallback events are written to the ledger, since running the
-		// full `clarity auto` command often fails at decomposition before
+		// full `apohara auto` command often fails at decomposition before
 		// reaching execution where simulateFailure triggers.
 		const testRouter = new ProviderRouter({
 			opencodeApiKey: "test-key",
@@ -623,14 +623,14 @@ describe("E2E: SummaryGenerator metrics", () => {
 
 	afterEach(async () => {
 		await rm(eventFile, { force: true }).catch(() => {});
-		const outputDir = path.join(process.cwd(), ".clarity", "runs", runId);
+		const outputDir = path.join(process.cwd(), ".apohara", "runs", runId);
 		await rm(outputDir, { recursive: true, force: true }).catch(() => {});
 	});
 
 	it("extracts >=1 fallback events", async () => {
 		const generator = new SummaryGenerator({
 			runId,
-			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+			outputDir: path.join(process.cwd(), ".apohara", "runs"),
 		});
 		const summaryPath = await generator.generate();
 		const markdown = await readFile(summaryPath, "utf-8");
@@ -640,7 +640,7 @@ describe("E2E: SummaryGenerator metrics", () => {
 	it("counts >=4 unique providers", async () => {
 		const generator = new SummaryGenerator({
 			runId,
-			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+			outputDir: path.join(process.cwd(), ".apohara", "runs"),
 		});
 		const summaryPath = await generator.generate();
 		const markdown = await readFile(summaryPath, "utf-8");
@@ -654,7 +654,7 @@ describe("E2E: SummaryGenerator metrics", () => {
 	it("calculates total cost < $0.50 for synthetic demo data", async () => {
 		const generator = new SummaryGenerator({
 			runId,
-			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+			outputDir: path.join(process.cwd(), ".apohara", "runs"),
 		});
 		const summaryPath = await generator.generate();
 		const markdown = await readFile(summaryPath, "utf-8");
@@ -668,7 +668,7 @@ describe("E2E: SummaryGenerator metrics", () => {
 	it("produces markdown containing fallback section", async () => {
 		const generator = new SummaryGenerator({
 			runId,
-			outputDir: path.join(process.cwd(), ".clarity", "runs"),
+			outputDir: path.join(process.cwd(), ".apohara", "runs"),
 		});
 		const summaryPath = await generator.generate();
 		const markdown = await readFile(summaryPath, "utf-8");

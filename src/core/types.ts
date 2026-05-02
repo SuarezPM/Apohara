@@ -18,7 +18,11 @@ export type ProviderId =
 	| "minimax-m2.7"         // MiniMax M2.7 - Latest from MiniMax
 	| "glm-deepinfra"        // GLM via DeepInfra
 	| "glm-fireworks"        // GLM via Fireworks AI
-	| "glm-zai";             // GLM via Z.ai
+	| "glm-zai"              // GLM via Z.ai
+	| "groq"                 // Groq - Ultra-fast inference (Llama, Qwen, etc.)
+	| "kiro-ai"              // Kiro AI - Free tier, no auth required
+	| "mistral"              // Mistral AI - Free tier (mistral-small-latest)
+	| "openai";              // OpenAI - gpt-4o-mini
 
 // Model capabilities for intelligent routing
 export interface ModelCapability {
@@ -138,6 +142,46 @@ export const MODELS: ModelCapability[] = [
 		contextWindow: 128000,
 		supportsVision: true,
 	},
+	// Groq - Ultra-fast inference for planning and execution
+	{
+		id: "groq",
+		name: "Groq (Llama 4 Maverick / Qwen 3)",
+		provider: "Groq",
+		bestFor: ["planning", "execution"],
+		strengths: ["ultra-low latency", "high throughput", "cost-effective", "openai-compatible"],
+		contextWindow: 131072,
+		supportsVision: false,
+	},
+	// Kiro AI - Free tier, no auth required
+	{
+		id: "kiro-ai",
+		name: "Kiro AI (Claude Sonnet / DeepSeek / Qwen)",
+		provider: "Kiro AI",
+		bestFor: ["planning", "execution", "verification"],
+		strengths: ["free tier", "no auth required", "multiple models", "openai-compatible"],
+		contextWindow: 200000,
+		supportsVision: false,
+	},
+	// Mistral - Free tier
+	{
+		id: "mistral",
+		name: "Mistral Small Latest",
+		provider: "Mistral AI",
+		bestFor: ["execution", "planning"],
+		strengths: ["free tier available", "european", "openai-compatible"],
+		contextWindow: 32000,
+		supportsVision: false,
+	},
+	// OpenAI - Cost-effective mini model
+	{
+		id: "openai",
+		name: "OpenAI GPT-4o Mini",
+		provider: "OpenAI",
+		bestFor: ["execution", "verification"],
+		strengths: ["reliable", "cost-effective", "fast"],
+		contextWindow: 128000,
+		supportsVision: false,
+	},
 	// Tavily - Real-time web search for AI agents (replaces Perplexity)
 	{
 		id: "tavily",
@@ -190,20 +234,20 @@ export function getBestModelsForRole(role: TaskRole): ModelCapability[] {
 }
 
 // Role-to-provider mapping with intelligent selection
-// Uses the most powerful model for each role based on the model list
+// Uses Groq as primary (available via GROQ_API_KEY) with fallbacks
 export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
 	research: "tavily",        // Tavily for real-time web search/research
-	planning: "moonshot-k2.6",    // Kimi K2.6 for planning (best reasoning)
-	execution: "deepseek-v4",     // DeepSeek V4 for code (most powerful)
-	verification: "deepseek-v4",  // DeepSeek V4 for verification
+	planning: "groq",          // Groq for planning (fast, reliable, available)
+	execution: "groq",         // Groq for execution (fast inference)
+	verification: "groq",      // Groq for verification
 };
 
 // Fallback provider order for each role (primary + fallbacks)
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
-	research: ["tavily", "gemini", "moonshot-k2.6"],
-	planning: ["moonshot-k2.6", "qwen3.6-plus", "gemini", "glm-deepinfra"],
-	execution: ["deepseek-v4", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7"],
-	verification: ["deepseek-v4", "deepseek", "moonshot-k2.5"],
+	research: ["tavily", "gemini", "groq"],
+	planning: ["groq", "kiro-ai", "deepseek", "mistral"],
+	execution: ["groq", "kiro-ai", "deepseek", "mistral", "openai"],
+	verification: ["groq", "kiro-ai", "deepseek", "openai"],
 };
 
 export interface Task {

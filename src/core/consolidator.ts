@@ -20,7 +20,7 @@ export interface ConsolidatorConfig {
 }
 
 /**
- * Consolidation Engine orchestrates the final phase of clarity auto:
+ * Consolidation Engine orchestrates the final phase of apohara auto:
  * - Creates a branch for the run
  * - Consolidates changes from successful worktrees
  * - Generates a summary markdown
@@ -35,8 +35,8 @@ export class Consolidator {
 	constructor(config?: ConsolidatorConfig, ledger?: EventLedger) {
 		this.ledger = ledger || new EventLedger();
 		this.config = config || {};
-		this.worktreesDir = this.config.worktreeBaseDir || ".clarity/worktrees";
-		this.stateFilePath = this.config.stateFilePath || ".clarity/state.json";
+		this.worktreesDir = this.config.worktreeBaseDir || ".apohara/worktrees";
+		this.stateFilePath = this.config.stateFilePath || ".apohara/state.json";
 	}
 
 	/**
@@ -49,7 +49,7 @@ export class Consolidator {
 	 */
 	public async run(): Promise<ConsolidationResult> {
 		const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-		const branchName = `clarity/run-${timestamp}`;
+		const branchName = `apohara/run-${timestamp}`;
 
 		await this.ledger.log(
 			"consolidation_started",
@@ -313,7 +313,7 @@ export class Consolidator {
 		allTasks: OrchestratorState["tasks"];
 		mergeStatus: "success" | "partial";
 	}): Promise<string> {
-		const summaryDir = join(".clarity", "runs", params.timestamp);
+		const summaryDir = join(".apohara", "runs", params.timestamp);
 		const summaryPath = join(summaryDir, "summary.md");
 
 		// Ensure directory exists
@@ -323,7 +323,7 @@ export class Consolidator {
 		const statusEmoji = params.mergeStatus === "success" ? "✅" : "⚠️";
 		const _duration = "N/A"; // Could track from ledger
 
-		const content = `# Clarity Auto Run Summary
+		const content = `# Apohara Auto Run Summary
 
 **Branch:** \`${params.branchName}\`
 **Timestamp:** ${params.timestamp}

@@ -109,7 +109,7 @@ async function saveCredentials(
  * Runs interactive config wizard.
  */
 async function runWizard(): Promise<void> {
-	console.log("\n🔧 Clarity Configuration Wizard");
+	console.log("\n🔧 Apohara Configuration Wizard");
 	console.log("Press Ctrl+C to cancel at any time\n");
 
 	const existing = await loadCredentials();

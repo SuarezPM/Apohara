@@ -49,7 +49,7 @@ async function dirExists(dirPath: string): Promise<boolean> {
 async function isNpmInstalled(): Promise<boolean> {
 	try {
 		const { execSync } = await import("node:child_process");
-		execSync("npm list -g --depth=0 clarity-code", {
+		execSync("npm list -g --depth=0 apohara", {
 			stdio: "pipe",
 			encoding: "utf-8",
 		});
@@ -80,7 +80,7 @@ async function removeDir(dirPath: string, label: string): Promise<boolean> {
 }
 
 /**
- * Detects shell rc files and removes clarity from PATH.
+ * Detects shell rc files and removes apohara from PATH.
  */
 async function removeFromPath(): Promise<boolean> {
 	const homeDir = os.homedir();
@@ -106,24 +106,24 @@ async function removeFromPath(): Promise<boolean> {
 			await fs.access(rcPath);
 			let content = await fs.readFile(rcPath, "utf-8");
 
-			// Check if this file contains clarity PATH export
-			const hasClarityExport = content.includes('export PATH=".*clarity.*"') ||
-				content.includes("clarity/bin") ||
-				content.includes("clarity-code/bin");
+			// Check if this file contains apohara PATH export
+			const hasApoharaExport = content.includes('export PATH=".*apohara.*"') ||
+				content.includes("apohara/bin") ||
+				content.includes("apohara/bin");
 
-			if (!hasClarityExport) {
+			if (!hasApoharaExport) {
 				continue;
 			}
 
-			// Remove clarity-related PATH modifications
+			// Remove apohara-related PATH modifications
 			const lines = content.split("\n");
 			const filteredLines = lines.filter((line) => {
-				// Skip lines that add clarity to PATH
-				if (line.includes("clarity/bin") || line.includes("clarity-code/bin")) {
+				// Skip lines that add apohara to PATH
+				if (line.includes("apohara/bin")) {
 					return false;
 				}
-				// Skip lines that source clarity init scripts
-				if (line.includes("clarity") && line.includes("source")) {
+				// Skip lines that source apohara init scripts
+				if (line.includes("apohara") && line.includes("source")) {
 					return false;
 				}
 				return true;
@@ -134,7 +134,7 @@ async function removeFromPath(): Promise<boolean> {
 			// Only write if content changed
 			if (content !== lines.join("\n")) {
 				await fs.writeFile(rcPath, content, "utf-8");
-				console.log(`  ✅ Updated ${rcFile} to remove clarity from PATH`);
+				console.log(`  ✅ Updated ${rcFile} to remove apohara from PATH`);
 				removedAny = true;
 			}
 		} catch {
@@ -161,7 +161,7 @@ async function removeNpmPackage(): Promise<boolean> {
 
 	try {
 		const { execSync } = await import("node:child_process");
-		execSync("npm uninstall -g clarity-code", {
+		execSync("npm uninstall -g apohara", {
 			stdio: "inherit",
 			encoding: "utf-8",
 		});
@@ -200,7 +200,7 @@ async function showWhatWillBeRemoved(): Promise<void> {
 	// Binary location
 	const { execSync } = await import("node:child_process");
 	try {
-		const which = execSync("which clarity", { encoding: "utf-8" }).trim();
+		const which = execSync("which apohara", { encoding: "utf-8" }).trim();
 		console.log(`  • Binary location: ${which}`);
 	} catch {
 		console.log("  • Binary location: not in PATH");
@@ -213,15 +213,15 @@ async function showWhatWillBeRemoved(): Promise<void> {
  * Main uninstall action.
  */
 async function uninstall(options: { dryRun?: boolean; yes?: boolean }): Promise<void> {
-	console.log("\n🧹 Clarity Uninstall");
-	console.log("==================\n");
+	console.log("\n🧹 Apohara Uninstall");
+	console.log("===================\n");
 
 	// Show what will be removed
 	await showWhatWillBeRemoved();
 
 	// Confirm uninstall
 	if (!options.yes) {
-		const proceed = await confirm("Are you sure you want to uninstall Clarity?", false);
+		const proceed = await confirm("Are you sure you want to uninstall Apohara?", false);
 		if (!proceed) {
 			console.log("\n❌ Uninstall cancelled.");
 			return;
@@ -284,7 +284,7 @@ async function uninstall(options: { dryRun?: boolean; yes?: boolean }): Promise<
 }
 
 export const uninstallCommand = new Command("uninstall")
-	.description("Uninstall Clarity (removes config, binaries, and npm package)")
+	.description("Uninstall Apohara (removes config, binaries, and npm package)")
 	.option("-y, --yes", "Skip confirmation prompt", false)
 	.option(
 		"--dry-run",

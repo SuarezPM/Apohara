@@ -159,8 +159,8 @@ cmd_verify_release() {
         exit 1
     fi
     
-    local repo_owner="${REPO_OWNER:-clarity-code}"
-    local repo_name="${REPO_NAME:-clarity-code}"
+    local repo_owner="${REPO_OWNER:-apohara}"
+    local repo_name="${REPO_NAME:-apohara}"
     
     # Get checksums from GitHub release
     local api_url="https://api.github.com/repos/${repo_owner}/${repo_name}/releases/tags/v${version}"
@@ -188,7 +188,7 @@ cmd_verify_release() {
         log_warn "No checksums.txt found in release"
         log_info "Attempting to verify tarball directly..."
         
-        local tarball="clarity-code-${version}-${platform}-${arch}.tar.gz"
+        local tarball="apohara-${version}-${platform}-${arch}.tar.gz"
         local tarball_url="https://github.com/${repo_owner}/${repo_name}/releases/download/v${version}/${tarball}"
         
         log_info "Downloading: $tarball_url"

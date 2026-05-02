@@ -6,9 +6,9 @@ import * as path from "node:path";
 
 const execAsync = promisify(execSync);
 
-describe("E2E: clarity auto command", () => {
+describe("E2E: apohara auto command", () => {
 	const testDir = path.resolve(process.cwd());
-	const runsDir = path.join(testDir, ".clarity", "runs");
+	const runsDir = path.join(testDir, ".apohara", "runs");
 	const eventsDir = path.join(testDir, ".events");
 
 	// Track test state
@@ -142,7 +142,7 @@ describe("E2E: clarity auto command", () => {
 			const expectedBranchName = `results/${runId}`;
 
 			// Verify paths are properly constructed
-			expect(runsDir).toContain(".clarity/runs");
+			expect(runsDir).toContain(".apohara/runs");
 			expect(expectedBranchName).toMatch(/^results\//);
 		});
 	});

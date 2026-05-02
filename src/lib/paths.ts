@@ -8,19 +8,19 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 /** Default config directory name when XDG is not set */
-const DEFAULT_CONFIG_DIR = ".clarity";
+const DEFAULT_CONFIG_DIR = ".apohara";
 
 /** Default state directory name */
-const DEFAULT_STATE_DIR = ".clarity";
+const DEFAULT_STATE_DIR = ".apohara";
 
 /** Default cache directory name */
-const DEFAULT_CACHE_DIR = ".clarity/cache";
+const DEFAULT_CACHE_DIR = ".apohara/cache";
 
 /**
  * Resolves the configuration directory path.
  * Follows XDG Base Directory Specification:
  * - Uses XDG_CONFIG_HOME if set and writable
- * - Falls back to ~/.clarity/ otherwise
+ * - Falls back to ~/.apohara/ otherwise
  */
 export function getConfigDir(): string {
 	const xdgConfig = process.env.XDG_CONFIG_HOME;
@@ -31,7 +31,7 @@ export function getConfigDir(): string {
 			// Check if XDG_CONFIG_HOME is writable
 			fs.accessSync(resolved, fs.constants.W_OK);
 			console.log(`[paths] Using XDG_CONFIG_HOME: ${resolved}`);
-			return path.join(resolved, "clarity");
+			return path.join(resolved, "apohara");
 		} catch {
 			console.log(
 				`[paths] XDG_CONFIG_HOME not writable, falling back to default`,
@@ -39,7 +39,7 @@ export function getConfigDir(): string {
 		}
 	}
 
-	// Fallback to ~/.clarity/
+	// Fallback to ~/.apohara/
 	const homeDir = os.homedir();
 	const configDir = path.join(homeDir, DEFAULT_CONFIG_DIR);
 	console.log(`[paths] Using default config dir: ${configDir}`);
@@ -57,7 +57,7 @@ export function getStateDir(): string {
 		try {
 			fs.accessSync(resolved, fs.constants.W_OK);
 			console.log(`[paths] Using XDG_STATE_HOME: ${resolved}`);
-			return path.join(resolved, "clarity");
+			return path.join(resolved, "apohara");
 		} catch {
 			console.log(
 				`[paths] XDG_STATE_HOME not writable, falling back to default`,
@@ -82,7 +82,7 @@ export function getCacheDir(): string {
 		try {
 			fs.accessSync(resolved, fs.constants.W_OK);
 			console.log(`[paths] Using XDG_CACHE_HOME: ${resolved}`);
-			return path.join(resolved, "clarity");
+			return path.join(resolved, "apohara");
 		} catch {
 			console.log(
 				`[paths] XDG_CACHE_HOME not writable, falling back to default`,
@@ -128,7 +128,7 @@ export function getConfigPath(): string {
  * Shows all resolved paths (for --show-paths option).
  */
 export function showPaths(): void {
-	console.log("Clarity Paths:");
+	console.log("Apohara Paths:");
 	console.log(`  Config: ${getConfigDir()}`);
 	console.log(`  State:  ${getStateDir()}`);
 	console.log(`  Cache:  ${getCacheDir()}`);

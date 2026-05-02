@@ -45,7 +45,7 @@ export const dashboardCommand = new Command("dashboard")
 
 		const env = { ...process.env };
 		if (options.run) {
-			env.CLARITY_RUN_ID = options.run;
+			env.APOHARA_RUN_ID = options.run;
 		}
 
 		const tuiPath = getTuiPath();

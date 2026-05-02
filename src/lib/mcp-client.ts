@@ -75,7 +75,7 @@ export class MCPClient extends EventEmitter {
 				protocolVersion: "2024-11-05",
 				capabilities: {},
 				clientInfo: {
-					name: "clarity-code",
+					name: "apohara",
 					version: "1.0.0",
 				},
 			}).then(() => {

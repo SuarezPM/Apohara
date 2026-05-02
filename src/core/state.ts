@@ -9,7 +9,7 @@ export class StateMachine {
 	private initialized = false;
 
 	constructor(filePath?: string) {
-		this.filePath = filePath || join(process.cwd(), ".clarity", "state.json");
+		this.filePath = filePath || join(process.cwd(), ".apohara", "state.json");
 		this.tmpPath = `${this.filePath}.tmp`;
 		this.state = this.createInitialState();
 	}

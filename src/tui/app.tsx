@@ -131,7 +131,7 @@ function DashboardApp() {
 		return (
 			<Box flexDirection="column">
 				<Text dimColor>Waiting for first execution...</Text>
-				<Text dimColor>Run `clarity auto` to start.</Text>
+				<Text dimColor>Run `apohara auto` to start.</Text>
 			</Box>
 		);
 	}

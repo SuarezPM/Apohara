@@ -38,7 +38,7 @@ export class Mem0Client {
 	constructor(config?: Mem0Config) {
 		this.apiKey = config?.apiKey || "";
 		this.baseUrl = config?.baseUrl || "https://api.mem0.ai/v1";
-		this.userId = config?.userId || "clarity-code";
+		this.userId = config?.userId || "apohara";
 	}
 
 	/**
@@ -191,5 +191,5 @@ export class Mem0Client {
 // Global instance
 export const mem0Client = new Mem0Client({
 	apiKey: process.env.MEM0_API_KEY,
-	userId: "clarity-code-agent",
+	userId: "apohara-agent",
 });

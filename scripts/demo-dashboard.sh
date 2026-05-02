@@ -14,7 +14,7 @@ NC='\033[0m'
 
 # ─── Configuration ──────────────────────────────────────────────────
 PROMPT="Build a simple hello-world API in TypeScript"
-AUTO_LOG=".clarity/demo-auto.log"
+AUTO_LOG=".apohara/demo-auto.log"
 DEMO_SUMMARY_NAME="demo-summary.json"
 
 # ─── Helpers ────────────────────────────────────────────────────────
@@ -23,10 +23,10 @@ ok()     { echo -e "${GREEN}  ✓ $1${NC}"; }
 fail()   { echo -e "${RED}  ✗ $1${NC}"; }
 warn()   { echo -e "${YELLOW}  ⚠ $1${NC}"; }
 
-# Resolve the clarity CLI command
-resolve_clarity() {
-    if command -v clarity >/dev/null 2>&1; then
-        echo "clarity"
+# Resolve the apohara CLI command
+resolve_apohara() {
+    if command -v apohara >/dev/null 2>&1; then
+        echo "apohara"
     elif [ -f "src/cli.ts" ]; then
         echo "bun src/cli.ts"
     else
@@ -63,29 +63,29 @@ if [ "$api_keys_ok" = false ]; then
     exit 1
 fi
 
-CLARITY_CMD=$(resolve_clarity)
+CLARITY_CMD=$(resolve_apohara)
 if [ -z "$CLARITY_CMD" ]; then
-    fail "Cannot find clarity CLI (expected 'clarity' in PATH or src/cli.ts)"
+    fail "Cannot find apohara CLI (expected 'apohara' in PATH or src/cli.ts)"
     exit 1
 fi
 ok "CLI resolved: ${CLARITY_CMD}"
 
 # ─── Phase 2: Start auto in background ──────────────────────────────
-phase "Phase 2: Starting clarity auto"
+phase "Phase 2: Starting apohara auto"
 
-mkdir -p .clarity/runs
+mkdir -p .apohara/runs
 
 # Snapshot existing event files so we can identify the new one
 EXISTING_EVENTS=$(mktemp)
 ls -1 .events/run-*.jsonl 2>/dev/null > "$EXISTING_EVENTS" || true
 
-# Start clarity auto in background, capturing all output
+# Start apohara auto in background, capturing all output
 AUTO_CMD="${CLARITY_CMD} auto ${PROMPT} --simulate-failure --no-pr -w 4"
 echo "  Command: ${AUTO_CMD}"
 ${AUTO_CMD} > "$AUTO_LOG" 2>&1 &
 AUTO_PID=$!
 
-ok "clarity auto started (PID: ${AUTO_PID})"
+ok "apohara auto started (PID: ${AUTO_PID})"
 ok "Log file: ${AUTO_LOG}"
 
 # ─── Phase 3: Dashboard instruction ─────────────────────────────────
@@ -95,8 +95,8 @@ cat <<'BANNER'
   ╔═══════════════════════════════════════════════════════════════╗
   ║  INSTRUCTION: Open a second terminal and run:                 ║
   ║                                                               ║
-  ║      clarity dashboard                                        ║
-  ║      # or if clarity is not in PATH:                          ║
+  ║      apohara dashboard                                        ║
+  ║      # or if apohara is not in PATH:                          ║
   ║      bun src/cli.ts dashboard                                 ║
   ║                                                               ║
   ║  This will launch the interactive TUI showing live progress.  ║
@@ -109,10 +109,10 @@ phase "Phase 4: Waiting for auto completion"
 
 if wait "$AUTO_PID"; then
     AUTO_EXIT=0
-    ok "clarity auto finished successfully"
+    ok "apohara auto finished successfully"
 else
     AUTO_EXIT=$?
-    warn "clarity auto exited with code ${AUTO_EXIT}"
+    warn "apohara auto exited with code ${AUTO_EXIT}"
 fi
 
 # ─── Phase 5: Parse event ledger ────────────────────────────────────
@@ -218,7 +218,7 @@ fi
 # ─── Phase 7: Write JSON summary ────────────────────────────────────
 phase "Phase 7: Writing JSON summary"
 
-SUMMARY_DIR=".clarity/runs/${RUN_ID}"
+SUMMARY_DIR=".apohara/runs/${RUN_ID}"
 mkdir -p "$SUMMARY_DIR"
 SUMMARY_FILE="${SUMMARY_DIR}/${DEMO_SUMMARY_NAME}"
 

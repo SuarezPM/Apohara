@@ -134,7 +134,7 @@ function AppContent() {
 		return (
 			<Box flexDirection="column">
 				<Text dimColor>Esperando primera ejecución...</Text>
-				<Text dimColor>Run `clarity auto` to start.</Text>
+				<Text dimColor>Run `apohara auto` to start.</Text>
 			</Box>
 		);
 	}

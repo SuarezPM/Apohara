@@ -5,7 +5,7 @@ import { TaskDecomposer } from "../core/decomposer";
 import { routeTask, routeTaskWithFallback } from "../core/agent-router";
 import { IsolationEngine } from "../core/isolation";
 import { EventLedger } from "../core/ledger";
-import { ParallelScheduler } from "../core/scheduler";
+import { SubagentManager } from "../core/subagent-manager";
 import { StateMachine } from "../core/state";
 import { SummaryGenerator } from "../core/summary";
 import type { DecomposedTask } from "../core/decomposer";
@@ -44,7 +44,7 @@ export const autoCommand = new Command("auto")
 			const worktreePoolSize = parseInt(options.worktrees || "3", 10);
 			const enablePr = options.pr ?? true;
 
-			console.log(`🚀 Starting clarity auto for: "${prompt}"`);
+			console.log(`🚀 Starting apohara auto for: "${prompt}"`);
 			console.log(`📊 Worktree pool size: ${worktreePoolSize}`);
 			if (options.simulateFailure) {
 				console.log(
@@ -55,18 +55,16 @@ export const autoCommand = new Command("auto")
 			// 1) Initialize core components
 			const stateMachine = new StateMachine();
 			const ledger = new EventLedger();
-			const isolationEngine = new IsolationEngine();
 			const router = new ProviderRouter({
 				simulateFailure: options.simulateFailure ?? false,
 			});
 			const decomposer = new TaskDecomposer(router);
-			const scheduler = new ParallelScheduler(
-				isolationEngine,
-				stateMachine,
-				ledger,
-				router,
-				{ worktreePoolSize },
-			);
+			const subagentManager = new SubagentManager({
+				maxConcurrent: worktreePoolSize,
+				timeoutMs: 120000,
+				maxRetries: 3,
+				backoffMs: [1000, 4000, 16000],
+			});
 
 			try {
 				// 2) Load or create state
@@ -96,7 +94,9 @@ export const autoCommand = new Command("auto")
 					const errorMessage =
 						error instanceof Error ? error.message : String(error);
 					console.error(`❌ Decomposition failed: ${errorMessage}`);
-					console.log("\n💡 Make sure your .env file has a valid API key:");
+					console.log("\n💡 Make sure you have configured your API keys:");
+					console.log("   apohara config");
+					console.log("   or set environment variables:\n");
 					console.log("   OPENCODE_API_KEY=your-key-here");
 					console.log("   or\n   DEEPSEEK_API_KEY=your-key-here\n");
 					await ledger.log(
@@ -127,30 +127,30 @@ export const autoCommand = new Command("auto")
 					"info",
 				);
 
-				// 4) Initialize scheduler and execute tasks
-				console.log("🔧 Initializing worktree pool...");
-				await scheduler.initialize();
+				// 4) Execute tasks via SubagentManager (parallel with dependency resolution)
+				console.log("▶️ Executing tasks in parallel via SubagentManager...");
+				const agentResults = await subagentManager.executeAll(
+					decompositionResult.tasks,
+				);
 
-				console.log("▶️ Executing tasks in parallel...");
-				const results = await scheduler.executeAll(decompositionResult.tasks);
-
-				// 5) Report results - compact output (one line per task)
-				const successCount = results.filter(
-					(r) => r.status === "success",
+				// 5) Report results
+				const successCount = agentResults.filter(
+					(r) => r.status === "completed",
 				).length;
-				const errorCount = results.filter((r) => r.status === "error").length;
+				const errorCount = agentResults.filter(
+					(r) => r.status === "failed" || r.status === "timeout",
+				).length;
 
-				// Compact terminal output: one line per task
 				console.log("\n📋 Task Results:");
-				for (const result of results) {
-					const statusIcon = result.status === "success" ? "✅" : "❌";
+				for (const result of agentResults) {
+					const statusIcon = result.status === "completed" ? "✅" : "❌";
 					console.log(
-						`   ${statusIcon} [${result.taskId}] ${result.status} (worktree: ${result.worktreeId})`,
+						`   ${statusIcon} [${result.taskId}] ${result.status} (provider: ${result.provider}, ${result.durationMs}ms)`,
 					);
 				}
 
 				console.log(
-					`\n📊 Summary: ${successCount} succeeded, ${errorCount} failed, ${results.length} total`,
+					`\n📊 Summary: ${successCount} succeeded, ${errorCount} failed, ${agentResults.length} total`,
 				);
 
 				await ledger.log(
@@ -158,11 +158,11 @@ export const autoCommand = new Command("auto")
 					{
 						successCount,
 						errorCount,
-						totalTasks: results.length,
-						results: results.map((r) => ({
+						totalTasks: agentResults.length,
+						results: agentResults.map((r) => ({
 							taskId: r.taskId,
 							status: r.status,
-							worktreeId: r.worktreeId,
+							provider: r.provider,
 						})),
 					},
 					errorCount > 0 ? "warning" : "info",
@@ -259,9 +259,6 @@ export const autoCommand = new Command("auto")
 
 				process.exit(1);
 			} finally {
-				// 5) Clean up worktrees
-				console.log("🧹 Cleaning up worktrees...");
-				await scheduler.shutdown();
 				console.log("👋 Shutdown complete.");
 			}
 		},

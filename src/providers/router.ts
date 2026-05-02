@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { config } from "../core/config";
+import { config, getProviderKey } from "../core/config";
 import type { EventLog, EventSeverity, ProviderId } from "../core/types";
 
 export interface LLMMessage {
@@ -47,8 +47,14 @@ export interface RouterConfig {
 	deepinfraApiKey?: string;
 	// Fireworks
 	fireworksApiKey?: string;
-	// Z.ai
-	zaiApiKey?: string;
+	// Groq - Ultra-fast inference
+	groqApiKey?: string;
+	// Kiro AI - Free tier, no auth required
+	kiroAiApiKey?: string;
+	// Mistral
+	mistralApiKey?: string;
+	// OpenAI
+	openaiApiKey?: string;
 	
 	cooldownMinutes?: number;
 	maxFailuresBeforeCooldown?: number;
@@ -86,8 +92,14 @@ const API_ENDPOINTS = {
 	"glm-deepinfra": "https://api.deepinfra.com/v1/chat/completions",
 	// Fireworks
 	"glm-fireworks": "https://api.fireworks.ai/v1/chat/completions",
-	// Z.ai
-	"glm-zai": "https://api.z-ai.cloud/v1/chat/completions",
+	// Groq - OpenAI-compatible ultra-fast inference
+	groq: "https://api.groq.com/openai/v1/chat/completions",
+	// Kiro AI - Free tier, no auth required
+	"kiro-ai": "https://api.kiro.ai/v1/chat/completions",
+	// Mistral
+	mistral: "https://api.mistral.ai/v1/chat/completions",
+	// OpenAI
+	openai: "https://api.openai.com/v1/chat/completions",
 };
 
 /**
@@ -109,6 +121,10 @@ const MODEL_NAMES: Record<ProviderId, string> = {
 	"glm-deepinfra": "THUDM/glm-4-9b-chat",
 	"glm-fireworks": "THUDM/glm-4-9b-chat",
 	"glm-zai": "THUDM/glm-4-9b-chat",
+	groq: "llama-3.3-70b-versatile",
+	"kiro-ai": "claude-sonnet-4-20250514",
+	mistral: "mistral-small-latest",
+	openai: "gpt-4o-mini",
 };
 
 interface ProviderHealth {
@@ -137,7 +153,10 @@ export class ProviderRouter {
 	private minimaxApiKey: string;
 	private deepinfraApiKey: string;
 	private fireworksApiKey: string;
-	private zaiApiKey: string;
+	private groqApiKey: string;
+	private kiroAiApiKey: string;
+	private mistralApiKey: string;
+	private openaiApiKey: string;
 
 	// Health tracking per provider
 	private providerHealth: Map<ProviderId, ProviderHealth> = new Map();
@@ -156,18 +175,21 @@ export class ProviderRouter {
 
 	constructor(cfg?: RouterConfig) {
 		// Initialize all API keys
-		this.opencodeApiKey = cfg?.opencodeApiKey || config.OPENCODE_API_KEY;
-		this.deepseekApiKey = cfg?.deepseekApiKey || config.DEEPSEEK_API_KEY || "";
-		this.geminiApiKey = cfg?.geminiApiKey || config.GEMINI_API_KEY || "";
-		this.tavilyApiKey = cfg?.tavilyApiKey || config.TAVILY_API_KEY || "";
-		this.moonshotApiKey = cfg?.moonshotApiKey || config.MOONSHOT_API_KEY || "";
-		this.xiaomiApiKey = cfg?.xiaomiApiKey || config.XIAOMI_API_KEY || "";
-		this.alibabaApiKey = cfg?.alibabaApiKey || config.ALIBABA_API_KEY || "";
-		this.minimaxApiKey = cfg?.minimaxApiKey || config.MINIMAX_API_KEY || "";
-		this.deepinfraApiKey = cfg?.deepinfraApiKey || config.DEEPINFRA_API_KEY || "";
-		this.fireworksApiKey = cfg?.fireworksApiKey || config.FIREWORKS_API_KEY || "";
-		this.zaiApiKey = cfg?.zaiApiKey || config.ZAI_API_KEY || "";
-		this.tavilyApiKey = cfg?.tavilyApiKey || config.TAVILY_API_KEY || "";
+		this.opencodeApiKey = cfg?.opencodeApiKey || getProviderKey("opencode-go") || "";
+		this.deepseekApiKey = cfg?.deepseekApiKey || getProviderKey("deepseek") || "";
+		this.geminiApiKey = cfg?.geminiApiKey || getProviderKey("gemini") || "";
+		this.tavilyApiKey = cfg?.tavilyApiKey || getProviderKey("tavily") || "";
+		this.moonshotApiKey = cfg?.moonshotApiKey || getProviderKey("moonshot") || "";
+		this.xiaomiApiKey = cfg?.xiaomiApiKey || getProviderKey("xiaomi") || "";
+		this.alibabaApiKey = cfg?.alibabaApiKey || getProviderKey("alibaba") || "";
+		this.minimaxApiKey = cfg?.minimaxApiKey || getProviderKey("minimax") || "";
+		this.deepinfraApiKey = cfg?.deepinfraApiKey || getProviderKey("deepinfra") || "";
+		this.fireworksApiKey = cfg?.fireworksApiKey || getProviderKey("fireworks") || "";
+		this.zaiApiKey = cfg?.zaiApiKey || getProviderKey("zai") || "";
+		this.groqApiKey = cfg?.groqApiKey || getProviderKey("groq") || "";
+		this.kiroAiApiKey = cfg?.kiroAiApiKey || getProviderKey("kiro-ai") || "anonymous";
+		this.mistralApiKey = cfg?.mistralApiKey || getProviderKey("mistral") || "";
+		this.openaiApiKey = cfg?.openaiApiKey || getProviderKey("openai") || "";
 		
 		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5;
 		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3;
@@ -178,7 +200,8 @@ export class ProviderRouter {
 			"opencode-go", "deepseek", "deepseek-v4", "gemini", "tavily",
 			"moonshot-k2.5", "moonshot-k2.6", "xiaomi-mimo",
 			"qwen3.5-plus", "qwen3.6-plus", "minimax-m2.5", "minimax-m2.7",
-			"glm-deepinfra", "glm-fireworks", "glm-zai"
+			"glm-deepinfra", "glm-fireworks", "glm-zai", "groq",
+			"kiro-ai", "mistral", "openai"
 		];
 		
 		for (const provider of allProviders) {
@@ -303,9 +326,9 @@ export class ProviderRouter {
 		// Priority order: most capable first, then fallbacks
 		const providers: ProviderId[] = [
 			// Execution role - most powerful coding models first
-			"deepseek-v4", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7",
+			"groq", "deepseek-v4", "kiro-ai", "openai", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7",
 			// Planning/Research
-			"moonshot-k2.5", "gemini", "tavily", "qwen3.5-plus",
+			"mistral", "moonshot-k2.5", "gemini", "tavily", "qwen3.5-plus",
 			// Legacy fallbacks
 			"deepseek", "glm-deepinfra", "glm-fireworks", "glm-zai", "xiaomi-mimo", "minimax-m2.5"
 		];
@@ -481,6 +504,14 @@ export class ProviderRouter {
 				return this.callFireworks(messages, "THUDM/glm-4-9b-chat");
 			case "glm-zai":
 				return this.callZai(messages, "THUDM/glm-4-9b-chat");
+			case "groq":
+				return this.callGroq(messages);
+			case "kiro-ai":
+				return this.callKiroAI(messages);
+			case "mistral":
+				return this.callMistral(messages);
+			case "openai":
+				return this.callOpenAI(messages);
 			default:
 				throw new Error(`Unknown provider: ${provider}`);
 		}
@@ -899,33 +930,138 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callZai(messages: LLMMessage[], model: string): Promise<LLMResponse> {
-		if (!this.zaiApiKey) {
-			throw new Error("Z.ai API key not configured");
+	private async callGroq(messages: LLMMessage[]): Promise<LLMResponse> {
+		if (!this.groqApiKey) {
+			throw new Error("Groq API key not configured. Get one at https://console.groq.com/keys");
 		}
-		
-		const response = await fetch(this.API_URLS["glm-zai"], {
+
+		const response = await fetch(this.API_URLS.groq, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.zaiApiKey}`,
+				Authorization: `Bearer ${this.groqApiKey}`,
 			},
 			body: JSON.stringify({
-				model,
+				model: "llama-3.3-70b-versatile",
 				messages,
 			}),
 			signal: AbortSignal.timeout(30000),
 		});
 
 		if (!response.ok) {
-			throw new Error(`Z.ai API Error: ${response.status} ${response.statusText}`);
+			const errorText = await response.text().catch(() => "");
+			throw new Error(`Groq API Error: ${response.status} ${response.statusText} ${errorText}`);
 		}
 
 		const data = await response.json();
 		return {
 			content: data.choices?.[0]?.message?.content || "",
-			provider: "glm-zai",
-			model,
+			provider: "groq",
+			model: "llama-4-maverick-17b-128e-instruct",
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callKiroAI(messages: LLMMessage[]): Promise<LLMResponse> {
+		const response = await fetch(this.API_URLS["kiro-ai"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				// Kiro AI does not require authentication
+			},
+			body: JSON.stringify({
+				model: MODEL_NAMES["kiro-ai"],
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "");
+			throw new Error(`Kiro AI API Error: ${response.status} ${response.statusText} ${errorText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "kiro-ai",
+			model: MODEL_NAMES["kiro-ai"],
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callMistral(messages: LLMMessage[]): Promise<LLMResponse> {
+		if (!this.mistralApiKey) {
+			throw new Error("Mistral API key not configured. Get one at https://console.mistral.ai/");
+		}
+
+		const response = await fetch(this.API_URLS.mistral, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.mistralApiKey}`,
+			},
+			body: JSON.stringify({
+				model: MODEL_NAMES.mistral,
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "");
+			throw new Error(`Mistral API Error: ${response.status} ${response.statusText} ${errorText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "mistral",
+			model: MODEL_NAMES.mistral,
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callOpenAI(messages: LLMMessage[]): Promise<LLMResponse> {
+		if (!this.openaiApiKey) {
+			throw new Error("OpenAI API key not configured. Get one at https://platform.openai.com/");
+		}
+
+		const response = await fetch(this.API_URLS.openai, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.openaiApiKey}`,
+			},
+			body: JSON.stringify({
+				model: MODEL_NAMES.openai,
+				messages,
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "");
+			throw new Error(`OpenAI API Error: ${response.status} ${response.statusText} ${errorText}`);
+		}
+
+		const data = await response.json();
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "openai",
+			model: MODEL_NAMES.openai,
 			usage: {
 				promptTokens: data.usage?.prompt_tokens || 0,
 				completionTokens: data.usage?.completion_tokens || 0,

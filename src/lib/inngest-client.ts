@@ -42,7 +42,7 @@ export class InngestClient {
 	private activeDispatches = new Map<string, DispatchResult>();
 
 	constructor(config?: InngestConfig) {
-		this.appId = config?.appId || process.env.INNGEST_APP_ID || "clarity-code";
+		this.appId = config?.appId || process.env.INNGEST_APP_ID || "apohara";
 		this.apiKey = config?.apiKey || process.env.INNGEST_API_KEY || "";
 		this.baseUrl = config?.baseUrl || "https://api.inngest.com/fn";
 	}

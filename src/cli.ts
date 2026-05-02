@@ -13,7 +13,7 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, "..", "package.json"
 
 const program = new Command();
 
-program.name("clarity").description("Clarity CLI").version(packageJson.version);
+program.name("apohara").description("Apohara CLI").version(packageJson.version);
 
 program.addCommand(configCommand);
 program.addCommand(autoCommand);

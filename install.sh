@@ -7,12 +7,12 @@
 set -e
 
 # Configuration
-REPO_OWNER="clarity-code"
-REPO_NAME="clarity-code"
+REPO_OWNER="apohara"
+REPO_NAME="apohara"
 CURRENT_VERSION="0.1.0"
-INSTALL_DIR="${HOME}/.clarity-code"
+INSTALL_DIR="${HOME}/.apohara-code"
 BIN_DIR="${INSTALL_DIR}/bin"
-CONFIG_DIR="${HOME}/.clarity"
+CONFIG_DIR="${HOME}/.apohara"
 
 # Colors for output
 RED='\033[0;31m'
@@ -166,13 +166,13 @@ get_latest_release() {
 install_via_npm() {
     log_info "Installing via npm..."
     
-    if ! npm install -g clarity-code; then
+    if ! npm install -g apohara; then
         log_error "npm install failed"
         exit 1
     fi
     
     log_info "Installation complete! ✓"
-    log_info "Run 'clarity --help' to get started"
+    log_info "Run 'apohara --help' to get started"
 }
 
 # Install via direct download (with checksum verification)
@@ -196,7 +196,7 @@ install_via_download() {
         *)        arch="x64" ;;
     esac
     
-    local tarball="clarity-code-${version}-${os}-${arch}.tar.gz"
+    local tarball="apohara-${version}-${os}-${arch}.tar.gz"
     local download_url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${version}/${tarball}"
     
     # Create temp directory
@@ -223,7 +223,7 @@ install_via_download() {
     tar -xzf "$tarball_path" -C "$temp_dir"
     
     # Copy files
-    local extract_dir="${temp_dir}/clarity-code-${version}-${os}-${arch}"
+    local extract_dir="${temp_dir}/apohara-${version}-${os}-${arch}"
     if [ -d "$extract_dir" ]; then
         cp -r "$extract_dir/"* "$BIN_DIR/"
     else
@@ -232,7 +232,7 @@ install_via_download() {
     fi
     
     # Make CLI executable
-    chmod +x "$BIN_DIR/clarity"
+    chmod +x "$BIN_DIR/apohara"
     
     # Add to PATH if not already there
     local shell_rc=""
@@ -250,7 +250,7 @@ install_via_download() {
     fi
     
     log_info "Installation complete! ✓"
-    log_info "Run 'clarity --help' to get started"
+    log_info "Run 'apohara --help' to get started"
 }
 
 # Main installation flow

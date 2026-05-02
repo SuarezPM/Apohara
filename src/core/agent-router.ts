@@ -7,29 +7,34 @@
 import type { ProviderId, TaskRole, EventLog, EventSeverity, ModelCapability } from "./types";
 import { ROLE_TO_PROVIDER, ROLE_FALLBACK_ORDER, getModelById, getBestModelsForRole, MODELS } from "./types";
 import { EventLedger } from "./ledger";
-import { config } from "../core/config";
+import { config, getProviderKey } from "../core/config";
 import { ProviderRouter } from "../providers/router";
+import { getCapabilityScore, rankProvidersForTask, roleToTaskType, selectBestProvider } from "./capability-manifest";
 
 // Re-export types for external use
 export type { ProviderId, TaskRole, ModelCapability };
 
 // Token validation map - validates API keys exist before dispatch
 const TOKEN_VALIDATORS: Record<ProviderId, () => boolean> = {
-	"opencode-go": () => !!config.OPENCODE_API_KEY,
-	"deepseek": () => !!config.DEEPSEEK_API_KEY,
-	"deepseek-v4": () => !!config.DEEPSEEK_API_KEY,
-	"tavily": () => !!config.TAVILY_API_KEY,
-	"gemini": () => !!config.GEMINI_API_KEY,
-	"moonshot-k2.5": () => !!config.MOONSHOT_API_KEY,
-	"moonshot-k2.6": () => !!config.MOONSHOT_API_KEY,
-	"xiaomi-mimo": () => !!config.XIAOMI_API_KEY,
-	"qwen3.5-plus": () => !!config.ALIBABA_API_KEY,
-	"qwen3.6-plus": () => !!config.ALIBABA_API_KEY,
-	"minimax-m2.5": () => !!config.MINIMAX_API_KEY,
-	"minimax-m2.7": () => !!config.MINIMAX_API_KEY,
-	"glm-deepinfra": () => !!config.DEEPINFRA_API_KEY,
-	"glm-fireworks": () => !!config.FIREWORKS_API_KEY,
-	"glm-zai": () => !!config.ZAI_API_KEY,
+	"opencode-go": () => !!getProviderKey("opencode-go"),
+	"deepseek": () => !!getProviderKey("deepseek"),
+	"deepseek-v4": () => !!getProviderKey("deepseek"),
+	"tavily": () => !!getProviderKey("tavily"),
+	"gemini": () => !!getProviderKey("gemini"),
+	"moonshot-k2.5": () => !!getProviderKey("moonshot"),
+	"moonshot-k2.6": () => !!getProviderKey("moonshot"),
+	"xiaomi-mimo": () => !!getProviderKey("xiaomi"),
+	"qwen3.5-plus": () => !!getProviderKey("alibaba"),
+	"qwen3.6-plus": () => !!getProviderKey("alibaba"),
+	"minimax-m2.5": () => !!getProviderKey("minimax"),
+	"minimax-m2.7": () => !!getProviderKey("minimax"),
+	"glm-deepinfra": () => !!getProviderKey("deepinfra"),
+	"glm-fireworks": () => !!getProviderKey("fireworks"),
+	"glm-zai": () => !!getProviderKey("zai"),
+	"groq": () => !!getProviderKey("groq"),
+	"kiro-ai": () => true, // No auth required
+	"mistral": () => !!getProviderKey("mistral"),
+	"openai": () => !!getProviderKey("openai"),
 };
 
 /**
@@ -107,6 +112,7 @@ async function logProviderEvent(
 /**
  * Routes a task to the correct provider based on its role.
  * Implements:
+ * - Capability manifest consultation for provider selection
  * - Intelligent role-based provider selection using top models
  * - Token validation before dispatch (Decision D006)
  * - Fallback chain activation on 429/timeout
@@ -122,21 +128,40 @@ export async function routeTask(
 ): Promise<RouteResult> {
 	const ledger = new EventLedger();
 	const taskId = task?.id;
-	const primaryProvider = ROLE_TO_PROVIDER[role];
-	const fallbackOrder = ROLE_FALLBACK_ORDER[role];
-	const modelCapability = getModelById(primaryProvider);
+	const taskType = roleToTaskType(role);
 
-	// Log role assignment
+	// Get capability-ranked providers for this task type
+	const rankedProviders = rankProvidersForTask(taskType);
+
+	// Find the best provider that has a valid token
+	let primaryProvider = ROLE_TO_PROVIDER[role];
+	let fallbackOrder = ROLE_FALLBACK_ORDER[role];
+	let modelCapability = getModelById(primaryProvider);
+
+	// Consult capability manifest: prioritize higher-scoring providers with valid tokens
+	const availableProviders = getAvailableProviders();
+	const bestByCapability = selectBestProvider(availableProviders, taskType);
+	if (bestByCapability && validateToken(bestByCapability)) {
+		primaryProvider = bestByCapability;
+		modelCapability = getModelById(primaryProvider);
+		// Reorder fallback to start after the selected primary
+		const remaining = fallbackOrder.filter((p) => p !== primaryProvider);
+		fallbackOrder = [primaryProvider, ...remaining];
+	}
+
+	// Log role assignment with capability info
 	await ledger.log(
 		"role_assignment",
 		{
-			message: `Task assigned to role: ${role}`,
+			message: `Task assigned to role: ${role} (taskType: ${taskType})`,
 			taskId,
 			role,
+			taskType,
+			capabilityScore: getCapabilityScore(primaryProvider, taskType),
 		},
 		"info",
 		taskId,
-		{ role },
+		{ role, provider: primaryProvider },
 	);
 
 	// Validate token for primary provider (Decision D006)
@@ -172,18 +197,19 @@ export async function routeTask(
 		console.error(`⚠ No valid token found for role ${role}, using primary anyway`);
 	}
 
-	// Log provider selection with model info
+	// Log provider selection with model info and capability score
 	const modelInfo = modelCapability ? `${modelCapability.name} (${modelCapability.provider})` : primaryProvider;
 	await logProviderEvent(
 		ledger,
 		"provider_selected",
-		`Provider ${modelInfo} selected for role ${role}`,
+		`Provider ${modelInfo} selected for role ${role} (capability: ${getCapabilityScore(primaryProvider, taskType)})`,
 		role,
 		primaryProvider,
 		{
 			modelName: modelCapability?.name,
 			modelProvider: modelCapability?.provider,
 			contextWindow: modelCapability?.contextWindow,
+			capabilityScore: getCapabilityScore(primaryProvider, taskType),
 		},
 	);
 

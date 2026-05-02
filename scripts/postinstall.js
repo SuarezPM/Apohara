@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Postinstall script for clarity-code npm package.
+ * Postinstall script for apohara npm package.
  * Extracts the correct platform-specific binary from optionalDependencies.
  * Works as both ESM and CommonJS.
  */
@@ -45,7 +45,7 @@ const archMap = {
 
 const currentPlatform = platformMap[platform()] || 'linux';
 const currentArch = archMap[arch()] || 'x64';
-const packageName = `@clarity-code/cli-${currentPlatform}-${currentArch}`;
+const packageName = `@apohara/cli-${currentPlatform}-${currentArch}`;
 
 const scriptDir = getScriptDir();
 const binariesDir = join(scriptDir, '..', 'binaries');
@@ -59,8 +59,8 @@ if (!existsSync(binariesDir)) {
 try {
   // Use createRequire to resolve the optional dependency
   const require = createRequire(import.meta.url);
-  const binaryPath = require.resolve(`${packageName}/bin/clarity`);
-  const destPath = join(binariesDir, 'clarity');
+  const binaryPath = require.resolve(`${packageName}/bin/apohara`);
+  const destPath = join(binariesDir, 'apohara');
 
   if (existsSync(binaryPath)) {
     copyFileSync(binaryPath, destPath);

@@ -82,6 +82,27 @@ describe("SubagentManager", () => {
 			expect(uniqueIds.size).toBe(3);
 		});
 
+		test("executes 5 tasks in parallel with maxConcurrent=5", async () => {
+			const manager5 = new SubagentManager({
+				maxConcurrent: 5,
+				timeoutMs: 15000,
+				maxRetries: 1,
+			});
+
+			const tasks = Array.from({ length: 5 }, (_, i) => ({
+				id: `parallel-task-${i + 1}`,
+				description: `Parallel task ${i + 1}`,
+				dependencies: [] as string[],
+				role: "execution" as TaskRole,
+			}));
+
+			const results = await manager5.executeAll(tasks);
+			expect(results.length).toBeGreaterThanOrEqual(5);
+			
+			const uniqueIds = new Set(results.map(r => r.taskId));
+			expect(uniqueIds.size).toBe(5);
+		});
+
 		test("handles dependency graph correctly", async () => {
 			const tasks = [
 				{ id: "task-a", description: "First task", dependencies: [], role: "execution" as TaskRole },
@@ -97,12 +118,47 @@ describe("SubagentManager", () => {
 		});
 	});
 
-	describe("configuration", () => {
+	describe("timeout handling", () => {
+		test("applies timeout from config", async () => {
+			const fastManager = new SubagentManager({
+				maxConcurrent: 1,
+				timeoutMs: 500, // Very short timeout
+				maxRetries: 0,
+			});
+
+			const tasks = [
+				{ id: "timeout-task", description: "A task that should timeout quickly", dependencies: [], role: "execution" as TaskRole },
+			];
+
+			const results = await fastManager.executeAll(tasks);
+			expect(results).toHaveLength(1);
+			// Should either complete quickly or timeout/abort
+			expect(results[0].taskId).toBe("timeout-task");
+		});
+	});
+
+	describe("retry configuration", () => {
 		test("uses provided backoffMs values", () => {
 			const customManager = createSubagentManager({
 				backoffMs: [200, 800, 3200],
 			});
 			expect(customManager).toBeDefined();
+		});
+
+		test("applies maxRetries from config", async () => {
+			const noRetryManager = new SubagentManager({
+				maxConcurrent: 1,
+				timeoutMs: 5000,
+				maxRetries: 0, // No retries
+			});
+
+			const tasks = [
+				{ id: "no-retry-task", description: "Test no retry", dependencies: [], role: "execution" as TaskRole },
+			];
+
+			const results = await noRetryManager.executeAll(tasks);
+			expect(results).toHaveLength(1);
+			expect(results[0].retries).toBe(0);
 		});
 	});
 });

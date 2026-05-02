@@ -1,0 +1,14 @@
+{
+  "currentTaskId": "check-active",
+  "tasks": [
+    {
+      "id": "check-active",
+      "description": "Check active tasks",
+      "status": "in_progress",
+      "createdAt": "2026-05-02T13:23:19.971Z",
+      "updatedAt": "2026-05-02T13:23:19.971Z"
+    }
+  ],
+  "status": "running",
+  "failedProviderTimestamps": {}
+}
