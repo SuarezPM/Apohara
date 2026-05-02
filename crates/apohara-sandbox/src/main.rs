@@ -6,13 +6,17 @@
 //   (Arch/Fedora/newer kernels: enabled by default, sysctl key may not exist)
 // Namespaces used: CLONE_NEWUSER, CLONE_NEWNS (mount), CLONE_NEWPID, CLONE_NEWNET, CLONE_NEWIPC
 // Seccomp-bpf: applied via seccompiler crate (pure Rust, no libseccomp required)
+// Violation detection: SECCOMP_RET_TRAP → SIGSYS → detected via WaitStatus::Signaled(SIGSYS)
 
 use clap::{Parser, Subcommand};
 use nix::mount::{mount, MsFlags};
 use nix::sched::{clone, CloneFlags};
 use nix::sys::resource::{setrlimit, Resource};
-use nix::sys::wait::{waitpid, WaitStatus};
+use nix::sys::wait::waitpid;
+use seccompiler::{BpfProgram, SeccompAction, SeccompFilter, SeccompRule};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::convert::TryInto;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -177,13 +181,309 @@ fn write_uid_gid_map(child_pid: i32, host_uid: u32, host_gid: u32) -> Result<(),
     Ok(())
 }
 
+// ── Seccomp filter construction ───────────────────────────────────────────────
+
+/// Syscalls required by /bin/sh and typical command execution.
+/// These are always allowed regardless of permission tier.
+fn base_allowed_syscalls() -> Vec<i64> {
+    vec![
+        // Core I/O
+        libc::SYS_read,
+        libc::SYS_write,
+        libc::SYS_open,
+        libc::SYS_openat,
+        libc::SYS_close,
+        libc::SYS_pread64,
+        libc::SYS_pwrite64,
+        libc::SYS_readv,
+        libc::SYS_writev,
+        libc::SYS_lseek,
+        // File metadata
+        libc::SYS_stat,
+        libc::SYS_fstat,
+        libc::SYS_lstat,
+        libc::SYS_newfstatat,
+        libc::SYS_statx,
+        libc::SYS_access,
+        libc::SYS_faccessat,
+        libc::SYS_readlink,
+        libc::SYS_readlinkat,
+        // Directory operations
+        libc::SYS_getdents64,
+        libc::SYS_getcwd,
+        libc::SYS_chdir,
+        libc::SYS_fchdir,
+        libc::SYS_mkdir,
+        libc::SYS_mkdirat,
+        libc::SYS_rmdir,
+        libc::SYS_rename,
+        libc::SYS_renameat,
+        libc::SYS_renameat2,
+        libc::SYS_unlink,
+        libc::SYS_unlinkat,
+        libc::SYS_symlink,
+        libc::SYS_symlinkat,
+        libc::SYS_link,
+        libc::SYS_linkat,
+        // Memory management
+        libc::SYS_mmap,
+        libc::SYS_munmap,
+        libc::SYS_mprotect,
+        libc::SYS_mremap,
+        libc::SYS_madvise,
+        libc::SYS_brk,
+        libc::SYS_msync,
+        // Process management
+        libc::SYS_clone,
+        libc::SYS_clone3,
+        libc::SYS_fork,
+        libc::SYS_vfork,
+        libc::SYS_execve,
+        libc::SYS_execveat,
+        libc::SYS_exit,
+        libc::SYS_exit_group,
+        libc::SYS_wait4,
+        libc::SYS_waitid,
+        libc::SYS_getpid,
+        libc::SYS_getppid,
+        libc::SYS_gettid,
+        libc::SYS_set_tid_address,
+        libc::SYS_getpgrp,
+        libc::SYS_setpgid,
+        libc::SYS_setsid,
+        // Signals
+        libc::SYS_rt_sigaction,
+        libc::SYS_rt_sigprocmask,
+        libc::SYS_rt_sigreturn,
+        libc::SYS_rt_sigsuspend,
+        libc::SYS_rt_sigpending,
+        libc::SYS_kill,
+        libc::SYS_tgkill,
+        libc::SYS_tkill,
+        libc::SYS_sigaltstack,
+        // Time
+        libc::SYS_nanosleep,
+        libc::SYS_clock_nanosleep,
+        libc::SYS_clock_gettime,
+        libc::SYS_clock_getres,
+        libc::SYS_gettimeofday,
+        libc::SYS_times,
+        // Synchronization/futex
+        libc::SYS_futex,
+        libc::SYS_futex_waitv,
+        // epoll / poll / select
+        libc::SYS_epoll_create,
+        libc::SYS_epoll_create1,
+        libc::SYS_epoll_wait,
+        libc::SYS_epoll_pwait,
+        libc::SYS_epoll_pwait2,
+        libc::SYS_epoll_ctl,
+        libc::SYS_poll,
+        libc::SYS_ppoll,
+        libc::SYS_select,
+        libc::SYS_pselect6,
+        // io_uring
+        libc::SYS_io_uring_setup,
+        libc::SYS_io_uring_enter,
+        libc::SYS_io_uring_register,
+        // File descriptors
+        libc::SYS_dup,
+        libc::SYS_dup2,
+        libc::SYS_dup3,
+        libc::SYS_fcntl,
+        libc::SYS_ioctl,
+        libc::SYS_pipe,
+        libc::SYS_pipe2,
+        libc::SYS_eventfd,
+        libc::SYS_eventfd2,
+        libc::SYS_signalfd,
+        libc::SYS_signalfd4,
+        libc::SYS_timerfd_create,
+        libc::SYS_timerfd_settime,
+        libc::SYS_timerfd_gettime,
+        // User/group identity (read-only inside namespace is fine)
+        libc::SYS_getuid,
+        libc::SYS_getgid,
+        libc::SYS_geteuid,
+        libc::SYS_getegid,
+        libc::SYS_getgroups,
+        libc::SYS_getresuid,
+        libc::SYS_getresgid,
+        // Resource limits
+        libc::SYS_getrlimit,
+        libc::SYS_setrlimit,
+        libc::SYS_prlimit64,
+        libc::SYS_getrusage,
+        // Misc process info
+        libc::SYS_uname,
+        libc::SYS_arch_prctl,
+        libc::SYS_prctl,
+        libc::SYS_sched_getaffinity,
+        libc::SYS_sched_setaffinity,
+        libc::SYS_sched_yield,
+        libc::SYS_sched_getparam,
+        libc::SYS_sched_getscheduler,
+        // Memory mapping misc
+        libc::SYS_membarrier,
+        libc::SYS_mincore,
+        libc::SYS_mlock,
+        libc::SYS_munlock,
+        libc::SYS_mlock2,
+        // Sendfile, splice, tee (for shell/bun pipelines)
+        libc::SYS_sendfile,
+        libc::SYS_splice,
+        libc::SYS_tee,
+        libc::SYS_copy_file_range,
+        // Misc required by dynamic linker
+        libc::SYS_getrandom,
+        libc::SYS_rseq,
+        // /proc reads (via open+read)
+        libc::SYS_truncate,
+        libc::SYS_ftruncate,
+        libc::SYS_fallocate,
+        libc::SYS_chmod,
+        libc::SYS_fchmod,
+        libc::SYS_fchmodat,
+        libc::SYS_chown,
+        libc::SYS_fchown,
+        libc::SYS_fchownat,
+        libc::SYS_lchown,
+        libc::SYS_umask,
+        libc::SYS_getdents,
+        libc::SYS_statfs,
+        libc::SYS_fstatfs,
+        libc::SYS_inotify_init,
+        libc::SYS_inotify_init1,
+        libc::SYS_inotify_add_watch,
+        libc::SYS_inotify_rm_watch,
+        // Thread-local storage
+        libc::SYS_set_robust_list,
+        libc::SYS_get_robust_list,
+        // Loopback network operations (needed even in readonly for some shells)
+        libc::SYS_socketpair,
+        libc::SYS_getsockopt,
+        libc::SYS_setsockopt,
+        libc::SYS_getsockname,
+        libc::SYS_getpeername,
+        // Misc
+        libc::SYS_capget,
+        libc::SYS_capset,
+        libc::SYS_recvmsg,
+        libc::SYS_sendmsg,
+        libc::SYS_shutdown,
+        // Mount operations (child needs to remount workdir as readonly)
+        libc::SYS_mount,
+        libc::SYS_umount2,
+        libc::SYS_pivot_root,
+        // seccomp syscall itself (needed if any child wants to apply its own filter)
+        libc::SYS_seccomp,
+        // prctl is already included above but list explicitly for clarity
+        // wait4/waitpid variants
+        libc::SYS_wait4,
+        // process_vm_readv/writev (used by some debuggers/profilers — exclude from sandbox)
+        // Open flags
+        libc::SYS_openat2,
+    ]
+}
+
+/// Network syscalls blocked in readonly tier — these are the "observable violations".
+/// When any of these is attempted, SECCOMP_RET_TRAP fires → child gets SIGSYS.
+fn network_violation_syscalls() -> Vec<(&'static str, i64)> {
+    vec![
+        ("socket", libc::SYS_socket),
+        ("connect", libc::SYS_connect),
+        ("bind", libc::SYS_bind),
+        ("listen", libc::SYS_listen),
+        ("accept", libc::SYS_accept),
+        ("accept4", libc::SYS_accept4),
+        ("sendto", libc::SYS_sendto),
+        ("recvfrom", libc::SYS_recvfrom),
+    ]
+}
+
+/// Build a seccomp BPF filter for the given permission tier.
+///
+/// Returns Ok(Some(program)) for readonly/workspace_write, Ok(None) for danger_full_access.
+/// The second return value is the list of violation syscall names (for reporting when SIGSYS fires).
+fn build_seccomp_filter(
+    permission: &str,
+) -> Result<(Option<BpfProgram>, Vec<String>), String> {
+    match permission {
+        "danger_full_access" => return Ok((None, vec![])),
+        _ => {}
+    }
+
+    let arch: seccompiler::TargetArch = std::env::consts::ARCH
+        .try_into()
+        .map_err(|_| format!("unsupported architecture: {}", std::env::consts::ARCH))?;
+
+    let mut rules: BTreeMap<i64, Vec<SeccompRule>> = BTreeMap::new();
+
+    // All base syscalls get unconditional allow (empty rule vector = always allow)
+    for syscall in base_allowed_syscalls() {
+        rules.insert(syscall, vec![]);
+    }
+
+    let violation_syscalls = network_violation_syscalls();
+    let violation_names: Vec<String> = violation_syscalls
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect();
+
+    match permission {
+        "readonly" => {
+            // Network syscalls get SECCOMP_RET_TRAP → SIGSYS → child detects violation
+            // We do NOT add them to the allow list; the mismatch_action handles them.
+            // The mismatch_action for readonly is Trap (so the shell dies with SIGSYS).
+            // We build the filter with:
+            //   - match_action = Allow (listed syscalls are allowed)
+            //   - mismatch_action = Trap (unlisted syscalls send SIGSYS)
+            // Network syscalls are explicitly NOT in the allow list → they hit mismatch_action.
+        }
+        "workspace_write" => {
+            // workspace_write: same as readonly but network is also NOT blocked
+            // Allow socket/connect so local IPC can work; block only external-looking patterns.
+            // For simplicity: workspace_write allows everything in base list.
+            // Network syscalls get Errno(EPERM) (not Trap) — quieter failure.
+            for (_, syscall_nr) in &violation_syscalls {
+                rules.insert(*syscall_nr, vec![]);
+            }
+        }
+        _ => {
+            // Unknown tier: treat as workspace_write (safe default)
+            for (_, syscall_nr) in &violation_syscalls {
+                rules.insert(*syscall_nr, vec![]);
+            }
+        }
+    }
+
+    // For readonly: mismatch = Trap (SIGSYS), match = Allow
+    // For workspace_write: mismatch = Errno(EPERM), match = Allow
+    let (mismatch_action, match_action) = match permission {
+        "readonly" => (SeccompAction::Trap, SeccompAction::Allow),
+        _ => (SeccompAction::Errno(libc::EPERM as u32), SeccompAction::Allow),
+    };
+
+    let filter = SeccompFilter::new(rules, mismatch_action, match_action, arch)
+        .map_err(|e| format!("SeccompFilter::new failed: {}", e))?;
+
+    let program: BpfProgram = filter
+        .try_into()
+        .map_err(|e| format!("BpfProgram compilation failed: {}", e))?;
+
+    Ok((Some(program), violation_names))
+}
+
 // ── Namespace-isolated execution ──────────────────────────────────────────────
 
 fn execute_with_namespaces(
     workdir: &str,
     command: &str,
-    _permission: &str,
+    permission: &str,
 ) -> Result<(i32, String, String, Vec<String>), String> {
+    // Build seccomp filter before forking (cheaper than building inside child)
+    let (seccomp_program, violation_names) = build_seccomp_filter(permission)?;
+
     // Pipes: parent signals child that UID/GID maps are written (ready_r/ready_w)
     // Child sends back stdout+stderr lengths then data (result_r/result_w)
     let (ready_r, ready_w) = create_pipe()?;
@@ -195,6 +495,8 @@ fn execute_with_namespaces(
 
     let workdir_owned = workdir.to_string();
     let command_owned = command.to_string();
+    // Wrap in Option so we can move out via take() inside FnMut closure (called exactly once)
+    let mut seccomp_opt = Some(seccomp_program);
 
     // Stack for the cloned child (1 MiB)
     let mut stack = vec![0u8; 1024 * 1024];
@@ -213,6 +515,7 @@ fn execute_with_namespaces(
                     result_w,
                     &workdir_owned,
                     &command_owned,
+                    seccomp_opt.take().unwrap_or(None),
                 )
             }),
             &mut stack,
@@ -257,7 +560,7 @@ fn execute_with_namespaces(
     write_all_fd(ready_w, &[1u8]);
     unsafe { libc::close(ready_w) };
 
-    // Read output from child: [stdout_len: u64][stderr_len: u64][stdout bytes][stderr bytes][exit_code: i32]
+    // Read output from child: [stdout_len: u64][stderr_len: u64][stdout bytes][stderr bytes][exit_code: i32][sigsys_flag: u8]
     let mut stdout_len_buf = [0u8; 8];
     let mut stderr_len_buf = [0u8; 8];
     if !read_exact_fd(result_r, &mut stdout_len_buf)
@@ -277,27 +580,47 @@ fn execute_with_namespaces(
     read_exact_fd(result_r, &mut stderr_buf);
 
     let mut exit_code_buf = [0u8; 4];
+    let mut sigsys_flag_buf = [0u8; 1];
     read_exact_fd(result_r, &mut exit_code_buf);
+    read_exact_fd(result_r, &mut sigsys_flag_buf);
     unsafe { libc::close(result_r) };
 
     let reported_exit = i32::from_ne_bytes(exit_code_buf);
+    let child_reported_sigsys = sigsys_flag_buf[0] != 0;
 
     // waitpid to reap the child
-    let exit_code = match waitpid(child_pid, None) {
-        Ok(WaitStatus::Exited(_, code)) => code,
-        Ok(WaitStatus::Signaled(_, sig, _)) => -(sig as i32),
-        _ => reported_exit,
+    let wait_result = waitpid(child_pid, None);
+    let _ = wait_result; // we use reported_exit and child_reported_sigsys from pipe
+
+    // Determine violations: child reports SIGSYS if the command was killed by seccomp
+    let violations = if child_reported_sigsys {
+        violation_names
+    } else {
+        vec![]
+    };
+
+    // Use exit code from pipe (reported_exit); if SIGSYS was detected, use 1
+    let final_exit = if child_reported_sigsys {
+        1
+    } else {
+        reported_exit
     };
 
     let stdout = String::from_utf8_lossy(&stdout_buf).into_owned();
     let stderr = String::from_utf8_lossy(&stderr_buf).into_owned();
 
-    Ok((exit_code, stdout, stderr, vec![]))
+    Ok((final_exit, stdout, stderr, violations))
 }
 
 // ── Child function (runs inside all new namespaces) ───────────────────────────
 
-fn child_fn(ready_r: i32, result_w: i32, workdir: &str, command: &str) -> isize {
+fn child_fn(
+    ready_r: i32,
+    result_w: i32,
+    workdir: &str,
+    command: &str,
+    seccomp_program: Option<BpfProgram>,
+) -> isize {
     // Apply resource limits as an additional layer inside the namespace
     let _ = setrlimit(Resource::RLIMIT_AS, 512 * 1024 * 1024, 512 * 1024 * 1024);
     let _ = setrlimit(Resource::RLIMIT_NOFILE, 256, 256);
@@ -323,6 +646,20 @@ fn child_fn(ready_r: i32, result_w: i32, workdir: &str, command: &str) -> isize 
         return 1;
     }
 
+    // Apply seccomp filter AFTER namespace setup and chdir, BEFORE exec.
+    // PR_SET_NO_NEW_PRIVS is set automatically by seccompiler::apply_filter().
+    // The filter is inherited by children (the /bin/sh grandchild and its descendants).
+    // Note: apply_filter() itself calls prctl() + seccomp() — both must be in the allowlist
+    // OR called before the filter is loaded. Since we load the filter here (after namespace
+    // setup), the filter is not yet active when apply_filter() makes its prctl/seccomp calls.
+    if let Some(program) = seccomp_program {
+        if let Err(e) = seccompiler::apply_filter(&program) {
+            // If seccomp application fails, abort rather than run unsandboxed.
+            send_error(result_w, &format!("seccomp filter apply failed: {}", e));
+            return 1;
+        }
+    }
+
     // Execute the command, capturing stdout/stderr
     let output = Command::new("/bin/sh")
         .arg("-c")
@@ -335,16 +672,28 @@ fn child_fn(ready_r: i32, result_w: i32, workdir: &str, command: &str) -> isize 
             1
         }
         Ok(out) => {
-            let exit_code = out.status.code().unwrap_or(1);
+            // Detect SIGSYS (seccomp violation) in two forms:
+            // 1. Direct: Command was exec()'d and killed by SIGSYS → signal() == Some(SIGSYS)
+            // 2. Via shell: sh forked+exec'd the command, sh exits with 128+signal_number
+            //    (POSIX shell exit status convention). SIGSYS=31 → shell exits 159.
+            use std::os::unix::process::ExitStatusExt;
+            let sigsys_direct = out.status.signal() == Some(libc::SIGSYS);
+            let raw_code = out.status.code().unwrap_or(0);
+            let sigsys_via_shell = raw_code == (128 + libc::SIGSYS);
+            let sigsys_violation = sigsys_direct || sigsys_via_shell;
+
+            let exit_code = if sigsys_violation { 1 } else { out.status.code().unwrap_or(1) };
             let stdout = out.stdout;
             let stderr = out.stderr;
 
-            // Send: [stdout_len][stderr_len][stdout][stderr][exit_code]
+            // Send: [stdout_len][stderr_len][stdout][stderr][exit_code][sigsys_flag: u8]
             write_all_fd(result_w, &(stdout.len() as u64).to_ne_bytes());
             write_all_fd(result_w, &(stderr.len() as u64).to_ne_bytes());
             write_all_fd(result_w, &stdout);
             write_all_fd(result_w, &stderr);
             write_all_fd(result_w, &(exit_code as i32).to_ne_bytes());
+            // Violation flag (1 byte): 1 = SIGSYS seccomp violation observed
+            write_all_fd(result_w, &[sigsys_violation as u8]);
             unsafe { libc::close(result_w) };
 
             exit_code as isize
@@ -360,6 +709,7 @@ fn send_error(result_w: i32, msg: &str) {
     write_all_fd(result_w, stdout);
     write_all_fd(result_w, stderr);
     write_all_fd(result_w, &1i32.to_ne_bytes());
+    // No violation flag on error paths (0 = no sigsys violation)
+    write_all_fd(result_w, &[0u8]);
     unsafe { libc::close(result_w) };
 }
-
