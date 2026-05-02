@@ -495,6 +495,7 @@ fn execute_with_namespaces(
 
     let workdir_owned = workdir.to_string();
     let command_owned = command.to_string();
+    let permission_owned = permission.to_string();
     // Wrap in Option so we can move out via take() inside FnMut closure (called exactly once)
     let mut seccomp_opt = Some(seccomp_program);
 
@@ -516,6 +517,7 @@ fn execute_with_namespaces(
                     &workdir_owned,
                     &command_owned,
                     seccomp_opt.take().unwrap_or(None),
+                    &permission_owned,
                 )
             }),
             &mut stack,
@@ -620,6 +622,7 @@ fn child_fn(
     workdir: &str,
     command: &str,
     seccomp_program: Option<BpfProgram>,
+    permission: &str,
 ) -> isize {
     // Apply resource limits as an additional layer inside the namespace
     let _ = setrlimit(Resource::RLIMIT_AS, 512 * 1024 * 1024, 512 * 1024 * 1024);
@@ -644,6 +647,48 @@ fn child_fn(
     if std::env::set_current_dir(workdir).is_err() {
         send_error(result_w, "chdir failed");
         return 1;
+    }
+
+    // Make all mounts private so our changes don't affect the host
+    let _ = mount(
+        None::<&str>,
+        "/",
+        None::<&str>,
+        MsFlags::MS_PRIVATE | MsFlags::MS_REC,
+        None::<&str>,
+    );
+
+    // Apply read-only root if permission is readonly or workspace_write
+    // danger_full_access leaves root writable
+    if permission == "readonly" || permission == "workspace_write" {
+        // Bind mount the workdir to itself so it's a separate mount point
+        let _ = mount(
+            Some(workdir),
+            workdir,
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_REC,
+            None::<&str>,
+        );
+        
+        // Remount root as readonly
+        let _ = mount(
+            Some("/"),
+            "/",
+            None::<&str>,
+            MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY | MsFlags::MS_REC,
+            None::<&str>,
+        );
+        
+        if permission == "workspace_write" {
+            // Remount workdir as read-write
+            let _ = mount(
+                Some(workdir),
+                workdir,
+                None::<&str>,
+                MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_REC,
+                None::<&str>,
+            );
+        }
     }
 
     // Apply seccomp filter AFTER namespace setup and chdir, BEFORE exec.

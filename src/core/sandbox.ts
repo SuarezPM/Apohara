@@ -79,7 +79,7 @@ export class Isolator {
       return {
         exitCode: 1,
         stdout: "",
-        stderr: `Sandbox binary not found at: ${this.sandboxBinaryPath}`,
+        stderr: `Sandbox binary not found at: ${this.sandboxBinaryPath}. Please run 'cargo build --release' in crates/apohara-sandbox.`,
         violations: [],
         durationMs: 0,
         error: "binary_not_found",

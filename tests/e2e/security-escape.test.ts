@@ -42,7 +42,7 @@ describe("Sandbox Security — Escape Prevention", () => {
     const result = await isolator.exec({
       workdir: testWorkdir,
       command:
-        "curl -s https://api.github.com/repos 2>&1 | head -1 || echo 'curl failed'",
+        "curl -s https://api.github.com/repos 2>&1 | head -1",
       permission: "readonly",
       taskId: "test-2",
       timeout: 5000,
@@ -93,7 +93,7 @@ describe("Sandbox Security — Escape Prevention", () => {
   test("Test 6: Cannot kill host processes (PID namespace)", async () => {
     const result = await isolator.exec({
       workdir: testWorkdir,
-      command: "kill -9 1 2>&1 || echo 'kill failed'",
+      command: "kill -9 1 2>&1",
       permission: "readonly",
       taskId: "test-6",
     });
