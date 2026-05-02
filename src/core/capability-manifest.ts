@@ -22,7 +22,7 @@ export interface ProviderCapability {
  * Conservative capability scores based on public benchmarks.
  * These are estimates — actual performance varies by use case.
  */
-const CAPABILITY_MANIFEST: ProviderCapability[] = [
+export const CAPABILITY_MANIFEST: ProviderCapability[] = [
 	{
 		provider: "groq",
 		scores: {
@@ -154,6 +154,126 @@ const CAPABILITY_MANIFEST: ProviderCapability[] = [
 		},
 		sources: ["HumanEval", "MBPP", "SWE-bench"],
 		lastUpdated: "2026-05-01",
+	},
+	{
+		provider: "anthropic-api",
+		scores: {
+			research: 0.8,
+			planning: 0.95,
+			codegen: 0.97,
+			debugging: 0.95,
+			verification: 0.93,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "gemini-api",
+		scores: {
+			research: 0.85,
+			planning: 0.9,
+			codegen: 0.92,
+			debugging: 0.88,
+			verification: 0.87,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "moonshot-k2.5",
+		scores: {
+			research: 0.7,
+			planning: 0.82,
+			codegen: 0.88,
+			debugging: 0.82,
+			verification: 0.78,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "minimax-m2.5",
+		scores: {
+			research: 0.65,
+			planning: 0.78,
+			codegen: 0.82,
+			debugging: 0.78,
+			verification: 0.72,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "minimax-m2.7",
+		scores: {
+			research: 0.68,
+			planning: 0.82,
+			codegen: 0.86,
+			debugging: 0.82,
+			verification: 0.76,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "xiaomi-mimo",
+		scores: {
+			research: 0.55,
+			planning: 0.65,
+			codegen: 0.72,
+			debugging: 0.68,
+			verification: 0.62,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "glm-deepinfra",
+		scores: {
+			research: 0.6,
+			planning: 0.72,
+			codegen: 0.78,
+			debugging: 0.72,
+			verification: 0.68,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "glm-fireworks",
+		scores: {
+			research: 0.6,
+			planning: 0.72,
+			codegen: 0.78,
+			debugging: 0.72,
+			verification: 0.68,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "glm-zai",
+		scores: {
+			research: 0.6,
+			planning: 0.72,
+			codegen: 0.78,
+			debugging: 0.72,
+			verification: 0.68,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
+	},
+	{
+		provider: "qwen3.5-plus",
+		scores: {
+			research: 0.68,
+			planning: 0.82,
+			codegen: 0.87,
+			debugging: 0.83,
+			verification: 0.78,
+		},
+		sources: ["community-eval"],
+		lastUpdated: "2026-05-02",
 	},
 ];
 

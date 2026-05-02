@@ -265,10 +265,10 @@ export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
 
 // Fallback provider order for each role (primary + fallbacks)
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
-	research: ["tavily", "gemini", "groq"],
-	planning: ["groq", "kiro-ai", "deepseek", "mistral"],
-	execution: ["groq", "kiro-ai", "deepseek", "mistral", "openai"],
-	verification: ["groq", "kiro-ai", "deepseek", "openai"],
+	research: ["tavily", "gemini", "gemini-api", "anthropic-api", "moonshot-k2.6", "groq", "qwen3.6-plus"],
+	planning: ["anthropic-api", "gemini-api", "groq", "moonshot-k2.6", "qwen3.6-plus", "moonshot-k2.5", "qwen3.5-plus", "kiro-ai", "deepseek", "mistral"],
+	execution: ["anthropic-api", "opencode-go", "groq", "deepseek-v4", "moonshot-k2.6", "minimax-m2.7", "qwen3.6-plus", "kiro-ai", "deepseek", "mistral", "openai"],
+	verification: ["anthropic-api", "gemini-api", "groq", "deepseek-v4", "moonshot-k2.6", "kiro-ai", "deepseek", "openai"],
 };
 
 export interface Task {
