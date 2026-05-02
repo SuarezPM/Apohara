@@ -281,6 +281,108 @@ export async function hasOAuthToken(provider: string): Promise<boolean> {
 }
 
 /**
+ * Validates API key format for a given key name.
+ * Returns { valid: true } for empty values (user can skip optional keys).
+ * Used by config wizard and provider router to reject malformed keys early.
+ */
+export function validateApiKeyFormat(
+	keyName: string,
+	value: string,
+): { valid: boolean; error?: string } {
+	if (!value) return { valid: true };
+
+	switch (keyName) {
+		case "ANTHROPIC_API_KEY":
+			// sk-ant-oat01-* are OAuth tokens, not API keys — reject explicitly
+			if (!value.startsWith("sk-ant-api03-")) {
+				return {
+					valid: false,
+					error: `Invalid Anthropic API key format. Keys must start with 'sk-ant-api03-'. Note: OAuth tokens (sk-ant-oat01-*) are not supported.`,
+				};
+			}
+			if (value.length < 40) {
+				return {
+					valid: false,
+					error: `Invalid Anthropic API key: too short (minimum 40 characters).`,
+				};
+			}
+			break;
+
+		case "OPENCODE_API_KEY":
+			if (!value.startsWith("oc-") && !value.startsWith("opencode-")) {
+				return {
+					valid: false,
+					error: `Invalid OpenCode API key format. Keys must start with 'oc-' or 'opencode-'.`,
+				};
+			}
+			if (value.length < 20) {
+				return {
+					valid: false,
+					error: `Invalid OpenCode API key: too short (minimum 20 characters).`,
+				};
+			}
+			break;
+
+		case "GOOGLE_AI_STUDIO_API_KEY":
+			// Google AI Studio keys: AIza prefix + 35 chars = 39 total
+			if (!value.startsWith("AIza")) {
+				return {
+					valid: false,
+					error: `Invalid Google AI Studio API key format. Keys must start with 'AIza'.`,
+				};
+			}
+			if (value.length !== 39) {
+				return {
+					valid: false,
+					error: `Invalid Google AI Studio API key: must be exactly 39 characters (AIza + 35 chars).`,
+				};
+			}
+			break;
+
+		case "OPENAI_API_KEY":
+			if (!value.startsWith("sk-") && !value.startsWith("sk-proj-")) {
+				return {
+					valid: false,
+					error: `Invalid OpenAI API key format. Keys must start with 'sk-' or 'sk-proj-'.`,
+				};
+			}
+			if (value.length < 40) {
+				return {
+					valid: false,
+					error: `Invalid OpenAI API key: too short (minimum 40 characters).`,
+				};
+			}
+			break;
+
+		case "DEEPSEEK_API_KEY":
+			if (!value.startsWith("sk-") && !value.startsWith("deepseek-")) {
+				return {
+					valid: false,
+					error: `Invalid DeepSeek API key format. Keys must start with 'sk-' or 'deepseek-'.`,
+				};
+			}
+			if (value.length < 20) {
+				return {
+					valid: false,
+					error: `Invalid DeepSeek API key: too short (minimum 20 characters).`,
+				};
+			}
+			break;
+
+		default:
+			if (value.length < 10) {
+				return {
+					valid: false,
+					error: `Invalid API key for ${keyName}: too short (minimum 10 characters).`,
+				};
+			}
+			break;
+	}
+
+	return { valid: true };
+}
+
+/**
  * Gets sanitized OAuth token info for logging
  */
 export async function getOAuthTokenInfo(provider: string): Promise<Record<string, unknown>> {

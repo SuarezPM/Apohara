@@ -12,6 +12,7 @@ const CREDENTIALS_TEMPLATE = {
 	DEEPSEEK_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
 	OPENAI_API_KEY: "",
+	GOOGLE_AI_STUDIO_API_KEY: "",
 };
 
 /**
@@ -107,7 +108,22 @@ function validateApiKey(keyName: string, value: string): ValidationResult {
 			}
 			break;
 
-		// For any future keys (e.g., GOOGLE_AI_STUDIO_API_KEY would be similar)
+		case "GOOGLE_AI_STUDIO_API_KEY":
+			// Google AI Studio keys start with AIza and are 39 characters total (AIza + 35 chars)
+			if (!value.startsWith("AIza")) {
+				return {
+					valid: false,
+					error: `Invalid Google AI Studio API key format. Keys must start with 'AIza'.`,
+				};
+			}
+			if (value.length !== 39) {
+				return {
+					valid: false,
+					error: `Invalid Google AI Studio API key: must be exactly 39 characters (AIza + 35 chars).`,
+				};
+			}
+			break;
+
 		default:
 			// Basic length check for unknown providers
 			if (value.length < 10) {
@@ -268,6 +284,7 @@ async function runWizard(): Promise<void> {
 		{ key: "DEEPSEEK_API_KEY", label: "DeepSeek API Key", secure: true },
 		{ key: "ANTHROPIC_API_KEY", label: "Anthropic API Key", secure: true },
 		{ key: "OPENAI_API_KEY", label: "OpenAI API Key", secure: true },
+		{ key: "GOOGLE_AI_STUDIO_API_KEY", label: "Google AI Studio API Key", secure: true },
 	];
 
 	const credentials = { ...existing };
