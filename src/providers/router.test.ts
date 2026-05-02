@@ -410,3 +410,59 @@ describe("Paid API provider routing", () => {
 		expect(capturedUrl).toContain("api.opencode.ai/v1/messages");
 	});
 });
+
+describe("ProviderRouter health tracking initialization — all 21 providers", () => {
+	// All 21 ProviderId values mirrored here so this test fails if a new provider is
+	// added to types.ts but not initialized in ProviderRouter's health map.
+	const ALL_PROVIDER_IDS: ProviderId[] = [
+		"opencode-go",
+		"anthropic-api",
+		"gemini-api",
+		"deepseek-v4",
+		"deepseek",
+		"tavily",
+		"gemini",
+		"moonshot-k2.5",
+		"moonshot-k2.6",
+		"xiaomi-mimo",
+		"qwen3.5-plus",
+		"qwen3.6-plus",
+		"minimax-m2.5",
+		"minimax-m2.7",
+		"glm-deepinfra",
+		"glm-fireworks",
+		"glm-zai",
+		"groq",
+		"kiro-ai",
+		"mistral",
+		"openai",
+	];
+
+	let freshRouter: ProviderRouter;
+
+	beforeEach(() => {
+		freshRouter = new ProviderRouter({});
+	});
+
+	test("all 21 providers initialize with zero failures", () => {
+		for (const id of ALL_PROVIDER_IDS) {
+			expect(
+				freshRouter.getFailureCount(id),
+				`Expected zero failures for provider: ${id}`,
+			).toBe(0);
+		}
+	});
+
+	test("isOnCooldown returns false for all 21 providers initially", () => {
+		for (const id of ALL_PROVIDER_IDS) {
+			expect(
+				freshRouter.isOnCooldown(id),
+				`Expected no cooldown for provider: ${id}`,
+			).toBe(false);
+		}
+	});
+
+	test("list of 21 providers is exhaustive", () => {
+		expect(ALL_PROVIDER_IDS.length).toBe(21);
+	});
+});

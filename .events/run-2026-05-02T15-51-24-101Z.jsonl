@@ -1,0 +1,1 @@
+{"id":"1eef0102-3a5e-4881-b47f-e9c8f54d9da7","timestamp":"2026-05-02T15:51:24.101Z","type":"provider_selected","severity":"info","payload":{"provider":"anthropic-api","message":"Routing request to anthropic-api"},"metadata":{"provider":"anthropic-api"}}
