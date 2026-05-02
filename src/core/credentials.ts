@@ -108,6 +108,9 @@ export function resolveCredentialSync(provider: string): string | null {
 	return null;
 }
 
+// OAuth token endpoint for Claude.ai
+const CLAUDE_TOKEN_ENDPOINT = "https://claude.ai/api/oauth/token";
+
 // Lazy-loaded OAuth token stores
 const tokenStores = new Map<string, OAuthTokenStore>();
 
@@ -120,10 +123,75 @@ function getTokenStore(provider: string): OAuthTokenStore {
 	if (!store) {
 		// Import the token store class dynamically
 		const { OAuthTokenStore: OAuthStore } = require("../lib/oauth-token-store");
-		store = new OAuthStore({ provider });
+		
+		// Create refresh handler for the provider
+		const refreshHandler = async (refreshToken: string): Promise<OAuthToken> => {
+			// Load client ID from credentials
+			const clientId = await loadClientId(provider);
+			if (!clientId) {
+				throw new Error(`No client ID configured for ${provider}`);
+			}
+			
+			const response = await fetch(CLAUDE_TOKEN_ENDPOINT, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: refreshToken,
+					client_id: clientId,
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`);
+			}
+
+			const data = await response.json() as {
+				access_token: string;
+				refresh_token?: string;
+				token_type: string;
+				expires_in: number;
+				scope?: string;
+			};
+
+			// Calculate new expiration time
+			const expires_at = Date.now() + data.expires_in * 1000;
+
+			return {
+				access_token: data.access_token,
+				refresh_token: data.refresh_token || refreshToken,
+				token_type: data.token_type,
+				expires_at,
+				scope: data.scope,
+			};
+		};
+
+		store = new OAuthStore({ provider }, refreshHandler);
 		tokenStores.set(provider, store);
 	}
 	return store;
+}
+
+/**
+ * Load client ID from credentials file for a provider
+ */
+async function loadClientId(provider: string): Promise<string> {
+	try {
+		const credPath = getCredentialsPath();
+		const content = await fs.readFile(credPath, "utf-8");
+		const parsed = JSON.parse(content);
+		// Map provider names to credential keys
+		const keyMap: Record<string, string> = {
+			"claude-ai": "claude-oauth-client-id",
+			"anthropic": "claude-oauth-client-id",
+		};
+		const key = keyMap[provider] || `${provider}-oauth-client-id`;
+		return parsed[key] || "";
+	} catch {
+		return "";
+	}
 }
 
 /**

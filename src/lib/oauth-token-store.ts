@@ -36,9 +36,10 @@ export class OAuthTokenStore {
 
 	constructor(config: TokenStoreConfig, refreshHandler?: TokenRefreshHandler) {
 		this.provider = config.provider;
+		// Use oauth-${provider}.json to match auth command path
 		this.tokenPath =
 			config.tokenPath ||
-			path.join(os.homedir(), ".apohara", `tokens-${config.provider}.json`);
+			path.join(os.homedir(), ".apohara", `oauth-${config.provider}.json`);
 		this.refreshHandler = refreshHandler;
 	}
 
