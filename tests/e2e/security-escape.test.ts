@@ -3,7 +3,7 @@
  * All 9 tests must pass before mesh verification can run.
  */
 
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe, beforeAll, afterAll } from "bun:test";
 import { Isolator } from "../../src/core/sandbox";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -13,13 +13,13 @@ describe("Sandbox Security — Escape Prevention", () => {
   let isolator: Isolator;
   let testWorkdir: string;
 
-  test.before(() => {
+  beforeAll(() => {
     isolator = new Isolator();
     testWorkdir = join(tmpdir(), `apohara-sandbox-test-${Date.now()}`);
     mkdirSync(testWorkdir, { recursive: true });
   });
 
-  test.after(() => {
+  afterAll(() => {
     try {
       rmSync(testWorkdir, { recursive: true, force: true });
     } catch {}

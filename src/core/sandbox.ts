@@ -27,11 +27,16 @@ export interface SandboxExecOptions {
   taskId?: string;
 }
 
+export interface SandboxViolation {
+  syscall: string;
+  path?: string;
+}
+
 export interface SandboxExecResult {
   exitCode: number;
   stdout: string;
   stderr: string;
-  violations: string[];
+  violations: (SandboxViolation | string)[];
   durationMs: number;
   error?: string;
 }
@@ -46,7 +51,7 @@ export class Isolator {
   private sandboxBinaryPath: string;
   private ledger: EventLedger;
 
-  constructor(sandboxBinaryPath = "target/release/apohara-sandbox") {
+  constructor(sandboxBinaryPath = "crates/apohara-sandbox/target/release/apohara-sandbox") {
     this.sandboxBinaryPath = sandboxBinaryPath;
     this.ledger = new EventLedger();
   }
@@ -67,6 +72,19 @@ export class Isolator {
     } = options;
 
     const startTime = Date.now();
+
+    // Check binary exists before attempting to spawn
+    const binaryFile = Bun.file(this.sandboxBinaryPath);
+    if (!(await binaryFile.exists())) {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: `Sandbox binary not found at: ${this.sandboxBinaryPath}`,
+        violations: [],
+        durationMs: 0,
+        error: "binary_not_found",
+      };
+    }
 
     try {
       // Invoke the Rust sandbox binary
@@ -155,14 +173,28 @@ export class Isolator {
     result: SandboxExecResult,
     permission: PermissionTier
   ): Promise<void> {
+    const hasViolations = result.violations.length > 0;
     const severity: EventSeverity =
-      result.exitCode === 0 ? "info" : "warning";
+      result.error === "parse_error" || result.error === "execution_error"
+        ? "error"
+        : hasViolations
+          ? "warning"
+          : "info";
+
+    // Normalize violations to structured form when possible
+    const normalizedViolations = result.violations.map((v) => {
+      if (typeof v === "object" && v !== null && "syscall" in v) {
+        return v as SandboxViolation;
+      }
+      // Legacy string entry — wrap as structured with no path
+      return { syscall: String(v) } satisfies SandboxViolation;
+    });
 
     await this.ledger.log(
       "sandbox_execution",
       {
         exitCode: result.exitCode,
-        violations: result.violations,
+        violations: normalizedViolations,
         permission,
         durationMs: result.durationMs,
         hasError: !!result.error,

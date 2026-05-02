@@ -682,7 +682,15 @@ fn child_fn(
             let sigsys_via_shell = raw_code == (128 + libc::SIGSYS);
             let sigsys_violation = sigsys_direct || sigsys_via_shell;
 
-            let exit_code = if sigsys_violation { 1 } else { out.status.code().unwrap_or(1) };
+            // If process was killed by any signal, treat as failure (code returns None for signals)
+            let exit_code = if sigsys_violation {
+                1
+            } else if out.status.signal().is_some() {
+                // Process killed by signal (e.g. SIGKILL) — not a seccomp violation but still a failure
+                128 + out.status.signal().unwrap()
+            } else {
+                out.status.code().unwrap_or(1)
+            };
             let stdout = out.stdout;
             let stderr = out.stderr;
 
