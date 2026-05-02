@@ -17,6 +17,8 @@ export type { ProviderId, TaskRole, ModelCapability };
 // Token validation map - validates API keys exist before dispatch
 const TOKEN_VALIDATORS: Record<ProviderId, () => boolean> = {
 	"opencode-go": () => !!getProviderKey("opencode-go"),
+	"anthropic-api": () => !!getProviderKey("anthropic-api"),
+	"gemini-api": () => !!getProviderKey("gemini-api"),
 	"deepseek": () => !!getProviderKey("deepseek"),
 	"deepseek-v4": () => !!getProviderKey("deepseek"),
 	"tavily": () => !!getProviderKey("tavily"),

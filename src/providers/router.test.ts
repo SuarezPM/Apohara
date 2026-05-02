@@ -8,14 +8,17 @@ describe("ProviderRouter", () => {
 		status: number;
 		statusText: string;
 		json: () => Promise<unknown>;
+		text: () => Promise<string>;
 	} | null = null;
 
 	function setMockResponse(ok: boolean, status: number, data: unknown = {}) {
+		const statusText = ok ? "OK" : "Error";
 		mockFetchResponse = {
 			ok,
 			status,
-			statusText: ok ? "OK" : "Error",
+			statusText,
 			json: async () => data,
+			text: async () => (typeof data === "string" ? data : JSON.stringify(data)),
 		};
 	}
 
@@ -189,7 +192,7 @@ describe("ProviderRouter", () => {
 
 	describe("successful response handling", () => {
 		test("resets failure count on success", async () => {
-			// Simulate success response for deepseek
+			// Simulate success response for deepseek (OpenAI-compatible format)
 			setMockResponse(true, 200, {
 				choices: [{ message: { content: "Hello" } }],
 				usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
@@ -241,13 +244,12 @@ describe("ProviderRouter", () => {
 	describe("timeout handling", () => {
 		test("applies timeout to API calls", async () => {
 			// The implementation uses AbortSignal.timeout(30000)
-			// We can verify the configuration exists
+			// opencode-go uses Anthropic Messages API format: content[].text
 			const messages: LLMMessage[] = [{ role: "user", content: "test" }];
 
-			// Set up a mock that will be called with timeout
 			setMockResponse(true, 200, {
-				choices: [{ message: { content: "OK" } }],
-				usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+				content: [{ type: "text", text: "OK" }],
+				usage: { input_tokens: 1, output_tokens: 1 },
 			});
 
 			const response = await router.completion({
@@ -264,5 +266,147 @@ describe("ProviderId type", () => {
 	test("accepts valid provider IDs", () => {
 		const validProviders: ProviderId[] = ["opencode-go", "deepseek"];
 		expect(validProviders).toHaveLength(2);
+	});
+
+	test("includes paid API providers", () => {
+		const paidProviders: ProviderId[] = ["anthropic-api", "gemini-api"];
+		expect(paidProviders).toHaveLength(2);
+	});
+});
+
+describe("Paid API provider routing", () => {
+	let router: ProviderRouter;
+
+	beforeEach(() => {
+		vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+			throw new Error("No mock response set");
+		});
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	test("anthropic-api rejects missing key", async () => {
+		router = new ProviderRouter({ anthropicApiKey: "" });
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		await expect(
+			router.completion({ messages, provider: "anthropic-api" }),
+		).rejects.toThrow("Anthropic API key not configured");
+	});
+
+	test("anthropic-api rejects OAuth token format", async () => {
+		router = new ProviderRouter({ anthropicApiKey: "sk-ant-oat01-xxxxxxxxxxxxxxxxxxxxxxxx" });
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		await expect(
+			router.completion({ messages, provider: "anthropic-api" }),
+		).rejects.toThrow("sk-ant-api03-");
+	});
+
+	test("anthropic-api accepts sk-ant-api03- keys and returns Anthropic format", async () => {
+		router = new ProviderRouter({ anthropicApiKey: "sk-ant-api03-valid-test-key-long-enough" });
+		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			statusText: "OK",
+			json: async () => ({
+				content: [{ type: "text", text: "Hello from Anthropic" }],
+				usage: { input_tokens: 5, output_tokens: 10 },
+			}),
+			text: async () => "",
+		} as unknown as Response);
+
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		const response = await router.completion({ messages, provider: "anthropic-api" });
+		expect(response.content).toBe("Hello from Anthropic");
+		expect(response.provider).toBe("anthropic-api");
+		expect(response.usage.promptTokens).toBe(5);
+		expect(response.usage.completionTokens).toBe(10);
+	});
+
+	test("gemini-api rejects missing key", async () => {
+		router = new ProviderRouter({ geminiApiKeyDirect: "" });
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		await expect(
+			router.completion({ messages, provider: "gemini-api" }),
+		).rejects.toThrow("Google AI Studio API key not configured");
+	});
+
+	test("gemini-api rejects invalid key format", async () => {
+		router = new ProviderRouter({ geminiApiKeyDirect: "invalid-key-format" });
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		await expect(
+			router.completion({ messages, provider: "gemini-api" }),
+		).rejects.toThrow("AIza");
+	});
+
+	test("gemini-api accepts AIza keys and uses x-goog-api-key header", async () => {
+		router = new ProviderRouter({ geminiApiKeyDirect: "AIzaTestKey12345678901234567890123456789" });
+		let capturedHeaders: Record<string, string> = {};
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+			capturedHeaders = init?.headers as Record<string, string> || {};
+			return {
+				ok: true,
+				status: 200,
+				statusText: "OK",
+				json: async () => ({
+					candidates: [{ content: { parts: [{ text: "Hello from Gemini" }] } }],
+					usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 7, totalTokenCount: 10 },
+				}),
+				text: async () => "",
+			} as unknown as Response;
+		});
+
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		const response = await router.completion({ messages, provider: "gemini-api" });
+		expect(response.content).toBe("Hello from Gemini");
+		expect(response.provider).toBe("gemini-api");
+		expect(capturedHeaders["x-goog-api-key"]).toBeDefined();
+	});
+
+	test("opencode-go uses x-api-key and anthropic-version headers", async () => {
+		router = new ProviderRouter({ opencodeApiKey: "oc-test-key-valid-long-enough-key" });
+		let capturedHeaders: Record<string, string> = {};
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+			capturedHeaders = init?.headers as Record<string, string> || {};
+			return {
+				ok: true,
+				status: 200,
+				statusText: "OK",
+				json: async () => ({
+					content: [{ type: "text", text: "Hello from OpenCode" }],
+					usage: { input_tokens: 2, output_tokens: 4 },
+				}),
+				text: async () => "",
+			} as unknown as Response;
+		});
+
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		const response = await router.completion({ messages, provider: "opencode-go" });
+		expect(response.content).toBe("Hello from OpenCode");
+		expect(capturedHeaders["x-api-key"]).toBeDefined();
+		expect(capturedHeaders["anthropic-version"]).toBe("2023-06-01");
+	});
+
+	test("opencode-go URL is api.opencode.ai/v1/messages", async () => {
+		router = new ProviderRouter({ opencodeApiKey: "oc-test-key-valid-long-enough-key" });
+		let capturedUrl = "";
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+			capturedUrl = url.toString();
+			return {
+				ok: true,
+				status: 200,
+				statusText: "OK",
+				json: async () => ({
+					content: [{ type: "text", text: "ok" }],
+					usage: { input_tokens: 1, output_tokens: 1 },
+				}),
+				text: async () => "",
+			} as unknown as Response;
+		});
+
+		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
+		await router.completion({ messages, provider: "opencode-go" });
+		expect(capturedUrl).toContain("api.opencode.ai/v1/messages");
 	});
 });

@@ -29,9 +29,13 @@ export interface LLMResponse {
 export interface RouterConfig {
 	// OpenCode
 	opencodeApiKey?: string;
+	// Anthropic direct API
+	anthropicApiKey?: string;
+	// Google AI Studio (direct)
+	geminiApiKeyDirect?: string;
 	// DeepSeek
 	deepseekApiKey?: string;
-	// Google
+	// Google (Gemini)
 	geminiApiKey?: string;
 	// Tavily - Real-time web search (replaces Perplexity for research)
 	tavilyApiKey?: string;
@@ -47,6 +51,8 @@ export interface RouterConfig {
 	deepinfraApiKey?: string;
 	// Fireworks
 	fireworksApiKey?: string;
+	// Z.ai GLM
+	zaiApiKey?: string;
 	// Groq - Ultra-fast inference
 	groqApiKey?: string;
 	// Kiro AI - Free tier, no auth required
@@ -68,8 +74,12 @@ export type { ProviderId } from "../core/types";
  * Provider API endpoints - grouped by provider
  */
 const API_ENDPOINTS = {
-	// OpenCode
-	"opencode-go": "https://api.opencode.com/v1/chat/completions",
+	// OpenCode - Anthropic Messages API format
+	"opencode-go": "https://api.opencode.ai/v1/messages",
+	// Anthropic direct API
+	"anthropic-api": "https://api.anthropic.com/v1/messages",
+	// Google AI Studio
+	"gemini-api": "https://generativelanguage.googleapis.com/v1beta/models",
 	// DeepSeek
 	deepseek: "https://api.deepseek.com/v1/chat/completions",
 	"deepseek-v4": "https://api.deepseek.com/v1/chat/completions",
@@ -106,7 +116,9 @@ const API_ENDPOINTS = {
  * Model names for each provider
  */
 const MODEL_NAMES: Record<ProviderId, string> = {
-	"opencode-go": "opencode-go/kimi-k2.5",
+	"opencode-go": "claude-sonnet-4-20250514",
+	"anthropic-api": "claude-sonnet-4-20250514",
+	"gemini-api": "gemini-2.0-flash",
 	deepseek: "deepseek-coder",
 	"deepseek-v4": "deepseek-chat",
 	gemini: "gemini-2.0-flash",
@@ -144,6 +156,8 @@ export class ProviderRouter {
 	
 	// API Keys
 	private opencodeApiKey: string;
+	private anthropicApiKey: string;
+	private geminiApiKeyDirect: string;
 	private deepseekApiKey: string;
 	private geminiApiKey: string;
 	private tavilyApiKey: string;
@@ -153,6 +167,7 @@ export class ProviderRouter {
 	private minimaxApiKey: string;
 	private deepinfraApiKey: string;
 	private fireworksApiKey: string;
+	private zaiApiKey: string;
 	private groqApiKey: string;
 	private kiroAiApiKey: string;
 	private mistralApiKey: string;
@@ -176,6 +191,8 @@ export class ProviderRouter {
 	constructor(cfg?: RouterConfig) {
 		// Initialize all API keys
 		this.opencodeApiKey = cfg?.opencodeApiKey || getProviderKey("opencode-go") || "";
+		this.anthropicApiKey = cfg?.anthropicApiKey || getProviderKey("anthropic-api") || "";
+		this.geminiApiKeyDirect = cfg?.geminiApiKeyDirect || getProviderKey("gemini-api") || "";
 		this.deepseekApiKey = cfg?.deepseekApiKey || getProviderKey("deepseek") || "";
 		this.geminiApiKey = cfg?.geminiApiKey || getProviderKey("gemini") || "";
 		this.tavilyApiKey = cfg?.tavilyApiKey || getProviderKey("tavily") || "";
@@ -197,7 +214,8 @@ export class ProviderRouter {
 
 		// Initialize health tracking for each provider
 		const allProviders: ProviderId[] = [
-			"opencode-go", "deepseek", "deepseek-v4", "gemini", "tavily",
+			"opencode-go", "anthropic-api", "gemini-api",
+			"deepseek", "deepseek-v4", "gemini", "tavily",
 			"moonshot-k2.5", "moonshot-k2.6", "xiaomi-mimo",
 			"qwen3.5-plus", "qwen3.6-plus", "minimax-m2.5", "minimax-m2.7",
 			"glm-deepinfra", "glm-fireworks", "glm-zai", "groq",
@@ -325,6 +343,8 @@ export class ProviderRouter {
 	public fallback(fromProvider?: ProviderId): ProviderId {
 		// Priority order: most capable first, then fallbacks
 		const providers: ProviderId[] = [
+			// Paid API providers first (highest quality)
+			"anthropic-api", "gemini-api",
 			// Execution role - most powerful coding models first
 			"groq", "deepseek-v4", "kiro-ai", "openai", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7",
 			// Planning/Research
@@ -408,6 +428,14 @@ export class ProviderRouter {
 		let currentProvider = preferredProvider;
 		let lastError: Error | unknown = null;
 
+		// Log provider selection for observability
+		await this.logEvent(
+			"provider_selected",
+			{ provider: currentProvider, message: `Routing request to ${currentProvider}` },
+			"info",
+			{ provider: currentProvider },
+		);
+
 		// Try up to 2 providers (original + fallback)
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
@@ -476,6 +504,10 @@ export class ProviderRouter {
 		switch (provider) {
 			case "opencode-go":
 				return this.callOpenCode(messages);
+			case "anthropic-api":
+				return this.callAnthropicApi(messages);
+			case "gemini-api":
+				return this.callGeminiApi(messages);
 			case "deepseek":
 				return this.callDeepSeek(messages);
 			case "deepseek-v4":
@@ -524,30 +556,220 @@ export class ProviderRouter {
 			throw new Error("OpenCode Go API Error: 429 Rate Limit Exceeded");
 		}
 
+		if (!this.opencodeApiKey) {
+			throw new Error("OpenCode API key not configured. Keys must start with 'oc-' or 'opencode-'.");
+		}
+
+		// OpenCode uses the Anthropic Messages API format
+		const systemMessages = messages.filter(m => m.role === "system");
+		const nonSystemMessages = messages.filter(m => m.role !== "system");
+		const systemPrompt = systemMessages.map(m => m.content).join("\n") || undefined;
+
+		const body: Record<string, unknown> = {
+			model: MODEL_NAMES["opencode-go"],
+			max_tokens: 8096,
+			messages: nonSystemMessages.map(m => ({ role: m.role, content: m.content })),
+		};
+		if (systemPrompt) body.system = systemPrompt;
+
 		const response = await fetch(this.API_URLS["opencode-go"], {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.opencodeApiKey}`,
+				"x-api-key": this.opencodeApiKey,
+				"anthropic-version": "2023-06-01",
 			},
-			body: JSON.stringify({
-				model: "opencode-go/kimi-k2.5",
-				messages,
-			}),
-			signal: AbortSignal.timeout(30000), // 30 second timeout
+			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(30000),
 		});
 
 		if (!response.ok) {
-			throw new Error(
-				`OpenCode Go API Error: ${response.status} ${response.statusText}`,
+			const errorText = await response.text().catch(() => "");
+			await this.logEvent(
+				"api_call_failed",
+				{ provider: "opencode-go", status: response.status, error: errorText },
+				"error",
+				{ provider: "opencode-go" },
 			);
+			throw new Error(`OpenCode Go API Error: ${response.status} ${response.statusText}`);
 		}
 
-		const data = await response.json();
+		const data = await response.json() as {
+			content?: Array<{ type: string; text?: string }>;
+			usage?: { input_tokens?: number; output_tokens?: number };
+		};
+		const content = data.content?.find(b => b.type === "text")?.text || "";
+		return {
+			content,
+			provider: "opencode-go",
+			model: MODEL_NAMES["opencode-go"],
+			usage: {
+				promptTokens: data.usage?.input_tokens || 0,
+				completionTokens: data.usage?.output_tokens || 0,
+				totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+			},
+		};
+	}
+
+	private async callAnthropicApi(messages: LLMMessage[]): Promise<LLMResponse> {
+		if (!this.anthropicApiKey) {
+			throw new Error("Anthropic API key not configured. Keys must start with 'sk-ant-api03-'.");
+		}
+
+		// Validate key format - reject OAuth tokens
+		if (!this.anthropicApiKey.startsWith("sk-ant-api03-")) {
+			const sanitized = this.anthropicApiKey.slice(-4);
+			await this.logEvent(
+				"api_key_validation_failed",
+				{ provider: "anthropic-api", keyLastFour: sanitized, reason: "format mismatch: must start with sk-ant-api03-" },
+				"error",
+				{ provider: "anthropic-api" },
+			);
+			throw new Error("Invalid Anthropic API key format. Keys must start with 'sk-ant-api03-'. OAuth tokens (sk-ant-oat01-*) are not supported.");
+		}
+
+		const systemMessages = messages.filter(m => m.role === "system");
+		const nonSystemMessages = messages.filter(m => m.role !== "system");
+		const systemPrompt = systemMessages.map(m => m.content).join("\n") || undefined;
+
+		const body: Record<string, unknown> = {
+			model: MODEL_NAMES["anthropic-api"],
+			max_tokens: 8096,
+			messages: nonSystemMessages.map(m => ({ role: m.role, content: m.content })),
+		};
+		if (systemPrompt) body.system = systemPrompt;
+
+		const response = await fetch(this.API_URLS["anthropic-api"], {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"x-api-key": this.anthropicApiKey,
+				"anthropic-version": "2023-06-01",
+			},
+			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(60000),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "");
+			const sanitized = this.anthropicApiKey.slice(-4);
+			await this.logEvent(
+				"api_call_failed",
+				{ provider: "anthropic-api", status: response.status, keyLastFour: sanitized, error: errorText },
+				"error",
+				{ provider: "anthropic-api" },
+			);
+			throw new Error(`Anthropic API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json() as {
+			content?: Array<{ type: string; text?: string }>;
+			usage?: { input_tokens?: number; output_tokens?: number };
+		};
+		const content = data.content?.find(b => b.type === "text")?.text || "";
+		return {
+			content,
+			provider: "anthropic-api",
+			model: MODEL_NAMES["anthropic-api"],
+			usage: {
+				promptTokens: data.usage?.input_tokens || 0,
+				completionTokens: data.usage?.output_tokens || 0,
+				totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+			},
+		};
+	}
+
+	private async callGeminiApi(messages: LLMMessage[]): Promise<LLMResponse> {
+		if (!this.geminiApiKeyDirect) {
+			throw new Error("Google AI Studio API key not configured. Keys must start with 'AIza'.");
+		}
+
+		// Validate key format
+		if (!this.geminiApiKeyDirect.startsWith("AIza")) {
+			const sanitized = this.geminiApiKeyDirect.slice(-4);
+			await this.logEvent(
+				"api_key_validation_failed",
+				{ provider: "gemini-api", keyLastFour: sanitized, reason: "format mismatch: must start with AIza" },
+				"error",
+				{ provider: "gemini-api" },
+			);
+			throw new Error("Invalid Google AI Studio API key format. Keys must start with 'AIza'.");
+		}
+
+		const model = MODEL_NAMES["gemini-api"];
+		const url = `${this.API_URLS["gemini-api"]}/${model}:generateContent?key=${this.geminiApiKeyDirect}`;
+
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"x-goog-api-key": this.geminiApiKeyDirect,
+			},
+			body: JSON.stringify({
+				contents: messages.map(msg => ({
+					role: msg.role === "assistant" ? "model" : "user",
+					parts: [{ text: msg.content }],
+				})),
+			}),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "");
+			const sanitized = this.geminiApiKeyDirect.slice(-4);
+			await this.logEvent(
+				"api_call_failed",
+				{ provider: "gemini-api", status: response.status, keyLastFour: sanitized, error: errorText },
+				"error",
+				{ provider: "gemini-api" },
+			);
+			throw new Error(`Google AI Studio API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json() as {
+			candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+			usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+		};
+		const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+		return {
+			content,
+			provider: "gemini-api",
+			model,
+			usage: {
+				promptTokens: data.usageMetadata?.promptTokenCount || 0,
+				completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
+				totalTokens: data.usageMetadata?.totalTokenCount || 0,
+			},
+		};
+	}
+
+	private async callZai(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+		if (!this.zaiApiKey) {
+			throw new Error("Z.ai API key not configured");
+		}
+
+		const response = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${this.zaiApiKey}`,
+			},
+			body: JSON.stringify({ model, messages }),
+			signal: AbortSignal.timeout(30000),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Z.ai API Error: ${response.status} ${response.statusText}`);
+		}
+
+		const data = await response.json() as {
+			choices?: Array<{ message?: { content?: string } }>;
+			usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+		};
 		return {
 			content: data.choices?.[0]?.message?.content || "",
-			provider: "opencode-go",
-			model: "opencode-go/kimi-k2.5",
+			provider: "glm-zai",
+			model,
 			usage: {
 				promptTokens: data.usage?.prompt_tokens || 0,
 				completionTokens: data.usage?.completion_tokens || 0,

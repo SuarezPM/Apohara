@@ -5,6 +5,10 @@ const envSchema = z.object({
 	// Primary execution provider (OpenCode Go)
 	OPENCODE_API_KEY: z.string().optional(),
 
+	// Paid API providers
+	ANTHROPIC_API_KEY: z.string().optional(),
+	GOOGLE_AI_STUDIO_API_KEY: z.string().optional(),
+
 	// Core providers
 	DEEPSEEK_API_KEY: z.string().optional(),
 	PERPLEXITY_API_KEY: z.string().optional(),
@@ -48,6 +52,8 @@ const parseEnv = () => {
 		if (process.env.NODE_ENV === "test") {
 			return {
 				OPENCODE_API_KEY: process.env.OPENCODE_API_KEY || "test-opencode-key",
+				ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || undefined,
+				GOOGLE_AI_STUDIO_API_KEY: process.env.GOOGLE_AI_STUDIO_API_KEY || undefined,
 				DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || "test-deepseek-key",
 				PERPLEXITY_API_KEY: process.env.PERPLEXITY_API_KEY || "test-perplexity-key",
 				GEMINI_API_KEY: process.env.GEMINI_API_KEY || "test-gemini-key",
@@ -82,8 +88,12 @@ export const config = parseEnv();
  * Gets the resolved API key for a provider, checking credentials file first.
  */
 export function getProviderKey(provider: string): string | null {
-	// Check environment variable first (fast path)
-	const envKey = provider.toUpperCase().replace(/-/g, "_") + "_API_KEY";
+	// Map provider IDs to their canonical env var names
+	const ENV_KEY_MAP: Record<string, string> = {
+		"anthropic-api": "ANTHROPIC_API_KEY",
+		"gemini-api": "GOOGLE_AI_STUDIO_API_KEY",
+	};
+	const envKey = ENV_KEY_MAP[provider] ?? (provider.toUpperCase().replace(/-/g, "_") + "_API_KEY");
 	const envValue = process.env[envKey];
 	if (envValue && envValue.length > 0) {
 		return envValue;

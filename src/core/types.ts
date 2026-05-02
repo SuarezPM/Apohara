@@ -4,11 +4,13 @@ export type TaskRole = "research" | "planning" | "execution" | "verification";
 // All supported LLM providers and models
 // Based on user's model list: GLM-5.1, GLM-5, Kimi K2.5, K2.6, MiMo-V2 series, Qwen3.5/3.6 Plus, MiniMax M2.5/M2.7, DeepSeek V4
 export type ProviderId =
-	| "opencode-go"           // OpenCode Go (Kimi K2.5) - Primary coding
+	| "opencode-go"           // OpenCode Go - Anthropic Messages API at api.opencode.ai
+	| "anthropic-api"        // Anthropic direct API - sk-ant-api03-* keys
+	| "gemini-api"           // Google AI Studio - x-goog-api-key header
 	| "deepseek-v4"          // DeepSeek V4 Pro/Flash - Reasoning & coding
 	| "deepseek"             // DeepSeek Coder (fallback)
 	| "tavily"               // Tavily - Web search for AI agents
-	| "gemini"               // Gemini 2.0 - Planning
+	| "gemini"               // Gemini 2.0 - Planning (generateContent format)
 	| "moonshot-k2.5"        // Kimi K2.5 (Moonshot)
 	| "moonshot-k2.6"        // Kimi K2.6 (Moonshot) - Latest & most powerful
 	| "xiaomi-mimo"          // Xiaomi MiMo V2 series
@@ -192,13 +194,32 @@ export const MODELS: ModelCapability[] = [
 		contextWindow: 10000, // Optimizado para resultados de búsqueda
 		supportsVision: false,
 	},
+	// Paid API providers with Anthropic Messages API format
+	{
+		id: "anthropic-api",
+		name: "Anthropic Claude",
+		provider: "Anthropic",
+		bestFor: ["execution", "planning", "verification"],
+		strengths: ["code generation", "reasoning", "long context"],
+		contextWindow: 200000,
+		supportsVision: true,
+	},
+	{
+		id: "gemini-api",
+		name: "Google AI Studio",
+		provider: "Google",
+		bestFor: ["execution", "planning", "research"],
+		strengths: ["long context", "multimodal", "fast"],
+		contextWindow: 1000000,
+		supportsVision: true,
+	},
 	// Legacy providers
 	{
 		id: "opencode-go",
-		name: "OpenCode Go (Kimi K2.5)",
+		name: "OpenCode Go",
 		provider: "OpenCode",
 		bestFor: ["execution"],
-		strengths: ["code generation", "specialized for coding"],
+		strengths: ["code generation", "Anthropic Messages API compatible"],
 		contextWindow: 128000,
 		supportsVision: true,
 	},
