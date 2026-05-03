@@ -40,14 +40,15 @@ describe("Sandbox Security — Escape Prevention", () => {
   test("Test 2: Cannot make network requests (network blocked)", async () => {
     const result = await isolator.exec({
       workdir: testWorkdir,
-      command:
-        "curl -s https://api.github.com/repos 2>&1 | head -1",
+      // No pipe: curl gets SIGSYS from seccomp and the shell reports exit 128+31.
+      // A pipe (e.g. | head -1) would mask the signal because head exits 0 on EOF.
+      command: "curl -s https://api.github.com/repos 2>&1",
       permission: "readonly",
       taskId: "test-2",
       timeout: 5000,
     });
 
-    // Should timeout or fail due to no network
+    // Should fail — seccomp traps socket() syscall, killing curl with SIGSYS
     expect(result.exitCode).not.toBe(0);
   });
 
@@ -89,16 +90,20 @@ describe("Sandbox Security — Escape Prevention", () => {
     expect(result.exitCode).toBeGreaterThanOrEqual(0);
   });
 
-  test("Test 6: Cannot kill host processes (PID namespace)", async () => {
+  test("Test 6: Cannot see host processes (PID namespace isolation)", async () => {
+    // In a PID namespace, only our namespace-local PIDs appear in /proc.
+    // PID 1 (init) and PID 2 (sh) should exist; host PIDs (typically >100) should not.
+    // This loop fails (exit 1) if any PID > 10 is visible, proving host processes are hidden.
     const result = await isolator.exec({
       workdir: testWorkdir,
-      command: "kill -9 1 2>&1",
+      command:
+        'for pid in /proc/[0-9]*; do n=${pid##*/}; if [ "$n" -gt 10 ]; then exit 1; fi; done',
       permission: "readonly",
       taskId: "test-6",
     });
 
-    // Should fail with "No such process" or permission denied
-    expect(result.exitCode).not.toBe(0);
+    // Inside PID namespace, only namespace-local PIDs exist — loop succeeds (exit 0)
+    expect(result.exitCode).toBe(0);
   });
 
   test("Test 7: CAN read files inside workdir (filesystem access)", async () => {

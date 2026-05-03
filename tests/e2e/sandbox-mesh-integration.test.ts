@@ -3,7 +3,7 @@
  * Executes a real task (add /health endpoint) with sandbox and mesh active.
  */
 
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe, beforeAll, afterAll } from "bun:test";
 import { Isolator } from "../../src/core/sandbox";
 import { VerificationMesh } from "../../src/core/verification-mesh";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -15,14 +15,14 @@ describe("Sandbox + Mesh Integration", () => {
   let mesh: VerificationMesh;
   let testWorkdir: string;
 
-  test.before(() => {
+  beforeAll(() => {
     isolator = new Isolator();
     mesh = new VerificationMesh();
     testWorkdir = join(tmpdir(), `apohara-integration-${Date.now()}`);
     mkdirSync(testWorkdir, { recursive: true });
   });
 
-  test.after(() => {
+  afterAll(() => {
     try {
       rmSync(testWorkdir, { recursive: true, force: true });
     } catch {}
@@ -71,7 +71,7 @@ test("evil test", () => {
 
     const result = await isolator.exec({
       workdir: testWorkdir,
-      command: "bun test evil.ts 2>&1 || true",
+      command: "bun test evil.ts 2>&1",
       permission: "readonly",
       taskId: "integration-2",
       timeout: 10000,
