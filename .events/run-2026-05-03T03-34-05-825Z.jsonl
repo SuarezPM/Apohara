@@ -1,0 +1,1 @@
+{"id":"0e125c77-fa3f-46c6-8cd9-2338c29b66c6","timestamp":"2026-05-03T03:34:05.825Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}

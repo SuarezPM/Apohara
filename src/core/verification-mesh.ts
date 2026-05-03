@@ -33,6 +33,8 @@ export interface MeshExecutionOptions {
     filesModified?: number;
   };
   policy?: Partial<VerificationPolicy>;
+  /** Override Agent B timeout in ms (for testing only — bypasses max(2×A_time, 30s) floor). */
+  agentBTimeoutMs?: number;
 }
 
 export interface MeshResult {
@@ -159,41 +161,42 @@ export class VerificationMesh {
     }
 
     // Mesh applies — execute Agent B with timeout
-    const agentBTimeout = Math.max(
-      Math.ceil(Date.now() - startTime) * 2,
-      30000
-    ); // max(A_time * 2, 30s)
+    const agentBTimeout =
+      options.agentBTimeoutMs !== undefined
+        ? options.agentBTimeoutMs
+        : Math.max(Math.ceil(Date.now() - startTime) * 2, 30000); // max(A_time * 2, 30s)
 
     const agentB = await Promise.race([
       routeTaskWithFallback(options.role, options.task),
       new Promise<{
         provider: ProviderId;
         response: any;
-        crashed: true;
+        timedOut: true;
       }>((resolve) =>
         setTimeout(
           () =>
             resolve({
               provider: "groq",
               response: null,
-              crashed: true,
+              timedOut: true,
             }),
           agentBTimeout
         )
       ),
     ]);
 
-    const agentBCrashed = "crashed" in agentB && agentB.crashed;
-    const agentBResponse = agentBCrashed ? null : agentB.response;
-    const agentBCost = agentBCrashed ? 0 : this.estimateCost(agentB.provider);
+    const agentBTimedOut = "timedOut" in agentB && agentB.timedOut;
+    const agentBCrashed = !agentBTimedOut && agentB.response === null;
+    const agentBResponse = agentBTimedOut || agentBCrashed ? null : agentB.response;
+    const agentBCost = agentBTimedOut || agentBCrashed ? 0 : this.estimateCost(agentB.provider);
 
     // If B crashed or timed out, degrade to A alone
-    if (agentBCrashed || agentBResponse === null) {
+    if (agentBTimedOut || agentBCrashed || agentBResponse === null) {
       await this.ledger.log(
         "verification_mesh_degraded",
         {
           taskId: options.taskId,
-          reason: agentBCrashed ? "agent_b_crashed" : "agent_b_timeout",
+          reason: agentBTimedOut ? "agent_b_timeout" : "agent_b_crashed",
         },
         "warning",
         options.taskId,
@@ -212,9 +215,9 @@ export class VerificationMesh {
         agentB: {
           provider: agentB.provider,
           response: null,
-          exitCode: agentBCrashed ? 139 : 143,
+          exitCode: agentBTimedOut ? 143 : 139,
           crashed: agentBCrashed,
-          timedOut: !agentBCrashed,
+          timedOut: agentBTimedOut,
         },
         meshApplied: false,
         meshCostDelta: 0,

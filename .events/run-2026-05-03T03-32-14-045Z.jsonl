@@ -1,0 +1,1 @@
+{"id":"a1eb7a8b-9c68-4bdc-bae1-cd7558f220e6","timestamp":"2026-05-03T03:32:14.800Z","type":"verification_mesh_skipped","severity":"info","taskId":"mesh-test-3","payload":{"taskId":"mesh-test-3","reason":"not_qualified_for_verification","complexity":"high","filesModified":1},"metadata":{"meshApplied":false}}

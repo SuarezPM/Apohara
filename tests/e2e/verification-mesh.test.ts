@@ -40,7 +40,7 @@ describe("Cross-Verification Mesh", () => {
 
     // Should have applied mesh
     expect(result.meshApplied).toBe(true);
-  });
+  }, 30000);
 
   test("Test 2: Logically equivalent outputs with different formatting handled by arbiter", async () => {
     const result = await mesh.execute({
@@ -88,7 +88,7 @@ describe("Cross-Verification Mesh", () => {
     if (result.meshApplied && result.arbiter) {
       expect(["A", "B", "conflict"]).toContain(result.arbiter.verdict);
     }
-  });
+  }, 30000);
 
   test("Test 4: Contradictory outputs flagged as conflict", async () => {
     // This test verifies the infrastructure; actual conflicting outputs are hard to trigger
@@ -113,7 +113,7 @@ describe("Cross-Verification Mesh", () => {
     if (result.meshApplied && result.arbiter) {
       expect(["A", "B", "conflict"]).toContain(result.arbiter.verdict);
     }
-  });
+  }, 30000);
 
   test("Test 5: High complexity task triggers mesh", async () => {
     const result = await mesh.execute({
@@ -138,7 +138,7 @@ describe("Cross-Verification Mesh", () => {
 
     expect(result.meshApplied).toBe(true);
     expect(result.agentB).toBeDefined();
-  });
+  }, 30000);
 
   test("Test 6: Low complexity task does NOT trigger mesh", async () => {
     const result = await mesh.execute({
@@ -199,7 +199,7 @@ describe("Cross-Verification Mesh", () => {
     // At least one mesh execution should have occurred
     const meshApplied = results.some((r) => r.meshApplied);
     expect(meshApplied).toBe(true);
-  });
+  }, 60000);
 
   test("Test 8: Event ledger captures mesh decisions and providers", async () => {
     const result = await mesh.execute({
@@ -235,7 +235,7 @@ describe("Cross-Verification Mesh", () => {
     const firstEntry = JSON.parse(lines[0]);
     expect(firstEntry.type).toBeDefined();
     expect(firstEntry.timestamp).toBeDefined();
-  });
+  }, 30000);
 
   test("Test 9: Arbiter selection prefers fast, cheap providers", async () => {
     // This test verifies that arbiter role uses groq/kiro-ai as primary
@@ -262,5 +262,76 @@ describe("Cross-Verification Mesh", () => {
         result.arbiter.provider
       );
     }
+  }, 30000);
+
+  test("Test 10: Circuit breaker disables mesh after verification cost exceeds threshold", async () => {
+    // After one qualifying task: sessionVerificationCost (B + arbiter ≈ 0.6) /
+    // sessionCostBase (A ≈ 0.3) = ~200% — always exceeds 15%, tripping the breaker.
+    // The first task still returns meshApplied:true (current task completes before breaker fires).
+    // The second qualifying task must return meshApplied:false because meshEnabled=false.
+    const task = {
+      id: "task-cb",
+      messages: [{ role: "user" as const, content: "Implement a module." }],
+      complexity: "high" as const,
+      filesModified: 5,
+    };
+    const policy = {
+      enabled: true,
+      max_extra_cost_pct: 15,
+      min_complexity: "high" as const,
+    };
+
+    const first = await mesh.execute({
+      taskId: "mesh-cb-1",
+      role: "execution",
+      task,
+      policy,
+    });
+
+    // First qualifying task: mesh applied, circuit breaker trips for future tasks
+    expect(first.meshApplied).toBe(true);
+
+    const second = await mesh.execute({
+      taskId: "mesh-cb-2",
+      role: "execution",
+      task,
+      policy,
+    });
+
+    // Second qualifying task: circuit breaker fired, mesh disabled
+    expect(second.meshApplied).toBe(false);
+  }, 30000);
+
+  test("Test 11: Timeout gate returns degraded result when Agent B exceeds timeout", async () => {
+    // Use agentBTimeoutMs=1 to force an immediate timeout for Agent B.
+    // The mesh should degrade gracefully: meshApplied:false, agentB.timedOut:true.
+    const result = await mesh.execute({
+      taskId: "mesh-timeout-1",
+      role: "execution",
+      task: {
+        id: "task-timeout",
+        messages: [{ role: "user", content: "Write a sorting algorithm." }],
+        complexity: "high",
+        filesModified: 4,
+      },
+      policy: {
+        enabled: true,
+        max_extra_cost_pct: 15,
+        min_complexity: "high",
+      },
+      agentBTimeoutMs: 1, // Force immediate timeout
+    });
+
+    // Agent A result still returned
+    expect(result.agentA).toBeDefined();
+    expect(result.agentA.exitCode).toBe(0);
+
+    // Mesh degraded due to timeout
+    expect(result.meshApplied).toBe(false);
+
+    // agentB field records the timeout
+    expect(result.agentB).toBeDefined();
+    expect(result.agentB!.timedOut).toBe(true);
+    expect(result.agentB!.crashed).toBe(false);
   });
 });
