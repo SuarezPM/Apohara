@@ -1,1 +1,0 @@
-{"id":"9a4cc6da-dcc3-48e9-8871-9f48c832bc6c","timestamp":"2026-05-03T04:21:06.927Z","type":"verification_mesh_degraded","severity":"warning","taskId":"mesh-timeout-1","payload":{"taskId":"mesh-timeout-1","reason":"agent_b_timeout"},"metadata":{"meshApplied":false,"agentBProvider":"groq"}}
