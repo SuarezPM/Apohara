@@ -60,11 +60,14 @@ export interface MeshResult {
   totalCost: number;
 }
 
+export type RouterFn = typeof routeTaskWithFallback;
+
 export class VerificationMesh {
   private ledger: EventLedger;
   private sessionCostBase: number = 0;
   private sessionVerificationCost: number = 0;
   private meshEnabled: boolean = true;
+  private routerFn: RouterFn;
 
   private defaultPolicy: VerificationPolicy = {
     enabled: true,
@@ -73,8 +76,10 @@ export class VerificationMesh {
     min_complexity: "high",
   };
 
-  constructor() {
+  /** @param routerFn - Injectable router for testing; defaults to routeTaskWithFallback */
+  constructor(routerFn?: RouterFn) {
     this.ledger = new EventLedger();
+    this.routerFn = routerFn ?? routeTaskWithFallback;
   }
 
   /**
@@ -124,7 +129,7 @@ export class VerificationMesh {
     const startTime = Date.now();
 
     // Execute Agent A (primary executor)
-    const agentA = await routeTaskWithFallback(options.role, options.task);
+    const agentA = await this.routerFn(options.role, options.task);
     const agentAResponse = agentA.response;
     const agentACost = this.estimateCost(agentA.provider);
 
@@ -167,7 +172,7 @@ export class VerificationMesh {
         : Math.max(Math.ceil(Date.now() - startTime) * 2, 30000); // max(A_time * 2, 30s)
 
     const agentB = await Promise.race([
-      routeTaskWithFallback(options.role, options.task),
+      this.routerFn(options.role, options.task),
       new Promise<{
         provider: ProviderId;
         response: any;
@@ -349,7 +354,7 @@ export class VerificationMesh {
         task.messages[0]?.content ||
         "Unknown task";
 
-      const arbiterResult = await routeTaskWithFallback("arbiter", {
+      const arbiterResult = await this.routerFn("arbiter", {
         id: `arbiter-${task.id || "unknown"}`,
         messages: [
           {
