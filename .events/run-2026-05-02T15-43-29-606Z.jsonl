@@ -1,2 +1,0 @@
-{"id":"ba01829d-af36-48f3-9b3d-1a31c50209f7","timestamp":"2026-05-02T15:43:29.606Z","type":"provider_selected","severity":"info","payload":{"provider":"opencode-go","message":"Routing request to opencode-go"},"metadata":{"provider":"opencode-go"}}
-{"id":"2d244d25-53e4-4797-9f5b-23749676ee86","timestamp":"2026-05-02T15:43:29.606Z","type":"provider_selected","severity":"info","payload":{"provider":"anthropic-api","message":"Routing request to anthropic-api"},"metadata":{"provider":"anthropic-api"}}

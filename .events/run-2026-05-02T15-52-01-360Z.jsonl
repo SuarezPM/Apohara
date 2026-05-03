@@ -1,2 +1,0 @@
-{"id":"430ecd3a-d5ac-4bfe-b2b6-2817b0b65ff5","timestamp":"2026-05-02T15:52:01.360Z","type":"provider_selected","severity":"info","payload":{"provider":"anthropic-api","message":"Routing request to anthropic-api"},"metadata":{"provider":"anthropic-api"}}
-{"id":"a84480f0-2258-431e-ad38-7be8fe53bda3","timestamp":"2026-05-02T15:52:01.361Z","type":"api_key_validation_failed","severity":"error","payload":{"provider":"anthropic-api","keyLastFour":"xxxx","reason":"format mismatch: must start with sk-ant-api03-"},"metadata":{"provider":"anthropic-api"}}

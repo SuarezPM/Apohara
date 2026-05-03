@@ -1,3 +1,0 @@
-{"id":"7a6c4a3c-c6ad-40d9-8032-66b515eb3336","timestamp":"2026-05-02T15:52:40.564Z","type":"provider_selected","severity":"info","payload":{"provider":"opencode-go","message":"Routing request to opencode-go"},"metadata":{"provider":"opencode-go"}}
-{"id":"ed123590-b61c-4f67-9450-eb062bb9594b","timestamp":"2026-05-02T15:52:40.564Z","type":"api_call_failed","severity":"error","payload":{"provider":"opencode-go","status":500,"error":"{\"error\":{\"message\":\"Internal Server Error\"}}"},"metadata":{"provider":"opencode-go"}}
-{"id":"dadc467b-096e-4cb2-96a1-c1cbdc88510d","timestamp":"2026-05-02T15:52:40.564Z","type":"provider_selected","severity":"info","payload":{"provider":"deepseek","message":"Routing request to deepseek"},"metadata":{"provider":"deepseek"}}

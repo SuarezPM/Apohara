@@ -1,2 +1,0 @@
-{"id":"542397ca-b003-407d-88e3-e085b7ed9ce7","timestamp":"2026-05-02T15:51:24.106Z","type":"provider_selected","severity":"info","payload":{"provider":"gemini-api","message":"Routing request to gemini-api"},"metadata":{"provider":"gemini-api"}}
-{"id":"9cb12e61-28d3-47da-afc2-e469efdbcfe9","timestamp":"2026-05-02T15:51:24.107Z","type":"api_key_validation_failed","severity":"error","payload":{"provider":"gemini-api","keyLastFour":"rmat","reason":"format mismatch: must start with AIza"},"metadata":{"provider":"gemini-api"}}
