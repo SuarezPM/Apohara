@@ -1,0 +1,1 @@
+{"id":"c1486d57-9c28-4eb4-9064-dc84ccb2b703","timestamp":"2026-05-03T16:43:07.354Z","type":"github_pr_skipped","severity":"info","payload":{"reason":"user opted out via --no-pr flag"}}

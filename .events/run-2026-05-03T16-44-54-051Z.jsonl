@@ -1,0 +1,1 @@
+{"id":"51f9cb97-9ef1-48f8-b6b2-06e3fa3b17c6","timestamp":"2026-05-03T16:44:54.051Z","type":"provider_fallback","severity":"warning","payload":{"message":"Provider opencode-go failed with retryable error, trying next provider","fromProvider":"opencode-go","error":"OpenCode Go API Error: 429 Error"},"metadata":{"provider":"opencode-go"}}

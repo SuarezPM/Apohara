@@ -1,0 +1,12 @@
+{"id":"f2414872-5eee-4201-8392-3f3907a1f7b1","timestamp":"2026-05-03T16:52:00.936Z","type":"dispatch","taskId":"task-1","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"7eb6948c-06ee-405a-954d-71d44d0a89a7","timestamp":"2026-05-03T16:52:00.937Z","type":"dispatch","taskId":"task-1","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"b2465ef7-728a-46ff-8da7-3a23c0feb280","timestamp":"2026-05-03T16:52:00.937Z","type":"dispatch","taskId":"task-2","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"fe09620c-bbdd-4462-b227-1251331a944b","timestamp":"2026-05-03T16:52:00.937Z","type":"dispatch","taskId":"task-2","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"687e4aaa-e7c6-48e0-93a7-e11ba39ec8f7","timestamp":"2026-05-03T16:52:01.379Z","type":"start","taskId":"task-1","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"b008efc8-4c1d-49b1-9570-0a791c774442","timestamp":"2026-05-03T16:52:01.850Z","type":"result","taskId":"task-1","role":"execution","provider":"groq","retries":0,"durationMs":913,"status":"completed"}
+{"id":"e6f0b663-519a-4181-b474-1185c0949f1e","timestamp":"2026-05-03T16:52:02.029Z","type":"start","taskId":"task-2","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"1f35da4c-2435-4c96-b002-34ad48b2a093","timestamp":"2026-05-03T16:52:02.315Z","type":"dispatch","taskId":"task-3","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"c7e59454-3cdb-4806-9836-8da473e394cc","timestamp":"2026-05-03T16:52:02.316Z","type":"dispatch","taskId":"task-3","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"101bcd01-2240-49b2-aac3-11aed298aadd","timestamp":"2026-05-03T16:52:02.421Z","type":"result","taskId":"task-2","role":"execution","provider":"groq","retries":0,"durationMs":1484,"status":"completed"}
+{"id":"6f4d257d-ff86-47e9-b0b6-b63fd8e0f748","timestamp":"2026-05-03T16:52:02.541Z","type":"start","taskId":"task-3","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"5a71a581-7995-40d7-b40a-7339bc70c84f","timestamp":"2026-05-03T16:52:02.968Z","type":"result","taskId":"task-3","role":"execution","provider":"groq","retries":0,"durationMs":652,"status":"completed"}

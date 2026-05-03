@@ -1,0 +1,4 @@
+{"id":"8edeef28-5f6d-4f8a-80a3-6011c9bde817","timestamp":"2026-05-03T16:40:30.147Z","type":"dispatch","taskId":"timeout-task","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"6ae7eb44-adaf-4b3f-b3c0-f46058f8b591","timestamp":"2026-05-03T16:40:30.148Z","type":"dispatch","taskId":"timeout-task","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"cc2f8d52-2c63-49bb-ba27-3f368213b063","timestamp":"2026-05-03T16:40:30.375Z","type":"start","taskId":"timeout-task","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"efe6111e-4dc4-4cc3-8011-7367c3887ef7","timestamp":"2026-05-03T16:40:30.813Z","type":"result","taskId":"timeout-task","role":"execution","provider":"groq","retries":0,"durationMs":665,"status":"completed"}

@@ -1,0 +1,8 @@
+{"id":"ebb08677-3ff9-4c55-8bda-27ff9af78079","timestamp":"2026-05-03T16:40:53.880Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"f618132f-28cb-44aa-b15b-b4909725b578","timestamp":"2026-05-03T16:40:53.881Z","type":"dispatch","taskId":"task-a","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"19303995-b929-4046-a4fb-ca8de68a601d","timestamp":"2026-05-03T16:40:54.326Z","type":"start","taskId":"task-a","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"69ec83ba-d7ee-401a-a542-eec75903785a","timestamp":"2026-05-03T16:40:54.963Z","type":"result","taskId":"task-a","role":"execution","provider":"groq","retries":0,"durationMs":1082,"status":"completed"}
+{"id":"cdd77621-7b13-43b3-80be-e62aeb580de5","timestamp":"2026-05-03T16:40:55.412Z","type":"dispatch","taskId":"task-b","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"f6b0dd99-226b-42ca-ae6d-544611556149","timestamp":"2026-05-03T16:40:55.412Z","type":"dispatch","taskId":"task-b","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"059f6691-f7f2-4340-98ba-c89ff68a6483","timestamp":"2026-05-03T16:40:55.639Z","type":"start","taskId":"task-b","role":"execution","provider":"groq","retries":0,"status":"running"}
+{"id":"ae411bb0-efcc-44cc-b165-a4f62f7692e4","timestamp":"2026-05-03T16:40:56.064Z","type":"result","taskId":"task-b","role":"execution","provider":"groq","retries":0,"durationMs":652,"status":"completed"}

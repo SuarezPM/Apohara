@@ -22,13 +22,13 @@ function getTuiPath(): string {
 	const isCompiled = currentDir.includes("/dist/");
 
 	if (isCompiled) {
-		// When compiled: dist/commands/dashboard.js -> go up to project root -> tui/cli.tsx
+		// When compiled: dist/commands/dashboard.js -> go up to project root -> packages/tui/cli.tsx
 		const projectRoot = dirname(dirname(dirname(currentDir)));
-		return join(projectRoot, "tui", "cli.tsx");
+		return join(projectRoot, "packages", "tui", "cli.tsx");
 	} else {
-		// When running from source: src/commands/dashboard.ts -> go up to project root -> src/tui/cli.tsx
+		// When running from source: src/commands/dashboard.ts -> go up to project root -> packages/tui/cli.tsx
 		const projectRoot = dirname(dirname(currentDir));
-		return join(projectRoot, "src", "tui", "cli.tsx");
+		return join(projectRoot, "packages", "tui", "cli.tsx");
 	}
 }
 
