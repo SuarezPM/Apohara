@@ -126,10 +126,8 @@ export class VerificationMesh {
     const agentAResponse = agentA.response;
     const agentACost = this.estimateCost(agentA.provider);
 
-    // Update session baseline if first execution
-    if (this.sessionCostBase === 0) {
-      this.sessionCostBase = agentACost;
-    }
+    // Accumulate baseline (all Agent A costs)
+    this.sessionCostBase += agentACost;
 
     // If mesh not applicable, return A alone
     if (!shouldVerify) {
@@ -234,13 +232,15 @@ export class VerificationMesh {
     const arbiterCost = this.estimateCost(arbiterVerdict.provider);
     const meshCost = agentBCost + arbiterCost;
 
-    // Check if total mesh cost exceeds 15% budget
-    const projectedSessionCost = this.sessionCostBase + this.sessionVerificationCost + meshCost;
-    const projectedExtraCostPct =
-      (this.sessionVerificationCost + meshCost) /
-      this.sessionCostBase * 100;
+    // Update session costs now (before circuit-breaker check so it's based on accumulated totals)
+    this.sessionVerificationCost += meshCost;
 
-    if (projectedExtraCostPct > policy.max_extra_cost_pct) {
+    // Check if accumulated verification cost now exceeds the session budget
+    // Circuit breaker fires for FUTURE tasks, not the current one
+    const accumulatedExtraCostPct =
+      (this.sessionVerificationCost / this.sessionCostBase) * 100;
+
+    if (accumulatedExtraCostPct > policy.max_extra_cost_pct) {
       this.meshEnabled = false;
 
       await this.ledger.log(
@@ -248,44 +248,22 @@ export class VerificationMesh {
         {
           taskId: options.taskId,
           reason: "cost_threshold_exceeded",
-          projectedExtraCostPct,
+          accumulatedExtraCostPct,
           threshold: policy.max_extra_cost_pct,
         },
         "warning",
         options.taskId,
         {
-          meshApplied: false,
-          costPercentage: projectedExtraCostPct,
+          meshApplied: true,
+          costPercentage: accumulatedExtraCostPct,
         }
       );
-
-      // Return A's response since mesh couldn't execute
-      return {
-        agentA: {
-          provider: agentA.provider,
-          response: agentAResponse,
-          exitCode: 0,
-        },
-        agentB: {
-          provider: agentB.provider,
-          response: agentBResponse,
-          exitCode: 0,
-          crashed: false,
-          timedOut: false,
-        },
-        meshApplied: false,
-        meshCostDelta: 0,
-        totalCost: agentACost,
-      };
     }
 
     const selectedResponse =
       arbiterVerdict.verdict === "A" ? agentAResponse : agentBResponse;
     const selectedProvider =
       arbiterVerdict.verdict === "A" ? agentA.provider : agentB.provider;
-
-    // Update session costs
-    this.sessionVerificationCost += meshCost;
 
     await this.ledger.log(
       "verification_mesh_completed",

@@ -3,14 +3,14 @@
  * Tests structural comparison, cost control, and graceful degradation.
  */
 
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe, beforeEach } from "bun:test";
 import { VerificationMesh } from "../../src/core/verification-mesh";
 import { EventLedger } from "../../src/core/ledger";
 
 describe("Cross-Verification Mesh", () => {
   let mesh: VerificationMesh;
 
-  test.before(() => {
+  beforeEach(() => {
     mesh = new VerificationMesh();
   });
 
