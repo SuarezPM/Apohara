@@ -1,17 +1,45 @@
 /**
  * Cross-Verification Mesh Tests — 3-agent consensus pattern.
  * Tests structural comparison, cost control, and graceful degradation.
+ *
+ * Uses ProviderRouter.prototype.completion spy to avoid real LLM calls
+ * and groq rate-limit exhaustion when all 11 tests run sequentially.
  */
 
-import { test, expect, describe, beforeEach } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach, vi } from "bun:test";
 import { VerificationMesh } from "../../src/core/verification-mesh";
-import { EventLedger } from "../../src/core/ledger";
+import { ProviderRouter } from "../../src/providers/router";
+
+// Spy on ProviderRouter.prototype.completion so no real LLM calls are made.
+let completionSpy: ReturnType<typeof vi.spyOn>;
+
+// Default mock: returns a short text response (non-JSON so arbiter uses structural fallback).
+const defaultMockCompletion = vi.fn().mockResolvedValue({
+  content: "Mock LLM response content for testing.",
+  provider: "groq",
+  model: "test-model",
+  usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+});
+
+// Arbiter mock: returns valid JSON verdict so arbiter parses correctly.
+const arbiterMockCompletion = vi.fn().mockImplementation(async () => ({
+  content: '{"verdict": "A", "reasoning": "Output A is more concise and correct."}',
+  provider: "groq",
+  model: "test-model",
+  usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+}));
 
 describe("Cross-Verification Mesh", () => {
   let mesh: VerificationMesh;
 
   beforeEach(() => {
     mesh = new VerificationMesh();
+    completionSpy = vi.spyOn(ProviderRouter.prototype, "completion" as any);
+    completionSpy.mockImplementation(defaultMockCompletion);
+  });
+
+  afterEach(() => {
+    completionSpy.mockRestore();
   });
 
   test("Test 1: Identical outputs from A and B pass directly", async () => {
@@ -40,7 +68,7 @@ describe("Cross-Verification Mesh", () => {
 
     // Should have applied mesh
     expect(result.meshApplied).toBe(true);
-  }, 30000);
+  });
 
   test("Test 2: Logically equivalent outputs with different formatting handled by arbiter", async () => {
     const result = await mesh.execute({
@@ -84,15 +112,13 @@ describe("Cross-Verification Mesh", () => {
       },
     });
 
-    // If mesh applies, arbiter should select the more concise output
+    // filesModified=1 < 3, so mesh should not apply
     if (result.meshApplied && result.arbiter) {
       expect(["A", "B", "conflict"]).toContain(result.arbiter.verdict);
     }
-  }, 30000);
+  });
 
   test("Test 4: Contradictory outputs flagged as conflict", async () => {
-    // This test verifies the infrastructure; actual conflicting outputs are hard to trigger
-    // In practice, this would manifest as divergent recommendations
     const result = await mesh.execute({
       taskId: "mesh-test-4",
       role: "verification",
@@ -113,7 +139,7 @@ describe("Cross-Verification Mesh", () => {
     if (result.meshApplied && result.arbiter) {
       expect(["A", "B", "conflict"]).toContain(result.arbiter.verdict);
     }
-  }, 30000);
+  });
 
   test("Test 5: High complexity task triggers mesh", async () => {
     const result = await mesh.execute({
@@ -138,7 +164,7 @@ describe("Cross-Verification Mesh", () => {
 
     expect(result.meshApplied).toBe(true);
     expect(result.agentB).toBeDefined();
-  }, 30000);
+  });
 
   test("Test 6: Low complexity task does NOT trigger mesh", async () => {
     const result = await mesh.execute({
@@ -199,7 +225,7 @@ describe("Cross-Verification Mesh", () => {
     // At least one mesh execution should have occurred
     const meshApplied = results.some((r) => r.meshApplied);
     expect(meshApplied).toBe(true);
-  }, 60000);
+  });
 
   test("Test 8: Event ledger captures mesh decisions and providers", async () => {
     const result = await mesh.execute({
@@ -235,11 +261,12 @@ describe("Cross-Verification Mesh", () => {
     const firstEntry = JSON.parse(lines[0]);
     expect(firstEntry.type).toBeDefined();
     expect(firstEntry.timestamp).toBeDefined();
-  }, 30000);
+  });
 
   test("Test 9: Arbiter selection prefers fast, cheap providers", async () => {
-    // This test verifies that arbiter role uses groq/kiro-ai as primary
-    // (fastest, cheapest providers)
+    // Use arbiter mock so it returns valid JSON verdict
+    completionSpy.mockImplementation(arbiterMockCompletion);
+
     const result = await mesh.execute({
       taskId: "mesh-test-9",
       role: "verification",
@@ -262,7 +289,7 @@ describe("Cross-Verification Mesh", () => {
         result.arbiter.provider
       );
     }
-  }, 30000);
+  });
 
   test("Test 10: Circuit breaker disables mesh after verification cost exceeds threshold", async () => {
     // After one qualifying task: sessionVerificationCost (B + arbiter ≈ 0.6) /
@@ -300,11 +327,35 @@ describe("Cross-Verification Mesh", () => {
 
     // Second qualifying task: circuit breaker fired, mesh disabled
     expect(second.meshApplied).toBe(false);
-  }, 30000);
+  });
 
   test("Test 11: Timeout gate returns degraded result when Agent B exceeds timeout", async () => {
-    // Use agentBTimeoutMs=1 to force an immediate timeout for Agent B.
-    // The mesh should degrade gracefully: meshApplied:false, agentB.timedOut:true.
+    // Agent A resolves quickly; Agent B delays 500ms so the 50ms timeout fires first.
+    // Use a fresh spy (restore previous, install new) to avoid cross-test state.
+    completionSpy.mockRestore();
+    const localSpy = vi.spyOn(ProviderRouter.prototype, "completion" as any);
+    let firstCall = true;
+    localSpy.mockImplementation(() => {
+      if (firstCall) {
+        firstCall = false;
+        return Promise.resolve({
+          content: "Agent A response",
+          provider: "groq",
+          model: "test-model",
+          usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+        });
+      }
+      // Agent B — delay 500ms so the 50ms agentBTimeoutMs fires first
+      return new Promise((resolve) =>
+        setTimeout(() => resolve({
+          content: "Agent B late response",
+          provider: "groq",
+          model: "test-model",
+          usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+        }), 500)
+      );
+    });
+
     const result = await mesh.execute({
       taskId: "mesh-timeout-1",
       role: "execution",
@@ -319,8 +370,10 @@ describe("Cross-Verification Mesh", () => {
         max_extra_cost_pct: 15,
         min_complexity: "high",
       },
-      agentBTimeoutMs: 1, // Force immediate timeout
+      agentBTimeoutMs: 50, // 50ms timeout fires before Agent B's 500ms delay
     });
+
+    localSpy.mockRestore();
 
     // Agent A result still returned
     expect(result.agentA).toBeDefined();

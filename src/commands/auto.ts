@@ -11,6 +11,8 @@ import { SummaryGenerator } from "../core/summary";
 import type { DecomposedTask } from "../core/decomposer";
 import { GitHubClient } from "../providers/github";
 import { ProviderRouter } from "../providers/router";
+import { Isolator } from "../core/sandbox";
+import { VerificationMesh } from "../core/verification-mesh";
 
 export const autoCommand = new Command("auto")
 	.description(
@@ -32,6 +34,11 @@ export const autoCommand = new Command("auto")
 		"Skip GitHub PR creation (useful for local-only runs)",
 		false,
 	)
+	.option(
+		"--improve-self",
+		"Use sandbox for test execution and VerificationMesh for high-complexity tasks",
+		false,
+	)
 	.action(
 		async (
 			prompt: string,
@@ -39,16 +46,23 @@ export const autoCommand = new Command("auto")
 				worktrees?: string;
 				simulateFailure?: boolean;
 				pr?: boolean;
+				improveSelf?: boolean;
 			},
 		) => {
 			const worktreePoolSize = parseInt(options.worktrees || "3", 10);
 			const enablePr = options.pr ?? true;
+			const improveSelf = options.improveSelf ?? false;
 
 			console.log(`🚀 Starting apohara auto for: "${prompt}"`);
 			console.log(`📊 Worktree pool size: ${worktreePoolSize}`);
 			if (options.simulateFailure) {
 				console.log(
 					`⚠️  SIMULATE-FAILURE MODE ENABLED - First provider will return 429`,
+				);
+			}
+			if (improveSelf) {
+				console.log(
+					`🔒 IMPROVE-SELF MODE: sandbox test execution + mesh verification for qualifying tasks`,
 				);
 			}
 
@@ -65,6 +79,10 @@ export const autoCommand = new Command("auto")
 				maxRetries: 3,
 				backoffMs: [1000, 4000, 16000],
 			});
+
+			// Improve-self components (initialized lazily when flag is set)
+			const isolator = improveSelf ? new Isolator() : null;
+			const verificationMesh = improveSelf ? new VerificationMesh() : null;
 
 			try {
 				// 2) Load or create state
@@ -132,6 +150,16 @@ export const autoCommand = new Command("auto")
 				const agentResults = await subagentManager.executeAll(
 					decompositionResult.tasks,
 				);
+
+				// 4b) Improve-self: sandbox test runs + mesh verification for qualifying tasks
+				if (improveSelf && isolator && verificationMesh) {
+					await runImproveSelf(
+						decompositionResult.tasks,
+						isolator,
+						verificationMesh,
+						ledger,
+					);
+				}
 
 				// 5) Report results
 				const successCount = agentResults.filter(
@@ -263,6 +291,97 @@ export const autoCommand = new Command("auto")
 			}
 		},
 	);
+
+/**
+ * Improve-self execution loop:
+ * 1. Run tests via Isolator.exec() (sandboxed) for each completed task
+ * 2. For tasks with complexity ∈ {high, critical} AND filesModified ≥ 3, run VerificationMesh
+ * 3. Emit EventLedger events for all outcomes
+ */
+async function runImproveSelf(
+	tasks: DecomposedTask[],
+	isolator: Isolator,
+	verificationMesh: VerificationMesh,
+	ledger: EventLedger,
+): Promise<void> {
+	const workdir = process.cwd();
+
+	for (const task of tasks) {
+		// Sandbox test run
+		const sandboxResult = await isolator.exec({
+			workdir,
+			command: "bun test",
+			permission: "workspace_write",
+			timeout: 60000,
+			taskId: task.id,
+		});
+
+		await ledger.log(
+			"sandbox_test_run",
+			{
+				taskId: task.id,
+				exitCode: sandboxResult.exitCode,
+				durationMs: sandboxResult.durationMs,
+				error: sandboxResult.error,
+			},
+			sandboxResult.exitCode === 0 ? "info" : "warning",
+			task.id,
+		);
+
+		// Determine complexity and files modified for mesh qualification
+		const complexity = (task as any).complexity ?? "medium";
+		const filesModified = (task as any).filesModified ?? 0;
+		const qualifiesForMesh =
+			(complexity === "high" || complexity === "critical") && filesModified >= 3;
+
+		if (qualifiesForMesh) {
+			const meshResult = await verificationMesh.execute({
+				taskId: task.id,
+				role: "execution",
+				task: {
+					id: task.id,
+					messages: [
+						{
+							role: "user",
+							content: task.description,
+						},
+					],
+					complexity,
+					filesModified,
+				},
+				policy: {
+					enabled: true,
+					max_extra_cost_pct: 15,
+					min_complexity: "high",
+				},
+			});
+
+			await ledger.log(
+				"improve_self_task_completed",
+				{
+					taskId: task.id,
+					sandboxExitCode: sandboxResult.exitCode,
+					meshApplied: meshResult.meshApplied,
+					meshCostDelta: meshResult.meshCostDelta,
+				},
+				"info",
+				task.id,
+			);
+		} else {
+			await ledger.log(
+				"improve_self_task_completed",
+				{
+					taskId: task.id,
+					sandboxExitCode: sandboxResult.exitCode,
+					meshApplied: false,
+					meshSkipReason: "not_qualified",
+				},
+				"info",
+				task.id,
+			);
+		}
+	}
+}
 
 /**
  * Runs Biome linting on the consolidated code with autofix.
