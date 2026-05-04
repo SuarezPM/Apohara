@@ -563,4 +563,27 @@ trait Drawable {
         assert!(names.contains(&"draw"));
         assert!(names.contains(&"get_bounds"));
     }
+
+    #[test]
+    fn test_parse_file_typescript_fixture() {
+        let path = Path::new("tests/fixtures/fixture.ts");
+        let sigs = parse_file(path).unwrap();
+        assert_eq!(sigs.len(), 3);
+
+        let names: Vec<_> = sigs.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"parseString"));
+        assert!(names.contains(&"calculateSum"));
+        assert!(names.contains(&"isValid"));
+    }
+
+    #[test]
+    fn test_parse_file_rust_fixture() {
+        let path = Path::new("tests/fixtures/fixture.rs");
+        let sigs = parse_file(path).unwrap();
+        assert_eq!(sigs.len(), 2);
+
+        let names: Vec<_> = sigs.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"process_data"));
+        assert!(names.contains(&"calculate_total"));
+    }
 }
