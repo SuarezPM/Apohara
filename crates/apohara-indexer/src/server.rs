@@ -22,6 +22,15 @@ pub const DEFAULT_SOCKET_PATH: &str = ".apohara/indexer.sock";
 /// Default inactivity timeout in seconds (30 minutes)
 pub const DEFAULT_INACTIVITY_TIMEOUT_SECS: u64 = 30 * 60;
 
+/// Get inactivity timeout from environment variable or default
+pub fn get_inactivity_timeout() -> Duration {
+    std::env::var("APOHARA_INACTIVITY_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map(Duration::from_secs)
+        .unwrap_or_else(|| Duration::from_secs(DEFAULT_INACTIVITY_TIMEOUT_SECS))
+}
+
 /// JSON-RPC request
 #[derive(Debug, Deserialize)]
 struct JsonRpcRequest {
@@ -99,7 +108,7 @@ impl Server {
             indexer: Arc::new(indexer),
             dependency_graph: Arc::new(Mutex::new(DependencyGraph::new())),
             socket_path: PathBuf::from(DEFAULT_SOCKET_PATH),
-            inactivity_timeout: Duration::from_secs(DEFAULT_INACTIVITY_TIMEOUT_SECS),
+            inactivity_timeout: get_inactivity_timeout(),
             last_activity: Arc::new(Mutex::new(Instant::now())),
             shutdown_flag: Arc::new(AtomicBool::new(false)),
         }
