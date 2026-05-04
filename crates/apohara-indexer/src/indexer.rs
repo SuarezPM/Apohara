@@ -229,6 +229,11 @@ impl Indexer {
     pub fn db_file_size(&self) -> Result<u64> {
         self.db.file_size()
     }
+
+    /// Generate embedding for text (public API for external usage)
+    pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
+        self.model.embed(text)
+    }
 }
 
 /// Search result with metadata
