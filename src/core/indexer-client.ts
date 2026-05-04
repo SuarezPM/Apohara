@@ -76,16 +76,16 @@ const RECONNECT_DELAY_MS = 1000;
 const SOCKET_READY_DELAY_MS = 500;
 
 /**
- * Get the resolved socket path (expands ~ to home directory)
+ * Get the resolved socket path (expands ~ to home directory, relative paths to cwd)
  */
 function getSocketPath(): string {
-	const homeDir = os.homedir();
+	const cwd = process.cwd();
 	const socketPath = DEFAULT_SOCKET_PATH;
 	if (socketPath.startsWith("~/") || socketPath.startsWith("~\\")) {
-		return path.join(homeDir, socketPath.slice(2));
+		return path.join(os.homedir(), socketPath.slice(2));
 	}
 	if (!socketPath.startsWith("/") && !socketPath.match(/^[A-Za-z]:/)) {
-		return path.join(homeDir, socketPath);
+		return path.join(cwd, socketPath);
 	}
 	return socketPath;
 }
