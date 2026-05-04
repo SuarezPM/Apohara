@@ -585,9 +585,37 @@ pub fn parse_source_imports_exports(source: &str, language: Language) -> Result<
 fn extract_typescript_imports(node: &Node, source: &str, imports: &mut Vec<ImportStatement>) {
     // Check if this node is an import statement
     if node.kind() == "import_statement" {
-        if let Some(import_clause) = node.child_by_field_name("module") {
-            if let Some(import_stmt) = parse_typescript_import_clause(&import_clause, source) {
-                imports.push(import_stmt);
+        // Find the source module path from the string child
+        let mut module_source = None;
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "string" {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    module_source = Some(text.trim_matches(|c| c == '\'' || c == '"').to_string());
+                }
+                break;
+            }
+        }
+        
+        // Check for import_clause (for named, default, namespace imports)
+        let mut found_import_clause = false;
+        for child in node.children(&mut cursor) {
+            if child.kind() == "import_clause" {
+                found_import_clause = true;
+                if let Some(source_text) = &module_source {
+                    if let Some(import_stmt) = parse_typescript_import_clause_with_source(&child, source, source_text) {
+                        imports.push(import_stmt);
+                    }
+                }
+                break;
+            }
+        }
+        
+        // If no import_clause found but we have a source, it's a side-effect import
+        if !found_import_clause {
+            if let Some(source_text) = module_source {
+                let line = node.start_position().row + 1;
+                imports.push(ImportStatement::new(source_text, ImportKind::SideEffect).with_line(line));
             }
         }
         return; // Don't recurse into children of import_statement
@@ -660,6 +688,88 @@ fn parse_typescript_require(node: &Node, source: &str) -> Option<ImportStatement
     }
 
     None
+}
+
+/// Parse a TypeScript import clause (from import_statement)
+/// Uses source provided externally (from parent import_statement)
+fn parse_typescript_import_clause_with_source(node: &Node, source: &str, source_text: &str) -> Option<ImportStatement> {
+    let start_position = node.start_position();
+    let line = start_position.row + 1;
+
+    // The source is passed in from the parent import_statement
+    let module_source = source_text.to_string();
+
+    // Check for different import styles by examining direct children
+    let mut cursor = node.walk();
+    let mut has_default = false;
+    let mut has_namespace = false;
+    let mut has_named = false;
+    let mut namespace_name = String::new();
+    let mut default_name = String::new();
+    let mut named_imports = Vec::new();
+
+    for child in node.children(&mut cursor) {
+        let kind = child.kind();
+        
+        // Check for default import (single identifier like "React")
+        if kind == "identifier" && !has_default && !has_namespace && !has_named {
+            // This might be a default import
+            if let Ok(name) = child.utf8_text(source.as_bytes()) {
+                default_name = name.to_string();
+                has_default = true;
+            }
+        }
+        
+        // Check for namespace import (* as Name)
+        if kind == "namespace_import" {
+            let mut ns_cursor = child.walk();
+            for ns_child in child.children(&mut ns_cursor) {
+                if ns_child.kind() == "identifier" {
+                    if let Ok(name) = ns_child.utf8_text(source.as_bytes()) {
+                        namespace_name = name.to_string();
+                        has_namespace = true;
+                    }
+                }
+            }
+        }
+        
+        // Check for named imports ({ a, b })
+        if kind == "named_imports" {
+            has_named = true;
+            let mut named_cursor = child.walk();
+            for named_child in child.children(&mut named_cursor) {
+                if named_child.kind() == "import_specifier" {
+                    // Get the name from the specifier
+                    let mut spec_cursor = named_child.walk();
+                    for spec_child in named_child.children(&mut spec_cursor) {
+                        if spec_child.kind() == "identifier" {
+                            if let Ok(name) = spec_child.utf8_text(source.as_bytes()) {
+                                if name != "default" { // Skip "default" keyword
+                                    named_imports.push(name.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Return based on what we found
+    if has_namespace && !namespace_name.is_empty() {
+        return Some(ImportStatement::new(module_source, ImportKind::Namespace(namespace_name)).with_line(line));
+    }
+    
+    if has_default && !default_name.is_empty() {
+        return Some(ImportStatement::new(module_source, ImportKind::Default(default_name)).with_line(line));
+    }
+    
+    if has_named && !named_imports.is_empty() {
+        return Some(ImportStatement::new(module_source, ImportKind::Named(named_imports)).with_line(line));
+    }
+
+    // Fallback: import without specific clause (import 'module' - side effect)
+    Some(ImportStatement::new(module_source, ImportKind::SideEffect).with_line(line))
 }
 
 /// Parse a TypeScript import clause (from import_statement)
@@ -752,19 +862,50 @@ fn parse_typescript_export(node: &Node, source: &str) -> Option<ExportStatement>
     let start_position = node.start_position();
     let line = start_position.row + 1;
 
-    // Check for re-export (export { a } from 'module')
-    let module = node.child_by_field_name("module");
-    if let Some(module_node) = module {
-        let source_text = module_node.utf8_text(source.as_bytes()).ok()?.to_string();
+    // Look for direct children to determine export type
+    let mut cursor = node.walk();
+    let mut has_from = false;
+    let mut module_source = String::new();
+    let mut specifier_node = None;
+    let mut declaration_node = None;
+
+    for child in node.children(&mut cursor) {
+        let kind = child.kind();
         
-        // Get the exported items
+        // Check for 'from' keyword - indicates re-export
+        if kind == "from" {
+            has_from = true;
+        }
+        
+        // String is the module source
+        if kind == "string" {
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                module_source = text.trim_matches(|c| c == '\'' || c == '"').to_string();
+            }
+        }
+        
+        // specifier contains { a, b }
+        if kind == "export_clause" || kind == "named_exports" {
+            specifier_node = Some(child);
+        }
+        
+        // declaration is for "export default ..."
+        if kind == "function_declaration" || kind == "class_declaration" || kind == "lexical_declaration" || kind == "variable_declaration" {
+            declaration_node = Some(child);
+        }
+    }
+
+    // Check for re-export (export { a } from 'module')
+    if has_from && !module_source.is_empty() {
         let mut items = Vec::new();
-        if let Some(specifier) = node.child_by_field_name("specifier") {
-            let cursor = &mut specifier.walk();
-            for child in specifier.children(cursor) {
-                if let Some(name) = child.utf8_text(source.as_bytes()).ok() {
-                    if !name.is_empty() && name != "{" && name != "}" && name != "," {
-                        items.push(name.to_string());
+        
+        if let Some(spec) = specifier_node {
+            let mut spec_cursor = spec.walk();
+            for child in spec.children(&mut spec_cursor) {
+                if let Ok(name) = child.utf8_text(source.as_bytes()) {
+                    let trimmed = name.trim();
+                    if !trimmed.is_empty() && trimmed != "{" && trimmed != "}" && trimmed != "," {
+                        items.push(trimmed.to_string());
                     }
                 }
             }
@@ -772,20 +913,19 @@ fn parse_typescript_export(node: &Node, source: &str) -> Option<ExportStatement>
 
         if items.is_empty() {
             // export * from 'module'
-            return Some(ExportStatement::new(ExportKind::ReExportAll(source_text)).with_line(line));
+            return Some(ExportStatement::new(ExportKind::ReExportAll(module_source)).with_line(line));
         } else {
             return Some(ExportStatement::new(ExportKind::ReExport {
                 items,
-                source: source_text,
+                source: module_source,
             }).with_line(line));
         }
     }
 
-    // Check for default export
-    let declaration = node.child_by_field_name("declaration");
-    if let Some(decl) = declaration {
-        // export default ...
+    // Check for default export (export default ...)
+    if let Some(decl) = declaration_node {
         let decl_text = decl.utf8_text(source.as_bytes()).ok()?.to_string();
+        
         // Check if it's a function or class declaration
         if decl.kind() == "function_declaration" {
             if let Some(name) = decl.child_by_field_name("name") {
@@ -801,15 +941,15 @@ fn parse_typescript_export(node: &Node, source: &str) -> Option<ExportStatement>
         return Some(ExportStatement::new(ExportKind::Default(decl_text)).with_line(line));
     }
 
-    // Check for named exports (export { a, b })
-    let specifier = node.child_by_field_name("specifier");
-    if let Some(spec) = specifier {
+    // Check for named exports (export { a, b }) without from
+    if let Some(spec) = specifier_node {
         let mut items = Vec::new();
-        let cursor = &mut spec.walk();
-        for child in spec.children(cursor) {
-            if let Some(name) = child.utf8_text(source.as_bytes()).ok() {
-                if !name.is_empty() && name != "{" && name != "}" && name != "," {
-                    items.push(name.to_string());
+        let mut spec_cursor = spec.walk();
+        for child in spec.children(&mut spec_cursor) {
+            if let Ok(name) = child.utf8_text(source.as_bytes()) {
+                let trimmed = name.trim();
+                if !trimmed.is_empty() && trimmed != "{" && trimmed != "}" && trimmed != "," {
+                    items.push(trimmed.to_string());
                 }
             }
         }
@@ -851,19 +991,59 @@ fn parse_rust_use(node: &Node, source: &str) -> Option<ImportStatement> {
     let start_position = node.start_position();
     let line = start_position.row + 1;
 
-    // Check if it's a pub use
-    let visibility = node.child_by_field_name("visibility");
-    let is_pub = visibility.map(|v| v.kind() == "pub_attribute").unwrap_or(false);
+    // Check if it's a pub use by looking for "pub" keyword
+    let mut is_pub = false;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "pub" {
+            is_pub = true;
+            break;
+        }
+    }
 
-    // Get the use tree
-    let tree = node.child_by_field_name("tree")?;
-    let tree_text = tree.utf8_text(source.as_bytes()).ok()?.to_string();
+    // Get the use tree - look for use_tree or scoped_identifier
+    let mut use_tree_text = String::new();
+    let mut tree_cursor = node.walk();
+    for child in node.children(&mut tree_cursor) {
+        let kind = child.kind();
+        // The path is typically in scoped_identifier or use_tree
+        if kind == "scoped_identifier" || kind == "use_tree" || kind == "identifier" {
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                if !text.is_empty() && text != "use" && text != "pub" {
+                    if use_tree_text.is_empty() {
+                        use_tree_text = text.to_string();
+                    } else {
+                        use_tree_text.push_str(&format!("::{}", text));
+                    }
+                }
+            }
+        }
+        // Also check for scoped_use_tree (std::foo::Bar)
+        if kind == "scoped_use_tree" {
+            let mut scoped_cursor = child.walk();
+            for scoped_child in child.children(&mut scoped_cursor) {
+                if let Ok(text) = scoped_child.utf8_text(source.as_bytes()) {
+                    if !text.is_empty() && text != "::" {
+                        if use_tree_text.is_empty() {
+                            use_tree_text = text.to_string();
+                        } else if text != "::" {
+                            use_tree_text.push_str(&format!("::{}", text));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if use_tree_text.is_empty() {
+        return None;
+    }
 
     if is_pub {
-        // pub use creates a re-export
-        Some(ImportStatement::new(tree_text, ImportKind::Namespace("pub_use".to_string())).with_line(line))
+        // pub use creates a re-export - treat as export (but we're in imports)
+        Some(ImportStatement::new(use_tree_text, ImportKind::Namespace("pub_use".to_string())).with_line(line))
     } else {
-        Some(ImportStatement::new(tree_text, ImportKind::Default(String::new())).with_line(line))
+        Some(ImportStatement::new(use_tree_text, ImportKind::Default(String::new())).with_line(line))
     }
 }
 
@@ -872,43 +1052,62 @@ fn parse_rust_mod(node: &Node, source: &str) -> Option<ImportStatement> {
     let start_position = node.start_position();
     let line = start_position.row + 1;
 
-    // Get the module name
-    let name = node.child_by_field_name("name")?;
-    let name_text = name.utf8_text(source.as_bytes()).ok()?.to_string();
-
-    // Check if it has a body (mod foo { ... }) or is external (mod foo;)
-    let body = node.child_by_field_name("body");
+    // Get the module name from direct children
+    let mut name_text = String::new();
+    let mut has_body = false;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        let kind = child.kind();
+        if kind == "identifier" {
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                name_text = text.to_string();
+            }
+        }
+        if kind == "block" || kind == "semicolon" {
+            // If we have a semicolon, it's external; if block, it's inline
+            has_body = kind == "block";
+        }
+    }
     
-    if body.is_some() {
-        // Inline module: mod foo { ... }
+    if name_text.is_empty() {
+        return None;
+    }
+
+    if has_body {
         Some(ImportStatement::new(name_text, ImportKind::Namespace("inline".to_string())).with_line(line))
     } else {
-        // External module: mod foo;
         Some(ImportStatement::new(name_text, ImportKind::Namespace("external".to_string())).with_line(line))
     }
 }
 
 /// Extract exports from Rust source (pub use statements)
 fn extract_rust_exports(node: &Node, source: &str, exports: &mut Vec<ExportStatement>) {
-    let cursor = &mut node.walk();
-
-    for child in node.children(cursor) {
-        match child.kind() {
-            "use_declaration" => {
-                // Check for pub use (which acts as an export)
-                let visibility = child.child_by_field_name("visibility");
-                if let Some(vis) = visibility {
-                    if vis.kind() == "pub_attribute" {
-                        if let Some(export_stmt) = parse_rust_export(&child, source) {
-                            exports.push(export_stmt);
-                        }
-                    }
-                }
-            }
-            _ => {
-                extract_rust_exports(&child, source, exports);
+    // Check if this is a use declaration
+    if node.kind() == "use_declaration" {
+        // Check for pub use (which acts as an export)
+        let mut is_pub = false;
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            let kind = child.kind();
+            // tree-sitter-rust uses "visibility_modifier" for pub, not "pub"
+            if kind == "pub" || kind == "visibility_modifier" {
+                is_pub = true;
+                break;
             }
         }
+        
+        if is_pub {
+            if let Some(export_stmt) = parse_rust_export(node, source) {
+                exports.push(export_stmt);
+            }
+        }
+        return;
+    }
+
+    // Recurse into children
+    let cursor = &mut node.walk();
+    for child in node.children(cursor) {
+        extract_rust_exports(&child, source, exports);
     }
 }
 
@@ -917,11 +1116,44 @@ fn parse_rust_export(node: &Node, source: &str) -> Option<ExportStatement> {
     let start_position = node.start_position();
     let line = start_position.row + 1;
 
-    // Get the use tree
-    let tree = node.child_by_field_name("tree")?;
-    let tree_text = tree.utf8_text(source.as_bytes()).ok()?.to_string();
+    // Get the use tree - extract from children
+    let mut use_tree_text = String::new();
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        let kind = child.kind();
+        // The path is typically in scoped_identifier, scoped_use_tree, or identifier
+        if kind == "scoped_identifier" || kind == "identifier" {
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                if !text.is_empty() && text != "use" && text != "pub" {
+                    if use_tree_text.is_empty() {
+                        use_tree_text = text.to_string();
+                    } else {
+                        use_tree_text.push_str(&format!("::{}", text));
+                    }
+                }
+            }
+        }
+        if kind == "scoped_use_tree" {
+            let mut scoped_cursor = child.walk();
+            for scoped_child in child.children(&mut scoped_cursor) {
+                if let Ok(text) = scoped_child.utf8_text(source.as_bytes()) {
+                    if !text.is_empty() && text != "::" {
+                        if use_tree_text.is_empty() {
+                            use_tree_text = text.to_string();
+                        } else if text != "::" {
+                            use_tree_text.push_str(&format!("::{}", text));
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    Some(ExportStatement::new(ExportKind::Named(vec![tree_text])).with_line(line))
+    if use_tree_text.is_empty() {
+        return None;
+    }
+
+    Some(ExportStatement::new(ExportKind::Named(vec![use_tree_text])).with_line(line))
 }
 
 #[cfg(test)]
