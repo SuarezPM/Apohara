@@ -13,6 +13,7 @@ import { test, expect, beforeAll, afterAll, describe } from "bun:test";
 import { IndexerClient } from "../src/core/indexer-client";
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as child_process from "child_process";
 
 // Use relative socket path matching the daemon's .apohara/indexer.sock
 // Run test from Clarity-Code directory
@@ -26,6 +27,19 @@ let stateChanges: string[] = [];
 
 describe("IndexerClient Integration Tests", () => {
 	beforeAll(async () => {
+		// Ensure clean state: kill any running daemon and remove socket
+		try {
+			child_process.execSync("pkill -f apohara-indexer || true");
+		} catch (e) {
+			// Ignore
+		}
+		
+		try {
+			await fs.unlink(SOCKET_PATH);
+		} catch (e) {
+			// Ignore if doesn't exist
+		}
+
 		// Ensure .apohara directory exists for socket
 		const socketDir = path.dirname(SOCKET_PATH);
 		await fs.mkdir(socketDir, { recursive: true }).catch(() => {});
