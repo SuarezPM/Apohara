@@ -125,8 +125,14 @@ impl Db {
         let read_txn = self.db.begin_read()
             .context("Failed to begin read transaction")?;
         
-        let table = read_txn.open_table(NODES_TABLE)
-            .context("Failed to open nodes table")?;
+        // Handle missing table gracefully - return empty vec if tables don't exist yet
+        let table = match read_txn.open_table(NODES_TABLE) {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::debug!("Nodes table doesn't exist yet: {}", e);
+                return Ok(Vec::new());
+            }
+        };
         
         let mut ids = Vec::new();
         for entry in table.iter()? {
