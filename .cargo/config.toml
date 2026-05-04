@@ -1,3 +1,2 @@
-[profile.release-linux]
-inherits = "release"
-rustflags = ["-C", "target-feature=+crt-static"]
+# Cargo config - static linking configuration
+# Note: Full static linking requires musl target with cross-compiler
