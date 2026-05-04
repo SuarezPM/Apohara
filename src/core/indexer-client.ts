@@ -151,8 +151,60 @@ export interface BlastRadiusResponse {
 	files: string[];
 }
 
+/** File signature (AST function/class signature) */
+export interface FileSignature {
+	name: string;
+	parameters: string;
+	return_type: string | null;
+	line: number;
+	column: number;
+}
+
+/** File signatures response */
+export interface FileSignaturesResponse {
+	file_path: string;
+	signatures: FileSignature[];
+}
+
 /** Connection state */
 export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
+
+// ============================================================================
+// Memory Types
+// ============================================================================
+
+/** Types of memories stored in the system */
+export type MemoryType = "correction" | "preference" | "architecture" | "past_error";
+
+/** Memory entry returned from search */
+export interface Memory {
+	/** Unique identifier (UUID) */
+	id: string;
+	/** Type of memory */
+	memory_type: MemoryType;
+	/** Content of the memory (text) */
+	content: string;
+	/** Timestamp when created */
+	created_at: number;
+	/** Similarity score from search (0-1, higher = more relevant) */
+	similarity: number;
+}
+
+/** Response from store_memory RPC */
+export interface StoreMemoryResponse {
+	/** UUID of the stored memory */
+	memory_id: string;
+	/** Status of the operation */
+	status: "stored";
+}
+
+/** Response from search_memory RPC */
+export interface SearchMemoryResponse {
+	/** Array of matching memories */
+	memories: Memory[];
+	/** Number of memories returned */
+	count: number;
+}
 
 /**
  * Event emitter for indexer client events
@@ -453,6 +505,45 @@ export class IndexerClient extends EventEmitter {
 	public async getBlastRadius(target: string): Promise<BlastRadiusResponse> {
 		const result = await this.sendRequest("get_blast_radius", { target }) as { files: string[] };
 		return result;
+	}
+
+	/**
+	 * Get file signatures (AST functions/classes) for a specific file
+	 * Returns exact signatures without using semantic/vector search
+	 */
+	public async getFileSignatures(filePath: string): Promise<FileSignaturesResponse> {
+		const result = await this.sendRequest("get_file_signatures", { file_path: filePath }) as FileSignaturesResponse;
+		return result;
+	}
+
+	/**
+	 * Store a memory in the database
+	 *
+	 * @param content - Text content of the memory
+	 * @param memoryType - Type of memory: "correction", "preference", "architecture", "past_error"
+	 * @returns Promise resolving to the memory ID (UUID)
+	 */
+	public async storeMemory(content: string, memoryType: MemoryType): Promise<string> {
+		const result = await this.sendRequest("store_memory", {
+			content,
+			memory_type: memoryType,
+		}) as StoreMemoryResponse;
+		return result.memory_id;
+	}
+
+	/**
+	 * Search memories by semantic similarity
+	 *
+	 * @param query - Text query to search for
+	 * @param topK - Maximum number of results to return (default: 5)
+	 * @returns Promise resolving to array of memories with similarity scores
+	 */
+	public async searchMemory(query: string, topK: number = 5): Promise<Memory[]> {
+		const result = await this.sendRequest("search_memory", {
+			query,
+			top_k: topK,
+		}) as SearchMemoryResponse;
+		return result.memories;
 	}
 
 	/**

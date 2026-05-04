@@ -1,0 +1,4 @@
+{"id":"08b45448-85b6-466b-8712-be18e8dc40a4","timestamp":"2026-05-04T18:35:19.462Z","type":"dispatch","taskId":"timeout-task","role":"execution","provider":"opencode-go","retries":0,"status":"running"}
+{"id":"17a2b1fb-60f3-42e0-8721-d4b32e55c920","timestamp":"2026-05-04T18:35:19.462Z","type":"dispatch","taskId":"timeout-task","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"061e493f-80ef-4250-b445-7c16e07e4aef","timestamp":"2026-05-04T18:35:19.462Z","type":"start","taskId":"timeout-task","role":"execution","provider":"deepseek-v4","retries":0,"status":"running"}
+{"id":"5ef11f57-a9d9-438b-b245-4231cccbf3ca","timestamp":"2026-05-04T18:35:19.462Z","type":"failure","taskId":"timeout-task","role":"execution","provider":"deepseek-v4","retries":0,"durationMs":0,"error":"undefined is not an object (evaluating 'response.ok')","status":"failed"}

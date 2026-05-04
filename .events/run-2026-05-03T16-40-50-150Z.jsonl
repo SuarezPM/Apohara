@@ -1,5 +1,0 @@
-{"id":"fa915967-8eb4-4244-94d1-348194c3ded0","timestamp":"2026-05-03T16:40:50.375Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}
-{"id":"dad35837-0dfb-4f66-a059-b9196319230c","timestamp":"2026-05-03T16:40:50.377Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}
-{"id":"c51d6288-9dfb-4199-a250-895fee820e16","timestamp":"2026-05-03T16:40:51.243Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}
-{"id":"0fc9846e-1ee5-4622-92e1-308db507fb9f","timestamp":"2026-05-03T16:40:51.246Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}
-{"id":"c6697d39-e57e-428a-91ca-225577520d8d","timestamp":"2026-05-03T16:40:51.246Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}

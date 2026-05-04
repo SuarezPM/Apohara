@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use tree_sitter::{Node, Parser};
@@ -96,7 +97,7 @@ pub struct ParseResult {
     pub exports: Vec<ExportStatement>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionSignature {
     pub name: String,
     pub parameters: Vec<Parameter>,
@@ -105,7 +106,7 @@ pub struct FunctionSignature {
     pub column: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Parameter {
     pub name: String,
     pub type_annotation: Option<String>,

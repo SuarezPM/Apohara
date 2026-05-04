@@ -1,2 +1,0 @@
-{"id":"cd343f1c-9ff3-4257-a42e-b3b0c8b0f5ea","timestamp":"2026-05-03T16:43:42.221Z","type":"provider_selected","severity":"info","payload":{"provider":"opencode-go","message":"Routing request to opencode-go"},"metadata":{"provider":"opencode-go"}}
-{"id":"92a67636-9e0b-4e66-8f48-fcca088ce02b","timestamp":"2026-05-03T16:43:42.225Z","type":"api_call_failed","severity":"error","payload":{"provider":"opencode-go","status":500,"error":"{\"error\":{\"message\":\"Internal Server Error\"}}"},"metadata":{"provider":"opencode-go"}}

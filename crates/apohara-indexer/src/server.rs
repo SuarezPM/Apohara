@@ -301,6 +301,9 @@ async fn handle_request(
         "search" => handle_search(&request.params, indexer).await,
         "index_file" => handle_index_file(&request.params, indexer).await,
         "get_blast_radius" => handle_get_blast_radius(&request.params, dep_graph).await,
+        "get_file_signatures" => handle_get_file_signatures(&request.params, indexer).await,
+        "store_memory" => handle_store_memory(&request.params, indexer).await,
+        "search_memory" => handle_search_memory(&request.params, indexer).await,
         _ => {
             return JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
@@ -434,6 +437,113 @@ async fn handle_get_blast_radius(
     Ok(serde_json::json!({ "files": paths }))
 }
 
+/// Handle get_file_signatures method
+/// Returns all AST signatures (functions, classes) from a file by querying the database
+async fn handle_get_file_signatures(
+    params: &Option<serde_json::Value>,
+    indexer: &Arc<Indexer>,
+) -> Result<serde_json::Value> {
+    let params = params.as_ref().ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+    let file_path = params
+        .get("file_path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'file_path' parameter"))?;
+
+    tracing::debug!("Getting file signatures for: {}", file_path);
+
+    // Search the database for all signatures in this file
+    // We use a broad search term that will match anything, then filter by file_path
+    let all_signatures = indexer.search_by_file_path(file_path)?;
+
+    let signatures_json: Vec<serde_json::Value> = all_signatures
+        .into_iter()
+        .map(|sig| {
+            serde_json::json!({
+                "name": sig.name,
+                "parameters": sig.parameters,
+                "return_type": sig.return_type,
+                "line": sig.line,
+                "column": sig.column,
+            })
+        })
+        .collect();
+
+    tracing::info!("Found {} signatures for {}", signatures_json.len(), file_path);
+
+    Ok(serde_json::json!({
+        "file_path": file_path,
+        "signatures": signatures_json,
+    }))
+}
+
+/// Handle store_memory method
+/// Stores a new memory with auto-generated embedding
+async fn handle_store_memory(
+    params: &Option<serde_json::Value>,
+    indexer: &Arc<Indexer>,
+) -> Result<serde_json::Value> {
+    let params = params.as_ref().ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+    
+    let content = params
+        .get("content")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'content' parameter"))?;
+    
+    let memory_type = params
+        .get("memory_type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'memory_type' parameter"))?;
+
+    // Store the memory
+    let memory_id = indexer.store_memory(memory_type, content)?;
+    
+    Ok(serde_json::json!({
+        "memory_id": memory_id,
+        "status": "stored"
+    }))
+}
+
+/// Handle search_memory method
+/// Searches for memories by semantic similarity
+async fn handle_search_memory(
+    params: &Option<serde_json::Value>,
+    indexer: &Arc<Indexer>,
+) -> Result<serde_json::Value> {
+    let params = params.as_ref().ok_or_else(|| anyhow::anyhow!("Missing params"))?;
+    
+    let query = params
+        .get("query")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'query' parameter"))?;
+    
+    let top_k = params
+        .get("top_k")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(5) as usize;
+
+    // Search memories
+    let results = indexer.search_memories(query, top_k)?;
+    
+    // Format results
+    let memories_json: Vec<serde_json::Value> = results
+        .into_iter()
+        .map(|(memory, score)| {
+            serde_json::json!({
+                "id": memory.id,
+                "memory_type": memory.memory_type.to_string(),
+                "content": memory.content,
+                "created_at": memory.created_at,
+                "similarity": score,
+            })
+        })
+        .collect();
+
+    Ok(serde_json::json!({
+        "memories": memories_json,
+        "count": memories_json.len(),
+    }))
+}
+
 /// Run the server with a new indexer
 pub async fn run_server() -> Result<()> {
     let indexer = Indexer::new()?;
@@ -464,5 +574,164 @@ mod tests {
         assert_eq!(JsonRpcError::method_not_found().code, -32601);
         assert_eq!(JsonRpcError::invalid_params("test").code, -32602);
         assert_eq!(JsonRpcError::internal_error("test").code, -32603);
+    }
+
+    #[tokio::test]
+    async fn test_store_memory() {
+        // Create indexer - skip if model not available
+        let indexer = match Indexer::new() {
+            Ok(i) => Arc::new(i),
+            Err(_) => {
+                eprintln!("Skipping test_store_memory: could not load model");
+                return;
+            }
+        };
+
+        // Test storing a preference memory
+        let params = serde_json::json!({
+            "content": "User prefers snake_case for all variable names",
+            "memory_type": "preference"
+        });
+
+        let result = handle_store_memory(&Some(params), &indexer).await;
+        assert!(result.is_ok(), "store_memory should succeed: {:?}", result.err());
+
+        let response = result.unwrap();
+        assert!(response.get("memory_id").is_some(), "Response should contain memory_id");
+        assert_eq!(response.get("status").unwrap().as_str().unwrap(), "stored");
+
+        let memory_id = response.get("memory_id").unwrap().as_str().unwrap();
+        assert!(!memory_id.is_empty(), "memory_id should not be empty");
+        assert_eq!(memory_id.len(), 36, "memory_id should be a UUID (36 chars)");
+
+        // Test storing architecture memory
+        let params = serde_json::json!({
+            "content": "Use repository pattern for data access",
+            "memory_type": "architecture"
+        });
+
+        let result = handle_store_memory(&Some(params), &indexer).await;
+        assert!(result.is_ok());
+
+        // Test invalid memory type
+        let params = serde_json::json!({
+            "content": "Some content",
+            "memory_type": "invalid_type"
+        });
+
+        let result = handle_store_memory(&Some(params), &indexer).await;
+        assert!(result.is_err(), "Should fail with invalid memory type");
+
+        // Test missing content
+        let params = serde_json::json!({
+            "memory_type": "preference"
+        });
+
+        let result = handle_store_memory(&Some(params), &indexer).await;
+        assert!(result.is_err(), "Should fail with missing content");
+
+        // Test missing memory_type
+        let params = serde_json::json!({
+            "content": "Some content"
+        });
+
+        let result = handle_store_memory(&Some(params), &indexer).await;
+        assert!(result.is_err(), "Should fail with missing memory_type");
+    }
+
+    #[tokio::test]
+    async fn test_search_memory() {
+        // Create indexer - skip if model not available
+        let indexer = match Indexer::new() {
+            Ok(i) => Arc::new(i),
+            Err(_) => {
+                eprintln!("Skipping test_search_memory: could not load model");
+                return;
+            }
+        };
+
+        // Store some memories first
+        let memories_to_store = vec![
+            ("preference", "User prefers snake_case for variable naming"),
+            ("architecture", "Use repository pattern for data access"),
+            ("past_error", "Avoid using unwrap in production code"),
+            ("correction", "Use Result type instead of panic"),
+        ];
+
+        for (mem_type, content) in memories_to_store {
+            let params = serde_json::json!({
+                "content": content,
+                "memory_type": mem_type
+            });
+            let result = handle_store_memory(&Some(params), &indexer).await;
+            assert!(result.is_ok(), "Failed to store memory: {:?}", result.err());
+        }
+
+        // Test 1: Search for preference-related content
+        let params = serde_json::json!({
+            "query": "What naming convention should I use?",
+            "top_k": 2
+        });
+
+        let result = handle_search_memory(&Some(params), &indexer).await;
+        assert!(result.is_ok(), "search_memory should succeed: {:?}", result.err());
+
+        let response = result.unwrap();
+        assert!(response.get("memories").is_some(), "Response should contain memories array");
+        assert!(response.get("count").is_some(), "Response should contain count");
+
+        let memories = response.get("memories").unwrap().as_array().unwrap();
+        assert!(!memories.is_empty(), "Should return at least one memory");
+        assert!(memories.len() <= 2, "Should respect top_k limit");
+
+        // Verify memory structure
+        let first_memory = &memories[0];
+        assert!(first_memory.get("id").is_some());
+        assert!(first_memory.get("memory_type").is_some());
+        assert!(first_memory.get("content").is_some());
+        assert!(first_memory.get("created_at").is_some());
+        assert!(first_memory.get("similarity").is_some());
+
+        // Test 2: Search with default top_k (should be 5)
+        let params = serde_json::json!({
+            "query": "code patterns and best practices"
+        });
+
+        let result = handle_search_memory(&Some(params), &indexer).await;
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        let memories = response.get("memories").unwrap().as_array().unwrap();
+        assert!(memories.len() <= 5, "Default top_k should be 5");
+
+        // Test 3: Search for non-existent content (should return empty but not error)
+        let params = serde_json::json!({
+            "query": "xyz non-existent query 12345",
+            "top_k": 3
+        });
+
+        let result = handle_search_memory(&Some(params), &indexer).await;
+        assert!(result.is_ok(), "Search should not fail even with no matches");
+
+        let response = result.unwrap();
+        let memories = response.get("memories").unwrap().as_array().unwrap();
+        // May return results or empty depending on semantic similarity
+
+        // Test 4: Missing query parameter
+        let params = serde_json::json!({
+            "top_k": 5
+        });
+
+        let result = handle_search_memory(&Some(params), &indexer).await;
+        assert!(result.is_err(), "Should fail with missing query");
+
+        // Test 5: Empty query (should work but may return arbitrary results)
+        let params = serde_json::json!({
+            "query": "",
+            "top_k": 1
+        });
+
+        let result = handle_search_memory(&Some(params), &indexer).await;
+        assert!(result.is_ok(), "Empty query should not error");
     }
 }

@@ -3,6 +3,7 @@
 /// Provides high-level API for indexing source code files and searching for similar functions.
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -234,6 +235,118 @@ impl Indexer {
     pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
         self.model.embed(text)
     }
+
+    /// Search for all signatures (functions, classes) in a specific file by path
+    /// This queries the database directly without using vector search
+    pub fn search_by_file_path(&self, file_path: &str) -> Result<Vec<FileSignature>> {
+        tracing::debug!("Searching for signatures in file: {}", file_path);
+
+        // Get all node IDs from the database
+        let node_ids = self.db.get_all_node_ids()?;
+        let mut signatures = Vec::new();
+
+        // Filter nodes by file_path
+        for id in node_ids {
+            if let Some(metadata) = self.db.get_node(id)? {
+                if metadata.file_path == file_path {
+                    signatures.push(FileSignature {
+                        name: metadata.function_name,
+                        parameters: metadata.parameters,
+                        return_type: metadata.return_type,
+                        line: metadata.line,
+                        column: metadata.column,
+                    });
+                }
+            }
+        }
+
+        // Sort by line number for consistent output
+        signatures.sort_by_key(|s| s.line);
+
+        tracing::debug!("Found {} signatures in {}", signatures.len(), file_path);
+        Ok(signatures)
+    }
+
+    // ============================================================================
+    // Memory Operations
+    // ============================================================================
+
+    /// Store a memory in the database
+    /// 
+    /// # Arguments
+    /// - `memory_type`: Type of memory (Correction, Preference, Architecture, PastError)
+    /// - `content`: Text content of the memory
+    /// 
+    /// # Returns
+    /// The UUID of the stored memory
+    pub fn store_memory(&self, memory_type: &str, content: &str) -> Result<String> {
+        use crate::db::{Memory, MemoryType};
+        use std::str::FromStr;
+        
+        // Parse memory type
+        let memory_type = MemoryType::from_str(memory_type)
+            .map_err(|e| anyhow::anyhow!("Invalid memory type: {}", e))?;
+        
+        // Generate embedding for content
+        tracing::debug!("Generating embedding for memory content ({} chars)", content.len());
+        let embedding = self.model.embed(content)?;
+        
+        // Generate UUID
+        let id = uuid::Uuid::new_v4().to_string();
+        
+        // Create memory
+        let memory = Memory {
+            id: id.clone(),
+            memory_type,
+            content: content.to_string(),
+            embedding,
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        };
+        
+        // Store in database
+        self.db.put_memory(&memory)?;
+        
+        tracing::info!("Stored memory with id={}", id);
+        Ok(id)
+    }
+
+    /// Search memories by semantic similarity
+    /// 
+    /// # Arguments
+    /// - `query`: Text to search for
+    /// - `top_k`: Maximum number of results to return
+    /// 
+    /// # Returns
+    /// Vector of (Memory, similarity_score) tuples, sorted by relevance
+    pub fn search_memories(&self, query: &str, top_k: usize) -> Result<Vec<(crate::db::Memory, f32)>> {
+        // Generate embedding for query
+        tracing::debug!("Searching memories for: {}", query);
+        let query_embedding = self.model.embed(query)?;
+        
+        // Search database
+        let results = self.db.search_memories_by_embedding(&query_embedding, top_k)?;
+        
+        tracing::debug!("Memory search returned {} results", results.len());
+        Ok(results)
+    }
+}
+
+/// Represents a function/class signature extracted from a file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSignature {
+    /// Function or method name
+    pub name: String,
+    /// Parameters as a string (e.g., "a: i32, b: String")
+    pub parameters: String,
+    /// Return type if any
+    pub return_type: Option<String>,
+    /// Line number in source file
+    pub line: usize,
+    /// Column number in source file
+    pub column: usize,
 }
 
 /// Search result with metadata
@@ -283,5 +396,46 @@ mod tests {
         
         assert!(text.contains("add"));
         assert!(text.contains("number"));
+    }
+
+    #[test]
+    fn test_memory_embedding() {
+        // Load the actual embedding model (requires model download on first run)
+        let indexer = Indexer::new();
+        
+        // Skip test if model can't be loaded (e.g., no internet, CI environment)
+        if indexer.is_err() {
+            eprintln!("Skipping test_memory_embedding: could not load model");
+            return;
+        }
+        
+        let indexer = indexer.unwrap();
+        
+        // Test embedding memory content
+        let memory_content = "User prefers snake_case for all variable names";
+        let embedding = indexer.embed(memory_content);
+        
+        assert!(embedding.is_ok(), "Should generate embedding for memory content");
+        let embedding = embedding.unwrap();
+        assert_eq!(embedding.len(), 768, "Nomic BERT produces 768-dim embeddings");
+        
+        // Verify embedding is normalized (L2 norm ≈ 1.0)
+        let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 0.01, "Embedding should be normalized, norm was {}", norm);
+        
+        // Test that different content produces different embeddings
+        let different_content = "User prefers camelCase for all variable names";
+        let different_embedding = indexer.embed(different_content).unwrap();
+        
+        // Cosine similarity should be high but not identical
+        let dot_product: f32 = embedding.iter().zip(different_embedding.iter()).map(|(a, b)| a * b).sum();
+        assert!(dot_product > 0.5, "Similar content should have high cosine similarity");
+        assert!(dot_product < 0.99, "Different content should not be identical");
+        
+        // Test that similar content produces very similar embeddings
+        let similar_content = "User prefers snake_case for variable naming";
+        let similar_embedding = indexer.embed(similar_content).unwrap();
+        let similar_dot: f32 = embedding.iter().zip(similar_embedding.iter()).map(|(a, b)| a * b).sum();
+        assert!(similar_dot > 0.9, "Semantically similar content should have very high cosine similarity");
     }
 }

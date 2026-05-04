@@ -1,3 +1,0 @@
-{"id":"a9108a51-31fe-4778-85e2-7ed0219582a0","timestamp":"2026-05-03T16:52:01.379Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}
-{"id":"ed47aeaf-3100-409c-a5ec-3b2461dea8cd","timestamp":"2026-05-03T16:52:02.029Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}
-{"id":"75598af2-55b3-4866-9ba4-01da9ef34874","timestamp":"2026-05-03T16:52:02.542Z","type":"provider_selected","severity":"info","payload":{"provider":"groq","message":"Routing request to groq"},"metadata":{"provider":"groq"}}

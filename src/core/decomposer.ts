@@ -1,6 +1,9 @@
 import { type LLMMessage, ProviderRouter } from "../providers/router";
 import { routeTaskWithFallback } from "./agent-router";
+import { EventLedger } from "./ledger";
+import type { IndexerClient, SearchResult } from "./indexer-client";
 import type { TaskRole } from "./types";
+import { fetchAndFormatMemories } from "./memory-injection";
 
 // Dynamic import for MCP client to avoid build issues when not available
 let mcpRegistry: any = null;
@@ -17,6 +20,18 @@ async function getMCPRegistry() {
 	return mcpRegistry;
 }
 
+export interface IndexerContext {
+	/** Semantically relevant files/functions found via broad prompt search */
+	searchHits: Array<{
+		filePath: string;
+		functionName: string;
+		line: number;
+		score: number;
+	}>;
+	/** Transitively affected files based on this task's primary target */
+	blastRadius: string[];
+}
+
 export interface DecomposedTask {
 	id: string;
 	description: string;
@@ -24,6 +39,8 @@ export interface DecomposedTask {
 	dependencies: string[];
 	role: TaskRole;
 	files?: string[];
+	/** Indexer-derived context injected at orchestration layer. Agents receive this as-is. */
+	indexerContext?: IndexerContext;
 }
 
 export interface DecompositionResult {
@@ -33,20 +50,40 @@ export interface DecompositionResult {
 
 export class TaskDecomposer {
 	private router: ProviderRouter;
+	private indexerClient: IndexerClient | null;
+	private ledger: EventLedger;
 
-	constructor(router?: ProviderRouter) {
+	constructor(router?: ProviderRouter, indexerClient?: IndexerClient | null) {
 		this.router = router || new ProviderRouter();
+		this.ledger = new EventLedger();
+		// null explicitly disables indexer (useful in tests); undefined triggers lazy default import
+		if (indexerClient !== undefined) {
+			this.indexerClient = indexerClient;
+		} else {
+			// Lazy-load the default singleton to avoid import-time side effects in tests
+			this.indexerClient = null;
+			import("./indexer-client")
+				.then(({ indexerClient: client }) => {
+					this.indexerClient = client;
+				})
+				.catch(() => {
+					// indexer-client not available
+				});
+		}
 	}
 
 	/**
 	 * Decomposes a high-level prompt into atomic tasks using an LLM.
 	 */
 	public async decompose(prompt: string): Promise<DecompositionResult> {
+		// Fetch relevant memories for cognitive injection
+		const memoryBlock = await this.fetchMemoryBlock(prompt);
+
 		const messages: LLMMessage[] = [
 			{
 				role: "system",
 				content: `You are a task decomposition engine. Given a user request, break it down into atomic, actionable tasks.
-
+${memoryBlock}
 Output format: Return a JSON object with a "tasks" array. Each task must have:
 - id: A short kebab-case identifier (e.g., "setup-deps", "impl-core")
 - description: Clear description of what to do
@@ -153,6 +190,9 @@ Example:
 			);
 		}
 
+		// Inject indexer context — one broad search over the prompt, then per-task blast radius
+		parsed.tasks = await this.injectIndexerContext(parsed.tasks, prompt);
+
 		// Enhance file estimation using MCP (GitNexus + cocoindex-code) if available
 		parsed.tasks = await this.enhanceWithMCP(parsed.tasks, prompt);
 
@@ -160,6 +200,99 @@ Example:
 			tasks: parsed.tasks,
 			originalPrompt: prompt,
 		};
+	}
+
+	/**
+	 * Fetches relevant memories and formats them for cognitive injection.
+	 * Returns empty string if indexer unavailable or no memories found.
+	 */
+	private async fetchMemoryBlock(prompt: string): Promise<string> {
+		if (!this.indexerClient) {
+			return "";
+		}
+
+		try {
+			return await fetchAndFormatMemories(prompt, this.indexerClient.searchMemory.bind(this.indexerClient));
+		} catch (error) {
+			// Graceful degradation - log and continue without memories
+			await this.ledger.log(
+				"memory_injection_skipped",
+				{ reason: "fetch_failed", error: (error as Error).message },
+				"warning",
+			);
+			return "";
+		}
+	}
+
+	/**
+	 * Injects indexer-derived context into each task.
+	 * Performs one broad semantic search over the prompt, then fetches blast radius
+	 * per task based on the task's primary file target.
+	 * Fails gracefully — if the daemon is unreachable, tasks are returned unchanged.
+	 */
+	private async injectIndexerContext(tasks: DecomposedTask[], prompt: string): Promise<DecomposedTask[]> {
+		const client = this.indexerClient;
+		if (!client) {
+			return tasks;
+		}
+
+		let searchHits: SearchResult[] = [];
+		let injectedCount = 0;
+		const startMs = Date.now();
+
+		try {
+			// One broad search over the full prompt — shared across all tasks
+			searchHits = await client.search(prompt, 10);
+		} catch (err) {
+			// Daemon unreachable or search failed — degrade gracefully
+			await this.ledger.log(
+				"indexer_context_skipped",
+				{ reason: "search_failed", error: (err as Error).message },
+				"warning",
+			);
+			return tasks;
+		}
+
+		const mappedHits = searchHits.map((hit) => ({
+			filePath: hit.metadata.file_path,
+			functionName: hit.metadata.function_name,
+			line: hit.metadata.line,
+			score: 1 - hit.distance, // distance → similarity score
+		}));
+
+		// Per-task blast radius using the task's primary file target
+		for (const task of tasks) {
+			const primaryTarget = task.files?.[0];
+			let blastRadius: string[] = [];
+
+			if (primaryTarget) {
+				try {
+					const result = await client.getBlastRadius(primaryTarget);
+					blastRadius = result.files;
+				} catch {
+					// Blast radius unavailable for this target — leave empty
+				}
+			}
+
+			task.indexerContext = {
+				searchHits: mappedHits,
+				blastRadius,
+			};
+			injectedCount++;
+		}
+
+		await this.ledger.log(
+			"indexer_context_injected",
+			{
+				prompt: prompt.slice(0, 120),
+				searchHits: mappedHits.length,
+				tasksEnriched: injectedCount,
+				durationMs: Date.now() - startMs,
+			},
+			"info",
+		);
+
+		return tasks;
 	}
 
 	/**

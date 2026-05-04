@@ -1,2 +1,0 @@
-{"id":"d6016f8c-522c-44ea-bd00-cf4622613549","timestamp":"2026-05-03T16:40:58.785Z","type":"provider_selected","severity":"info","payload":{"provider":"gemini-api","message":"Routing request to gemini-api"},"metadata":{"provider":"gemini-api"}}
-{"id":"321eb205-597c-42f9-9ffc-580ad620a893","timestamp":"2026-05-03T16:40:58.786Z","type":"provider_selected","severity":"info","payload":{"provider":"opencode-go","message":"Routing request to opencode-go"},"metadata":{"provider":"opencode-go"}}

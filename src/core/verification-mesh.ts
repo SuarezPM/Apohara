@@ -15,6 +15,7 @@ import { EventLedger } from "./ledger";
 import { routeTaskWithFallback } from "./agent-router";
 import { ProviderRouter } from "../providers/router";
 import type { ProviderId, TaskRole } from "./types";
+import type { IndexerClient, FileSignaturesResponse } from "./indexer-client";
 
 export interface VerificationPolicy {
   enabled: boolean;
@@ -68,6 +69,7 @@ export class VerificationMesh {
   private sessionVerificationCost: number = 0;
   private meshEnabled: boolean = true;
   private routerFn: RouterFn;
+  private indexerClient: IndexerClient | null;
 
   private defaultPolicy: VerificationPolicy = {
     enabled: true,
@@ -76,10 +78,14 @@ export class VerificationMesh {
     min_complexity: "high",
   };
 
-  /** @param routerFn - Injectable router for testing; defaults to routeTaskWithFallback */
-  constructor(routerFn?: RouterFn) {
+  /**
+   * @param routerFn - Injectable router for testing; defaults to routeTaskWithFallback
+   * @param indexerClient - Injectable indexer client for context compression; null disables it
+   */
+  constructor(routerFn?: RouterFn, indexerClient?: IndexerClient | null) {
     this.ledger = new EventLedger();
     this.routerFn = routerFn ?? routeTaskWithFallback;
+    this.indexerClient = indexerClient ?? null;
   }
 
   /**
@@ -307,6 +313,111 @@ export class VerificationMesh {
   }
 
   /**
+   * Extract modified file paths from agent response.
+   * Looks for:
+   * 1. A `modifiedFiles` field in the response
+   * 2. Diff-style patterns like "+++ b/path/to/file"
+   */
+  private extractModifiedFiles(response: any): string[] {
+    const content = this.extractContent(response);
+    const files = new Set<string>();
+
+    // Try to find modifiedFiles field if present
+    if (response && typeof response === "object") {
+      if (response.modifiedFiles && Array.isArray(response.modifiedFiles)) {
+        for (const file of response.modifiedFiles) {
+          if (typeof file === "string") {
+            files.add(file);
+          }
+        }
+      }
+    }
+
+    // Also look for diff-style patterns: "+++ b/path/to/file"
+    const diffPattern = /^\+\+\+ b\/(.+)$/gm;
+    let match;
+    while ((match = diffPattern.exec(content)) !== null) {
+      files.add(match[1]);
+    }
+
+    // Look for other common patterns
+    // Pattern: "File: path/to/file" or "file: path/to/file"
+    const filePattern = /(?:^|\n)(?:File|file):\s*(.+?)(?:\r?\n|$)/g;
+    while ((match = filePattern.exec(content)) !== null) {
+      const filePath = match[1].trim();
+      // Filter out obvious non-file content
+      if (filePath.length > 0 && !filePath.includes(" ") && filePath.includes(".")) {
+        files.add(filePath);
+      }
+    }
+
+    return Array.from(files);
+  }
+
+  /**
+   * Fetch file signatures from indexer for context compression.
+   * Returns signatures or null if indexer is unavailable or fails.
+   */
+  private async fetchFileSignatures(filePaths: string[]): Promise<Map<string, FileSignaturesResponse> | null> {
+    if (!this.indexerClient) {
+      return null;
+    }
+
+    const signatures = new Map<string, FileSignaturesResponse>();
+    const failedPaths: string[] = [];
+
+    for (const filePath of filePaths) {
+      try {
+        const result = await this.indexerClient.getFileSignatures(filePath);
+        signatures.set(filePath, result);
+      } catch (err) {
+        // Log but continue - we'll use fallback for failed files
+        failedPaths.push(filePath);
+      }
+    }
+
+    // Log compression event with results
+    await this.ledger.log(
+      "arbiter_context_compressed",
+      {
+        filePaths,
+        successCount: signatures.size,
+        failedCount: failedPaths.length,
+        failedPaths: failedPaths.length > 0 ? failedPaths : undefined,
+      },
+      "info",
+    );
+
+    return signatures.size > 0 ? signatures : null;
+  }
+
+  /**
+   * Build compressed context from file signatures.
+   * Returns a formatted string with signatures for each file.
+   */
+  private buildCompressedContext(signatures: Map<string, FileSignaturesResponse>): string {
+    const sections: string[] = [];
+
+    for (const [filePath, response] of signatures) {
+      if (response.signatures.length === 0) {
+        continue;
+      }
+
+      const fileSection = [`=== ${filePath} ===`];
+
+      for (const sig of response.signatures) {
+        const params = sig.parameters || "";
+        const returnType = sig.return_type ? `: ${sig.return_type}` : "";
+        fileSection.push(`  ${sig.name}(${params})${returnType} [L${sig.line}]`);
+      }
+
+      sections.push(fileSection.join("\n"));
+    }
+
+    return sections.join("\n\n");
+  }
+
+  /**
    * Run Arbiter: LLM-based comparison of two outputs.
    * Sends both outputs to an arbiter model and asks it to pick the better one.
    * Falls back to structural comparison if the LLM call fails.
@@ -335,12 +446,40 @@ export class VerificationMesh {
       };
     }
 
+    // Extract modified files from both responses
+    const filesA = this.extractModifiedFiles(responseA);
+    const filesB = this.extractModifiedFiles(responseB);
+    const allFiles = [...new Set([...filesA, ...filesB])];
+
+    // Try to fetch file signatures for context compression
+    let compressedContext: string | null = null;
+    let contextSource: "signatures" | "full" = "full";
+
+    if (allFiles.length > 0 && this.indexerClient) {
+      try {
+        const signatures = await this.fetchFileSignatures(allFiles);
+        if (signatures) {
+          compressedContext = this.buildCompressedContext(signatures);
+          contextSource = "signatures";
+        }
+      } catch {
+        // Fallback to full content if signature fetching fails
+        contextSource = "full";
+      }
+    }
+
     // Outputs differ — invoke LLM arbiter
     try {
       const taskDescription =
         task.messages.find((m) => m.role === "user")?.content ||
         task.messages[0]?.content ||
         "Unknown task";
+
+      // Build the arbiter prompt with compressed context if available
+      let contextBlock = "";
+      if (compressedContext) {
+        contextBlock = `\n\n--- FILE SIGNATURES (AST) ---\n${compressedContext}\n--- END SIGNATURES ---`;
+      }
 
       const arbiterResult = await this.routerFn("verification", {
         id: `arbiter-${task.id || "unknown"}`,
@@ -352,7 +491,7 @@ export class VerificationMesh {
           },
           {
             role: "user",
-            content: `Task: ${taskDescription}\n\n--- OUTPUT A ---\n${contentA}\n\n--- OUTPUT B ---\n${contentB}\n\nWhich output is better? Reply with JSON only.`,
+            content: `Task: ${taskDescription}${contextBlock}\n\n--- OUTPUT A ---\n${contentA}\n\n--- OUTPUT B ---\n${contentB}\n\nWhich output is better? Reply with JSON only.`,
           },
         ],
       });
@@ -362,7 +501,9 @@ export class VerificationMesh {
 
       return {
         verdict: parsed.verdict,
-        reasoning: parsed.reasoning,
+        reasoning: contextSource === "signatures"
+          ? `${parsed.reasoning} (evaluated using AST signatures)`
+          : parsed.reasoning,
         provider: arbiterResult.provider,
       };
     } catch (error) {
