@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tracing::{debug, warn};
 
 /// A directed graph representing file dependencies
 ///
@@ -74,11 +75,15 @@ impl DependencyGraph {
     /// the given target, either directly or indirectly.
     ///
     /// Returns an empty set if the target is not in the graph.
-    /// Uses iterative DFS to handle large graphs efficiently.
+    /// Uses iterative BFS to handle large graphs efficiently.
+    /// Implements cycle detection via visited set to handle circular dependencies.
     pub fn get_blast_radius(&self, target: impl Into<PathBuf>) -> Vec<PathBuf> {
         let target = target.into();
         
+        debug!("Computing blast radius for target: {:?}", target);
+        
         if !self.nodes.contains_key(&target) {
+            debug!("Target {:?} not in graph, returning empty", target);
             return Vec::new();
         }
         
@@ -86,6 +91,10 @@ impl DependencyGraph {
         let mut reverse_edges: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
         for (source, deps) in &self.edges {
             for dep in deps {
+                // Detect self-loops
+                if source == dep {
+                    warn!("Self-loop detected: {:?} imports itself", source);
+                }
                 reverse_edges
                     .entry(dep.clone())
                     .or_insert_with(Vec::new)
@@ -95,17 +104,21 @@ impl DependencyGraph {
         
         // If target has no dependents, return empty
         let Some(initial_dependents) = reverse_edges.get(&target) else {
+            debug!("Target {:?} has no dependents", target);
             return Vec::new();
         };
         
         // BFS to find all transitively dependent files
         let mut visited: HashMap<PathBuf, ()> = HashMap::new();
         let mut queue: Vec<PathBuf> = initial_dependents.clone();
+        let mut depth: usize = 0;
         
         // Mark initial dependents as visited
         for dep in initial_dependents {
             visited.insert(dep.clone(), ());
         }
+        
+        debug!("Starting BFS traversal with {} initial dependents", initial_dependents.len());
         
         while let Some(current) = queue.pop() {
             // Get dependents of current node
@@ -114,10 +127,13 @@ impl DependencyGraph {
                     if !visited.contains_key(dep) {
                         visited.insert(dep.clone(), ());
                         queue.push(dep.clone());
+                        depth += 1;
                     }
                 }
             }
         }
+        
+        debug!("BFS traversal complete: visited {} files at depth {}", visited.len(), depth);
         
         // Convert to sorted vector for deterministic output
         let mut result: Vec<PathBuf> = visited.into_keys().collect();
@@ -269,5 +285,45 @@ mod tests {
         
         assert_eq!(graph.file_count(), 3);
         assert_eq!(graph.edge_count(), 3);
+    }
+
+    #[test]
+    fn test_self_loop_handling() {
+        let mut graph = DependencyGraph::new();
+        graph.add_file("src/cyclic.rs");
+        
+        // Self-loop: file imports itself
+        graph.add_dependency("src/cyclic.rs", "src/cyclic.rs");
+        
+        // Should not cause infinite loop - visited set prevents it
+        let deps = graph.get_direct_dependencies("src/cyclic.rs");
+        assert_eq!(deps.len(), 1);
+        assert!(deps.contains(&PathBuf::from("src/cyclic.rs")));
+        
+        // Blast radius of self-referencing file includes itself
+        // (it transitively "depends" on itself via self-loop)
+        let blast = graph.get_blast_radius("src/cyclic.rs");
+        assert!(blast.contains(&PathBuf::from("src/cyclic.rs")));
+    }
+
+    #[test]
+    fn test_circular_dependency_handling() {
+        let mut graph = DependencyGraph::new();
+        graph.add_file("src/a.rs");
+        graph.add_file("src/b.rs");
+        
+        // Circular: a imports b, b imports a
+        graph.add_dependency("src/a.rs", "src/b.rs");
+        graph.add_dependency("src/b.rs", "src/a.rs");
+        
+        // Direct dependencies work
+        let deps_a = graph.get_direct_dependencies("src/a.rs");
+        let deps_b = graph.get_direct_dependencies("src/b.rs");
+        assert_eq!(deps_a.len(), 1);
+        assert_eq!(deps_b.len(), 1);
+        
+        // Blast radius of a should include b (and stop due to visited set)
+        let blast = graph.get_blast_radius("src/a.rs");
+        assert!(blast.contains(&PathBuf::from("src/b.rs")));
     }
 }
