@@ -1,0 +1,3 @@
+[profile.release-linux]
+inherits = "release"
+rustflags = ["-C", "target-feature=+crt-static"]
