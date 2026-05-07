@@ -80,6 +80,40 @@ function extractKey(entry: unknown): string | null {
 }
 
 /**
+ * Pre-populates process.env with credentials from ~/.apohara/credentials.json.
+ * Called at CLI startup BEFORE ProviderRouter instantiation.
+ * Respects precedence: existing env vars are NOT overwritten.
+ * Returns the count of injected credentials for logging.
+ */
+export function injectCredentials(): { injected: number; skipped: number; providers: string[] } {
+	const parsed = readCredentialsFileSync();
+	if (!parsed) {
+		return { injected: 0, skipped: 0, providers: [] };
+	}
+
+	let injected = 0;
+	let skipped = 0;
+	const providers: string[] = [];
+
+	for (const [envKey, rawValue] of Object.entries(parsed)) {
+		// Skip non-string values and empty strings
+		const value = extractKey(rawValue);
+		if (!value) continue;
+
+		// Only inject if the env var is not already set
+		if (!process.env[envKey] || process.env[envKey]!.length === 0) {
+			process.env[envKey] = value;
+			injected++;
+			providers.push(envKey);
+		} else {
+			skipped++;
+		}
+	}
+
+	return { injected, skipped, providers };
+}
+
+/**
  * Resolves the API key for a given provider using the following precedence:
  * 1. ~/.apohara/credentials.json
  * 2. Environment variable (PROVIDER_API_KEY uppercase with underscores)
