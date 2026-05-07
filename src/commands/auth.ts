@@ -7,6 +7,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { generateCodeVerifier, generateCodeChallenge, calculateExpiresAt } from "../lib/oauth-pkce.js";
+import { password } from "@inquirer/prompts";
+import { PROVIDER_TO_ENV_MAP } from "../core/credentials.js";
 
 // Claude.ai OAuth configuration
 const CLAUDE_OAUTH_CONFIG = {
@@ -96,7 +98,13 @@ function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof 
 			console.log(`[Auth] Callback server listening on http://localhost:${port}`);
 		});
 
-		server.on("error", reject);
+		server.on("error", (err: any) => {
+			if (err.code === 'EADDRINUSE') {
+				reject(new Error(`OAuth callback port ${port} is already in use. Please free the port (e.g., 'killall node') and try again.`));
+			} else {
+				reject(err);
+			}
+		});
 
 		// Timeout after 5 minutes
 		setTimeout(() => {
@@ -156,8 +164,8 @@ async function loginClaude(): Promise<void> {
 
 	console.log("[Auth] Generated PKCE code_verifier and code_challenge");
 
-	// Find an available port for callback
-	const callbackPort = await findAvailablePort(28563, 28599);
+	// Use exactly port 28563 for callback
+	const callbackPort = 28563;
 	const redirectUri = `http://localhost:${callbackPort}/callback`;
 
 	console.log(`[Auth] Starting callback server on port ${callbackPort}...`);
@@ -249,81 +257,75 @@ async function loginClaude(): Promise<void> {
 	}
 }
 
-/**
- * Find an available port in a range
- */
-async function findAvailablePort(start: number, end: number): Promise<number> {
-	const net = require("net");
-
-	for (let port = start; port <= end; port++) {
-		const available = await new Promise<boolean>((resolve) => {
-			const server = net.createServer();
-			server.once("error", () => resolve(false));
-			server.once("listening", () => {
-				server.close();
-				resolve(true);
-			});
-			server.listen(port);
-		});
-
-		if (available) {
-			return port;
-		}
-	}
-
-	throw new Error("No available port found in range");
-}
-
-/**
- * Show authentication status for a provider
- */
-async function showStatus(provider: string): Promise<void> {
-	const tokenPath = getOAuthCredentialsPath(provider);
-
-	try {
-		const content = await fs.readFile(tokenPath, "utf-8");
-		const token = JSON.parse(content);
-
-		const expiresAt = new Date(token.expires_at);
-		const now = new Date();
-		const isExpired = expiresAt < now;
-		const expiresIn = Math.round((expiresAt.getTime() - now.getTime()) / 1000 / 60); // minutes
-
-		console.log(`\n📋 ${provider} Authentication Status:`);
-		console.log(`   Token type: ${token.token_type}`);
-		console.log(`   Expires at: ${expiresAt.toLocaleString()}`);
-		console.log(`   Status: ${isExpired ? "❌ Expired" : "✅ Valid"}`);
-
-		if (!isExpired && expiresIn < 60) {
-			console.log(`   Expires in: ${expiresIn} minutes`);
-		} else if (!isExpired) {
-			const hours = Math.round(expiresIn / 60);
-			console.log(`   Expires in: ${hours} hours`);
-		}
-
-		if (token.refresh_token) {
-			console.log(`   Refresh token: ✅ Available`);
-		} else {
-			console.log(`   Refresh token: ❌ Not available`);
-		}
-
-		if (token.scope) {
-			console.log(`   Scope: ${token.scope}`);
-		}
-
-		console.log("");
-
-	} catch {
-		console.log(`\n📋 ${provider} Authentication Status:`);
-		console.log(`   Status: ❌ Not authenticated`);
-		console.log(`   Run: apohara auth login ${provider}`);
-		console.log("");
-	}
-}
-
 // Export auth command
 export const authCommand = new Command("auth")
-	.description("Manage OAuth authentication for Claude.ai and other providers");
+	.description("Manage authentication for providers (API Keys and OAuth)");
+
+// Key subcommand
+authCommand
+	.command("key <provider>")
+	.description("Configure an API key for a provider")
+	.action(async (provider: string) => {
+		const envKey = PROVIDER_TO_ENV_MAP[provider];
+		if (!envKey) {
+			console.error(`❌ Unknown provider: ${provider}`);
+			console.log(`   Supported providers: ${Object.keys(PROVIDER_TO_ENV_MAP).join(", ")}`);
+			process.exit(1);
+		}
+
+		const apiKey = await password({
+			message: `Enter API key for ${provider}:`,
+			mask: "*"
+		});
+
+		if (!apiKey) {
+			console.error("❌ No API key provided.");
+			process.exit(1);
+		}
+
+		console.log(`[Auth] Validating key...`);
+		try {
+			const baseUrl = provider === "anthropic" || provider === "claude-ai" 
+				? "https://api.anthropic.com/v1/models" 
+				: "https://api.openai.com/v1/models";
+			const headers: Record<string, string> = {
+				"Authorization": `Bearer ${apiKey}`,
+			};
+			if (provider === "anthropic" || provider === "claude-ai") {
+				headers["x-api-key"] = apiKey;
+				headers["anthropic-version"] = "2023-06-01";
+			}
+			const response = await fetch(baseUrl, { headers, method: "GET" }).catch(() => ({ ok: false }));
+			if (!response.ok) {
+				console.warn(`⚠️  Warning: API key validation failed or timed out. Saving anyway.`);
+			} else {
+				console.log(`✅ API key validation successful.`);
+			}
+		} catch (e) {
+			console.warn(`⚠️  Warning: API key validation failed or timed out. Saving anyway.`);
+		}
+
+		const xdgConfig = process.env.XDG_CONFIG_HOME;
+		const credPath = xdgConfig
+			? path.join(xdgConfig, "apohara", "credentials.json")
+			: path.join(os.homedir(), ".apohara", "credentials.json");
+
+		let credentials: Record<string, any> = {};
+		try {
+			const content = await fs.readFile(credPath, "utf-8");
+			credentials = JSON.parse(content);
+		} catch {
+			// Ignore if file doesn't exist
+		}
+
+		credentials[envKey] = apiKey;
+
+		await fs.mkdir(path.dirname(credPath), { recursive: true });
+		await fs.writeFile(credPath, JSON.stringify(credentials, null, 2), "utf-8");
+		await fs.chmod(credPath, 0o600);
+
+		console.log(`✅ API key saved for ${provider} in ~/.apohara/credentials.json`);
+	});
 
 // Login subcommand
 authCommand
@@ -333,14 +335,16 @@ authCommand
 		console.log(`[Auth] Login command invoked for provider: ${provider}`);
 
 		if (provider === "claude") {
-			await loginClaude();
+			try {
+				await loginClaude();
+			} catch (error: any) {
+				console.error(error.message);
+				process.exit(1);
+			}
 		} else if (provider === "gemini") {
-			// Import and use gemini OAuth
 			const { loginWithGoogleOAuth, saveApoharaToken, loadClientId } = await import("../lib/oauth/gemini.js");
-			
 			console.log("[Auth] Starting Gemini OAuth login...");
 			
-			// Load client ID from credentials
 			const credPath = process.env.XDG_CONFIG_HOME
 				? path.join(process.env.XDG_CONFIG_HOME, "apohara", "credentials.json")
 				: path.join(os.homedir(), ".apohara", "credentials.json");
@@ -360,12 +364,15 @@ authCommand
 				process.exit(1);
 			}
 
-			// Perform OAuth flow
-			const token = await loginWithGoogleOAuth(clientId);
-			await saveApoharaToken(token);
-			
-			console.log(`✅ Gemini authentication successful!`);
-			console.log(`   Expires at: ${new Date(token.expires_at).toLocaleString()}`);
+			try {
+				const token = await loginWithGoogleOAuth(clientId);
+				await saveApoharaToken(token);
+				console.log(`✅ Gemini authentication successful!`);
+				console.log(`   Expires at: ${new Date(token.expires_at).toLocaleString()}`);
+			} catch (error: any) {
+				console.error(error.message);
+				process.exit(1);
+			}
 		} else {
 			console.error(`❌ Unknown provider: ${provider}`);
 			console.log("   Supported providers: claude, gemini");
@@ -375,36 +382,134 @@ authCommand
 
 // Status subcommand
 authCommand
-	.command("status [provider]")
-	.description("Show authentication status (default: claude)")
-	.action(async (provider?: string) => {
-		const targetProvider = provider || "claude";
-		
-		if (targetProvider === "gemini") {
-			// Show gemini status using the gemini OAuth module
-			const { getGeminiTokenInfo } = await import("../lib/oauth/gemini.js");
-			
-			try {
-				const info = await getGeminiTokenInfo();
-				
-				console.log("\n📋 Gemini Authentication Status:");
-				console.log(`   Source: ${info.source || "none"}`);
-				
-				if (info.present) {
-					console.log(`   Token type: ${info.token_type}`);
-					console.log(`   Expires at: ${info.expires_at}`);
-					console.log(`   Status: ${info.is_expired ? "❌ Expired" : "✅ Valid"}`);
-					console.log(`   Refresh token: ${info.has_refresh_token ? "✅ Available" : "❌ Not available"}`);
-				} else {
-					console.log(`   Status: ❌ Not authenticated`);
-					console.log(`   Run: apohara auth login gemini`);
-				}
-				console.log("");
-			} catch (error) {
-				console.error("[Auth] Failed to get Gemini status:", error);
-			}
-			return;
+	.command("status")
+	.description("Show authentication status across all providers")
+	.option("--json", "Output raw JSON")
+	.action(async (options: { json?: boolean }) => {
+		const providersStatus: Record<string, any> = {};
+		const xdgConfig = process.env.XDG_CONFIG_HOME;
+		const credPath = xdgConfig
+			? path.join(xdgConfig, "apohara", "credentials.json")
+			: path.join(os.homedir(), ".apohara", "credentials.json");
+
+		let credentials: Record<string, any> = {};
+		try {
+			const content = await fs.readFile(credPath, "utf-8");
+			credentials = JSON.parse(content);
+		} catch {
+			// Ignored
 		}
-		
-		await showStatus(targetProvider);
+
+		for (const [provider, envKey] of Object.entries(PROVIDER_TO_ENV_MAP)) {
+			if (credentials[envKey] || credentials[provider]) {
+				providersStatus[provider] = { type: "API Key", status: "✅ Configured" };
+			}
+		}
+
+		const oauthProviders = ["claude", "gemini"];
+		for (const provider of oauthProviders) {
+			const tokenPath = getOAuthCredentialsPath(provider);
+			try {
+				const content = await fs.readFile(tokenPath, "utf-8");
+				const token = JSON.parse(content);
+				const expiresAt = new Date(token.expires_at);
+				const isExpired = expiresAt < new Date();
+				providersStatus[provider] = { type: "OAuth", status: isExpired ? "❌ Expired" : "✅ Valid", expires_at: token.expires_at };
+			} catch {
+				// Don't add to list if no file exists and we didn't add it as an API key either
+				if (!providersStatus[provider]) {
+					providersStatus[provider] = { type: "OAuth", status: "❌ Not authenticated" };
+				}
+			}
+		}
+
+		if (options.json) {
+			console.log(JSON.stringify(providersStatus, null, 2));
+		} else {
+			console.log(`\n📋 Authentication Status:`);
+			console.log(`-------------------------------------------------`);
+			console.log(`Provider`.padEnd(20) + `Type`.padEnd(15) + `Status`);
+			console.log(`-------------------------------------------------`);
+			for (const [provider, info] of Object.entries(providersStatus)) {
+				console.log(`${provider.padEnd(20)}${info.type.padEnd(15)}${info.status}`);
+			}
+			console.log(`-------------------------------------------------\n`);
+		}
+	});
+
+// Refresh subcommand
+authCommand
+	.command("refresh <provider>")
+	.description("Refresh OAuth token for a provider")
+	.action(async (provider: string) => {
+		if (provider === "claude" || provider === "gemini") {
+			console.log(`[Auth] Attempting to refresh OAuth token for ${provider}...`);
+			const { resolveOAuthToken } = await import("../core/credentials.js");
+			const providerMap: Record<string, string> = { "claude": "claude-ai", "gemini": "gemini-ai" };
+			const actualProvider = providerMap[provider] || provider;
+			const token = await resolveOAuthToken(actualProvider);
+			if (token) {
+				console.log(`✅ Successfully refreshed token for ${provider}.`);
+			} else {
+				console.error(`❌ Failed to refresh token for ${provider}. Are you logged in?`);
+			}
+		} else if (PROVIDER_TO_ENV_MAP[provider]) {
+			console.log(`[Auth] ${provider} uses an API key. API keys do not need manual refresh.`);
+		} else {
+			console.error(`❌ Unknown provider: ${provider}`);
+			process.exit(1);
+		}
+	});
+
+// Revoke subcommand
+authCommand
+	.command("revoke <provider>")
+	.description("Revoke authentication for a provider locally")
+	.action(async (provider: string) => {
+		let removed = false;
+
+		const tokenPath = getOAuthCredentialsPath(provider);
+		try {
+			await fs.unlink(tokenPath);
+			console.log(`[Auth] Deleted OAuth token for ${provider}`);
+			removed = true;
+		} catch {
+			// Ignored
+		}
+
+		const xdgConfig = process.env.XDG_CONFIG_HOME;
+		const credPath = xdgConfig
+			? path.join(xdgConfig, "apohara", "credentials.json")
+			: path.join(os.homedir(), ".apohara", "credentials.json");
+
+		try {
+			const content = await fs.readFile(credPath, "utf-8");
+			const credentials = JSON.parse(content);
+			let changed = false;
+
+			if (credentials[provider]) {
+				delete credentials[provider];
+				changed = true;
+			}
+			
+			const envKey = PROVIDER_TO_ENV_MAP[provider];
+			if (envKey && credentials[envKey]) {
+				delete credentials[envKey];
+				changed = true;
+			}
+
+			if (changed) {
+				await fs.writeFile(credPath, JSON.stringify(credentials, null, 2), "utf-8");
+				console.log(`[Auth] Removed API key for ${provider} from credentials.json`);
+				removed = true;
+			}
+		} catch {
+			// Ignored
+		}
+
+		if (removed) {
+			console.log(`✅ Successfully revoked access for ${provider} locally.`);
+		} else {
+			console.log(`[Auth] No local credentials found for ${provider}.`);
+		}
 	});
