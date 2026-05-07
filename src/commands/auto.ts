@@ -13,6 +13,7 @@ import { GitHubClient } from "../providers/github";
 import { ProviderRouter } from "../providers/router";
 import { Isolator } from "../core/sandbox";
 import { VerificationMesh } from "../core/verification-mesh";
+import { injectCredentials } from "../core/credentials.js";
 
 export const autoCommand = new Command("auto")
 	.description(
@@ -64,6 +65,14 @@ export const autoCommand = new Command("auto")
 				console.log(
 					`🔒 IMPROVE-SELF MODE: sandbox test execution + mesh verification + auto-commit`,
 				);
+			}
+
+			// 0) Inject credentials from ~/.apohara/credentials.json into process.env
+			// This bridges the config wizard output to the ProviderRouter's env-based auth.
+			// Existing OS environment variables take precedence (not overwritten).
+			const credResult = injectCredentials();
+			if (credResult.injected > 0) {
+				console.log(`🔑 Loaded ${credResult.injected} credential(s) from config: ${credResult.providers.join(", ")}`);
 			}
 
 			// 1) Initialize core components
