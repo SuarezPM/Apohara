@@ -51,7 +51,6 @@ Apohara ("El que crea" en guaraní) is a multi-agent AI orchestration framework 
 - [ ] **ROUTE-01**: Implement Thompson Sampling in Capability Manifest for autonomous provider learning
 - [ ] **ROUTE-02**: Implement 5% canary traffic allocation for provider exploration
 - [ ] **ROUTE-03**: Implement exponential moving average score updates from real execution outcomes
-- [ ] **MESH-01**: Implement AST signature injection in cross-verification arbiter
 - [ ] **MESH-02**: Implement configurable verification policy (which tasks trigger mesh)
 - [ ] **LEDGER-01**: Add SHA-256 hashes to Event Ledger entries for deterministic replay
 - [ ] **LEDGER-02**: Implement replay mode — re-execute historical runs at temperature 0
@@ -61,10 +60,12 @@ Apohara ("El que crea" en guaraní) is a multi-agent AI orchestration framework 
 - [ ] **DAG-02**: Implement backpressure when worktree pool is full
 - [ ] **TUI-01**: Add real-time cost display per agent in dashboard
 - [ ] **TUI-02**: Add swarm block visualization (which agent is touching which files)
-- [ ] **MEMORY-01**: Replace Mem0 with Engram (local-first SQLite + FTS5, MIT, no API keys)
+
 
 ### Out of Scope
 
+- **MEMORY-01** — Already shipped. Long-term memory uses native redb Rust daemon + Nomic BERT embeddings. No migration needed
+- **MESH-01** — AST signature injection already completed and tested
 - **Ratatui terminal renderer** — Deferred to Phase Gamma/Delta. Current Ink TUI has 108 passing tests. Rebuilding violates "Simplicity First"
 - **40+ providers** — Stabilize 21 first. Quality over quantity. Thompson Sampling must prove itself on current roster
 - **IDE integration** — Apohara is CLI-first. Not competing with Cursor/VS Code
@@ -100,7 +101,7 @@ Apohara ("El que crea" en guaraní) is a multi-agent AI orchestration framework 
 | Stabilize 21 providers over expanding to 40 | Quality > quantity. Prove Thompson Sampling first | — Pending |
 | Wire CredentialResolver as P0 | Without working credentials, swarm can't execute real tasks | — Pending |
 | GSD1 as workflow protocol | Proven phase execution framework, integrates naturally | — Pending |
-| Replace Mem0 with Engram | Local-first (SQLite+FTS5), MIT license, no API keys needed | — Pending |
+| Keep redb + Nomic BERT memory | Already shipped, local-first, no API keys needed | ✓ Shipped |
 | Write-Only Room legal strategy | Never read AGPL/unlicensed code. Maximizes IP cleanliness for acquisition | ✓ Good |
 
 ## Evolution
