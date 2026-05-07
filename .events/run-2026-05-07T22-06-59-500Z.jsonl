@@ -1,0 +1,3 @@
+{"id":"e703cf81-0923-43c9-b686-99473b962f44","timestamp":"2026-05-07T22:06:59.500Z","type":"provider_selected","severity":"info","payload":{"provider":"gemini-api","message":"Routing request to gemini-api"},"metadata":{"provider":"gemini-api"}}
+{"id":"baa1787b-c2eb-45fd-88d0-84c15dd4f821","timestamp":"2026-05-07T22:06:59.500Z","type":"provider_selected","severity":"info","payload":{"provider":"opencode-go","message":"Routing request to opencode-go"},"metadata":{"provider":"opencode-go"}}
+{"id":"24e6b7d4-006f-4649-96dd-2c673eb213a4","timestamp":"2026-05-07T22:06:59.500Z","type":"provider_selected","severity":"info","payload":{"provider":"opencode-go","message":"Routing request to opencode-go"},"metadata":{"provider":"opencode-go"}}

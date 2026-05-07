@@ -257,18 +257,18 @@ export function getBestModelsForRole(role: TaskRole): ModelCapability[] {
 // Role-to-provider mapping with intelligent selection
 // Uses Groq as primary (available via GROQ_API_KEY) with fallbacks
 export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
-	research: "tavily",        // Tavily for real-time web search/research
-	planning: "groq",          // Groq for planning (fast, reliable, available)
-	execution: "groq",         // Groq for execution (fast inference)
-	verification: "groq",      // Groq for verification
+	research: "tavily",
+	planning: "moonshot-k2.6",
+	execution: "deepseek-v4",
+	verification: "deepseek-v4",
 };
 
 // Fallback provider order for each role (primary + fallbacks)
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
-	research: ["tavily", "gemini", "gemini-api", "anthropic-api", "moonshot-k2.6", "groq", "qwen3.6-plus"],
-	planning: ["anthropic-api", "gemini-api", "groq", "moonshot-k2.6", "qwen3.6-plus", "moonshot-k2.5", "qwen3.5-plus", "kiro-ai", "deepseek", "mistral"],
-	execution: ["anthropic-api", "opencode-go", "groq", "deepseek-v4", "moonshot-k2.6", "minimax-m2.7", "qwen3.6-plus", "kiro-ai", "deepseek", "mistral", "openai"],
-	verification: ["anthropic-api", "gemini-api", "groq", "deepseek-v4", "moonshot-k2.6", "kiro-ai", "deepseek", "openai"],
+	research: ["tavily", "gemini", "moonshot-k2.6"],
+	planning: ["moonshot-k2.6", "qwen3.6-plus", "gemini", "glm-deepinfra"],
+	execution: ["deepseek-v4", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7"],
+	verification: ["deepseek-v4", "deepseek", "moonshot-k2.5"],
 };
 
 export interface Task {
@@ -278,6 +278,10 @@ export interface Task {
 	status: "pending" | "in_progress" | "completed" | "failed";
 	createdAt: Date;
 	updatedAt: Date;
+	/** Files this task claims ownership of (writes to) */
+	targetFiles?: string[];
+	/** Dependencies injected by the system (e.g. collision serialization) */
+	implicitDependencies?: string[];
 }
 
 export type EventSeverity = "info" | "warning" | "error";
@@ -303,6 +307,7 @@ export interface EventLog {
 		toProvider?: ProviderId;
 		errorReason?: string;
 		fallbackProviders?: ProviderId[]; // List of fallback providers attempted
+		capabilityScore?: number;
 	};
 }
 

@@ -39,6 +39,19 @@ export interface DecomposedTask {
 	dependencies: string[];
 	role: TaskRole;
 	files?: string[];
+	/**
+	 * Relative file paths this task will CREATE or MODIFY (writes only, not reads).
+	 * Empty array = no file ownership = freely parallelizable.
+	 * Declared by the LLM during decomposition; used by injectCollisionEdges() to
+	 * serialize tasks that would modify the same files.
+	 */
+	targetFiles: string[];
+	/**
+	 * Dependency edges injected by DAG collision detection (not declared by the LLM).
+	 * Subset of `dependencies`. Stored separately for observability — the ledger can
+	 * distinguish user-declared deps from system-injected serialization edges.
+	 */
+	implicitDependencies?: string[];
 	/** Indexer-derived context injected at orchestration layer. Agents receive this as-is. */
 	indexerContext?: IndexerContext;
 }
@@ -46,6 +59,55 @@ export interface DecomposedTask {
 export interface DecompositionResult {
 	tasks: DecomposedTask[];
 	originalPrompt: string;
+}
+
+/**
+ * Post-processing pass: detect tasks that share targetFiles and inject implicit
+ * dependency edges to serialize them, preventing merge conflicts during parallel execution.
+ *
+ * Algorithm: O(n²) pair comparison — acceptable for 5–20 task DAGs.
+ * Tie-breaker for determinism: alphabetical task ID (lower ID = higher priority = runs first).
+ *
+ * A task with targetFiles: [] claims no file ownership and is freely parallelizable.
+ * Injected edges are recorded in implicitDependencies for observability.
+ */
+export function injectCollisionEdges(tasks: DecomposedTask[]): DecomposedTask[] {
+	// Work on a sorted copy (lower ID = higher scheduling priority)
+	const sorted = [...tasks].sort((a, b) => a.id.localeCompare(b.id));
+
+	for (let i = 0; i < sorted.length; i++) {
+		for (let j = i + 1; j < sorted.length; j++) {
+			const taskA = sorted[i]; // lower ID → higher priority, runs first
+			const taskB = sorted[j]; // higher ID → will wait for A if collision
+
+			const filesA = new Set(taskA.targetFiles ?? []);
+			if (filesA.size === 0) continue; // A claims no files → freely parallelizable
+
+			const collidingFiles = (taskB.targetFiles ?? []).filter((f) => filesA.has(f));
+			if (collidingFiles.length === 0) continue; // No shared files
+
+			// Check if a dependency edge already exists in either direction
+			const alreadyLinked =
+				taskB.dependencies.includes(taskA.id) ||
+				taskA.dependencies.includes(taskB.id);
+
+			if (!alreadyLinked) {
+				// Inject: B must wait for A (A has lower/earlier ID)
+				taskB.dependencies = [...taskB.dependencies, taskA.id];
+				taskB.implicitDependencies = [
+					...(taskB.implicitDependencies ?? []),
+					taskA.id,
+				];
+
+				console.log(
+					`[DAG] Collision detected — serializing: ${taskB.id} waits for ${taskA.id}` +
+					` (shared files: ${collidingFiles.join(", ")})`,
+				);
+			}
+		}
+	}
+
+	return sorted;
 }
 
 export class TaskDecomposer {
@@ -89,12 +151,19 @@ Output format: Return a JSON object with a "tasks" array. Each task must have:
 - description: Clear description of what to do
 - estimatedComplexity: "low", "medium", or "high"
 - dependencies: Array of task IDs that must complete before this one
-- role: One of "research", "planning", "execution", or "verification". 
+- role: One of "research", "planning", "execution", or "verification".
   - "research": Tasks that gather information, search docs, or explore codebase
   - "planning": Tasks that decompose milestones, create plans, or design architecture
   - "execution": Tasks that implement code, write files, or modify the codebase
   - "verification": Tasks that test, review, audit, or validate implementations
 - files: Array of file paths likely to be created or modified (e.g., "src/main.ts", "tests/integration.test.ts"). Be specific but reasonable. Empty array if no files needed.
+- targetFiles: REQUIRED. Array of relative file paths this task will CREATE or MODIFY (writes only).
+  This enables safe parallel execution — tasks declaring the same file will be automatically serialized.
+  Rules:
+    * List only files this task WRITES (not just reads)
+    * Use project-relative paths (e.g. "src/auth.ts", NOT "/home/user/src/auth.ts")
+    * If a task's file output is truly dynamic/unknown, set "targetFiles": []
+    * Empty array = freely parallelizable (no file ownership claimed)
 
 Rules:
 - Tasks should be independently implementable when dependencies are met
@@ -111,7 +180,8 @@ Example:
       "estimatedComplexity": "low",
       "dependencies": [],
       "role": "execution",
-      "files": ["package.json", "tsconfig.json", "src/index.ts"]
+      "files": ["package.json", "tsconfig.json", "src/index.ts"],
+      "targetFiles": ["package.json", "tsconfig.json", "src/index.ts"]
     },
     {
       "id": "impl-core",
@@ -119,7 +189,8 @@ Example:
       "estimatedComplexity": "high",
       "dependencies": ["setup-project"],
       "role": "execution",
-      "files": ["src/core/handler.ts", "src/types.ts"]
+      "files": ["src/core/handler.ts", "src/types.ts"],
+      "targetFiles": ["src/core/handler.ts", "src/types.ts"]
     }
   ]
 }`,
@@ -179,9 +250,16 @@ Example:
 			if ((task as any).estimatedFiles && !task.files?.length) {
 				task.files = (task as any).estimatedFiles;
 			}
+			// Normalize targetFiles — default to [] if missing or malformed (graceful degradation)
+			if (!task.targetFiles || !Array.isArray(task.targetFiles)) {
+				task.targetFiles = [];
+			}
 		}
 
-		// Detect dependency cycles using DFS
+		// Post-processing Step 1: inject implicit dependency edges for file-sharing tasks
+		parsed.tasks = injectCollisionEdges(parsed.tasks);
+
+		// Post-processing Step 2: detect dependency cycles (catches irreconcilable conflicts)
 		const cycle = this.detectCycle(parsed.tasks);
 		if (cycle) {
 			throw new Error(

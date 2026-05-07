@@ -53,7 +53,7 @@ async function loadClientId(): Promise<string> {
 /**
  * Start a local HTTP server to receive OAuth callback
  */
-function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof import("http").createServer>; code: Promise<string> }> {
+function startCallbackServer(port: number): Promise<{ server: import("http").Server; code: Promise<string> }> {
 	return new Promise((resolve, reject) => {
 		const http = require("http");
 
@@ -62,7 +62,7 @@ function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof 
 			resolveCode = res;
 		});
 
-		const server = http.createServer((req: ReturnType<typeof import("http").IncomingMessage>, res: ReturnType<typeof import("http").ServerResponse>) => {
+		const server = http.createServer((req: import("http").IncomingMessage, res: import("http").ServerResponse) => {
 			const url = new URL(req.url || "/", `http://localhost:${port}`);
 
 			if (url.pathname === "/callback") {
@@ -342,7 +342,7 @@ authCommand
 				process.exit(1);
 			}
 		} else if (provider === "gemini") {
-			const { loginWithGoogleOAuth, saveApoharaToken, loadClientId } = await import("../lib/oauth/gemini.js");
+			const { loginWithGoogleOAuth, saveApoharaToken } = await import("../lib/oauth/gemini.js");
 			console.log("[Auth] Starting Gemini OAuth login...");
 			
 			const credPath = process.env.XDG_CONFIG_HOME

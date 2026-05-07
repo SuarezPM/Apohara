@@ -29,7 +29,7 @@ Each phase delivers an end-to-end user-observable capability. No horizontal laye
 4. `apohara auth refresh` and `apohara auth revoke` work for OAuth providers
 5. All auth subcommands are discoverable via `apohara auth --help`
 
-### Phase 3: DAG Hardening — Safe Parallel Execution
+### Phase 3: DAG Hardening — Safe Parallel Execution [DONE]
 **Goal:** The swarm can safely execute parallel tasks without file collisions or pool exhaustion.
 **Mode:** mvp
 **Requirements:** DAG-01, DAG-02
@@ -39,7 +39,7 @@ Each phase delivers an end-to-end user-observable capability. No horizontal laye
 3. A 10-task DAG with 3 parallel waves executes without merge conflicts
 4. Consolidator reports zero silent data corruption on parallel runs
 
-### Phase 4: Event Ledger v2 — Deterministic Replay
+### Phase 4: Event Ledger v2 — Deterministic Replay [ACTIVE]
 **Goal:** Every swarm run is reproducible. User can replay a historical run and get the same outcome.
 **Mode:** mvp
 **Requirements:** LEDGER-01, LEDGER-02

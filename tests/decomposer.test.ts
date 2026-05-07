@@ -61,9 +61,17 @@ describe("TaskDecomposer Integration", () => {
 		expect(result).toBeDefined();
 		expect(result.originalPrompt).toBe("Build authentication system");
 		expect(result.tasks).toHaveLength(3);
-		expect(result.tasks[0].id).toBe("setup-deps");
-		expect(result.tasks[0].dependencies).toEqual([]);
-		expect(result.tasks[1].dependencies).toContain("setup-deps");
+
+		const setupTask = result.tasks.find((t) => t.id === "setup-deps")!;
+		const implTask = result.tasks.find((t) => t.id === "impl-auth")!;
+		const testTask = result.tasks.find((t) => t.id === "write-tests")!;
+
+		expect(setupTask).toBeDefined();
+		expect(implTask).toBeDefined();
+		expect(testTask).toBeDefined();
+
+		expect(implTask.dependencies).toContain("setup-deps");
+		expect(testTask.dependencies).toContain("impl-auth");
 	});
 
 	it("should handle JSON wrapped in markdown code blocks", async () => {
@@ -186,9 +194,13 @@ describe("TaskDecomposer Integration", () => {
 
 		const result = await decomposer.decompose("Test all levels");
 
-		expect(result.tasks[0].estimatedComplexity).toBe("low");
-		expect(result.tasks[1].estimatedComplexity).toBe("medium");
-		expect(result.tasks[2].estimatedComplexity).toBe("high");
+		const lowTask = result.tasks.find((t) => t.id === "low")!;
+		const medTask = result.tasks.find((t) => t.id === "medium")!;
+		const highTask = result.tasks.find((t) => t.id === "high")!;
+
+		expect(lowTask.estimatedComplexity).toBe("low");
+		expect(medTask.estimatedComplexity).toBe("medium");
+		expect(highTask.estimatedComplexity).toBe("high");
 	});
 });
 

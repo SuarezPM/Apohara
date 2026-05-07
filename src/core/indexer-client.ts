@@ -213,7 +213,7 @@ export class IndexerClient extends EventEmitter {
 	private socketPath: string;
 	private binaryPath: string;
 	private socket: net.Socket | null = null;
-	private process: child_process.ChildProcessWithoutNullStreams | null = null;
+	private process: child_process.ChildProcess | null = null;
 	private state: ConnectionState = "disconnected";
 	private requestId = 0;
 	private pendingRequests = new Map<number | string, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
@@ -286,12 +286,13 @@ export class IndexerClient extends EventEmitter {
 				// Ensure the parent directory exists
 				const socketDir = path.dirname(this.socketPath);
 				fs.mkdir(socketDir, { recursive: true }).then(() => {
-					this.process = child_process.spawn(this.binaryPath, [], {
+					const cp = child_process.spawn(this.binaryPath, [], {
 						detached: true,
 						stdio: "ignore",
 					});
+					this.process = cp;
 
-					this.process.on("error", (err) => {
+					cp.on("error", (err) => {
 						this.lastError = err;
 						this.emit("error", err);
 						reject(err);

@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import type { OAuthTokenStore } from "../lib/oauth-token-store";
+import type { OAuthToken } from "../lib/oauth-pkce";
 
 // Dynamic imports to avoid circular dependencies
 let geminiOAuth: typeof import("../lib/oauth/gemini") | null = null;
@@ -209,72 +210,72 @@ const tokenStores = new Map<string, OAuthTokenStore>();
 function getTokenStore(provider: string): OAuthTokenStore {
 	// Handle gemini-ai specially using the gemini OAuth module
 	if (provider === "gemini-ai") {
-		let store = tokenStores.get(provider);
-		if (!store) {
-			const { createGeminiTokenStore } = require("../lib/oauth-token-store");
-			
-			// Load client ID and secret from credentials
-			// For Google OAuth, we need client credentials
-			// This will be handled via the gemini OAuth module directly for login
-			// For token refresh, we need proper configuration
-			store = createGeminiTokenStore("" /* clientId will be loaded on refresh */);
-			tokenStores.set(provider, store);
-		}
+		const existingStore = tokenStores.get(provider);
+		if (existingStore) return existingStore;
+
+		const { createGeminiTokenStore } = require("../lib/oauth/gemini");
+		
+		// Load client ID and secret from credentials
+		// For Google OAuth, we need client credentials
+		// This will be handled via the gemini OAuth module directly for login
+		// For token refresh, we need proper configuration
+		const store = createGeminiTokenStore("" /* clientId will be loaded on refresh */);
+		tokenStores.set(provider, store);
 		return store;
 	}
 
-	let store = tokenStores.get(provider);
-	if (!store) {
-		// Import the token store class dynamically
-		const { OAuthTokenStore: OAuthStore } = require("../lib/oauth-token-store");
+	const existingStore = tokenStores.get(provider);
+	if (existingStore) return existingStore;
+
+	// Import the token store class dynamically
+	const { OAuthTokenStore: OAuthStore } = require("../lib/oauth-token-store");
+	
+	// Create refresh handler for the provider
+	const refreshHandler = async (refreshToken: string): Promise<OAuthToken> => {
+		// Load client ID from credentials
+		const clientId = await loadClientId(provider);
+		if (!clientId) {
+			throw new Error(`No client ID configured for ${provider}`);
+		}
 		
-		// Create refresh handler for the provider
-		const refreshHandler = async (refreshToken: string): Promise<OAuthToken> => {
-			// Load client ID from credentials
-			const clientId = await loadClientId(provider);
-			if (!clientId) {
-				throw new Error(`No client ID configured for ${provider}`);
-			}
-			
-			const response = await fetch(CLAUDE_TOKEN_ENDPOINT, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/x-www-form-urlencoded",
-				},
-				body: new URLSearchParams({
-					grant_type: "refresh_token",
-					refresh_token: refreshToken,
-					client_id: clientId,
-				}),
-			});
+		const response = await fetch(CLAUDE_TOKEN_ENDPOINT, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				grant_type: "refresh_token",
+				refresh_token: refreshToken,
+				client_id: clientId,
+			}),
+		});
 
-			if (!response.ok) {
-				throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`);
-			}
+		if (!response.ok) {
+			throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`);
+		}
 
-			const data = await response.json() as {
-				access_token: string;
-				refresh_token?: string;
-				token_type: string;
-				expires_in: number;
-				scope?: string;
-			};
-
-			// Calculate new expiration time
-			const expires_at = Date.now() + data.expires_in * 1000;
-
-			return {
-				access_token: data.access_token,
-				refresh_token: data.refresh_token || refreshToken,
-				token_type: data.token_type,
-				expires_at,
-				scope: data.scope,
-			};
+		const data = await response.json() as {
+			access_token: string;
+			refresh_token?: string;
+			token_type: string;
+			expires_in: number;
+			scope?: string;
 		};
 
-		store = new OAuthStore({ provider }, refreshHandler);
-		tokenStores.set(provider, store);
-	}
+		// Calculate new expiration time
+		const expires_at = Date.now() + data.expires_in * 1000;
+
+		return {
+			access_token: data.access_token,
+			refresh_token: data.refresh_token || refreshToken,
+			token_type: data.token_type,
+			expires_at,
+			scope: data.scope,
+		};
+	};
+
+	const store = new OAuthStore({ provider }, refreshHandler);
+	tokenStores.set(provider, store);
 	return store;
 }
 

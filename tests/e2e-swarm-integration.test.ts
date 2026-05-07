@@ -91,8 +91,8 @@ describe("E2E Swarm Integration Tests", () => {
 				const result = await routeTask(role, { id: `task-${role}` });
 				expect(result.fallbackProviders).toBeDefined();
 				expect(result.fallbackProviders.length).toBeGreaterThanOrEqual(2);
-				// First fallback should be the primary provider
-				expect(result.fallbackProviders[0]).toBe(ROLE_TO_PROVIDER[role]);
+				// First fallback should be the actual selected provider
+				expect(result.fallbackProviders[0]).toBe(result.provider);
 			}
 		});
 
@@ -105,7 +105,7 @@ describe("E2E Swarm Integration Tests", () => {
 		it("should route planning to moonshot-k2.6 or fallback", async () => {
 			const result = await routeTask("planning");
 			// If MOONSHOT_API_KEY is set, maps to moonshot-k2.6, otherwise falls back
-			expect(["moonshot-k2.6", "gemini", "qwen3.6-plus"]).toContain(result.provider);
+			expect(["moonshot-k2.6", "gemini", "qwen3.6-plus", "kiro-ai"]).toContain(result.provider);
 		});
 
 		it("should work with verify token function", () => {

@@ -1,0 +1,2 @@
+{"id":"389af312-4434-4444-8127-6c8a07708540","timestamp":"2026-05-07T22:13:37.978Z","type":"worktree_created","severity":"info","payload":{"worktreeId":"lane-0","path":".apohara/worktrees/lane-0"}}
+{"id":"195d5b1d-f19a-4b7b-8325-fa73298bab66","timestamp":"2026-05-07T22:13:37.978Z","type":"worktree_created","severity":"info","payload":{"worktreeId":"lane-1","path":".apohara/worktrees/lane-1"}}

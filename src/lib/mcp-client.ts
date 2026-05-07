@@ -214,6 +214,13 @@ export class MCPRegistry {
 	}
 
 	/**
+	 * List tools for a specific registered server
+	 */
+	async listTools(serverName: string): Promise<MCPTool[]> {
+		return this.toolCache.get(serverName) || [];
+	}
+
+	/**
 	 * Get all registered servers
 	 */
 	getServers(): string[] {

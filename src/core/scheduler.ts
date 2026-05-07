@@ -1,3 +1,4 @@
+import pLimit from "../lib/p-limit";
 import type { LLMMessage } from "../providers/router";
 import { type ProviderId, ProviderRouter } from "../providers/router";
 import type { DecomposedTask } from "./decomposer";
@@ -17,6 +18,52 @@ export interface TaskExecutionResult {
 	output?: string;
 	error?: string;
 	worktreeId: string;
+}
+
+/**
+ * Topological sort of tasks using Kahn's BFS algorithm.
+ * Returns tasks in an order where every task appears after all its dependencies.
+ * Throws if the graph contains a cycle (should not happen if decomposer ran detectCycle).
+ */
+function topoSort(tasks: DecomposedTask[]): DecomposedTask[] {
+	const inDegree = new Map<string, number>();
+	const adjList = new Map<string, string[]>(); // id → list of dependents
+	const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+	for (const t of tasks) {
+		inDegree.set(t.id, 0);
+		adjList.set(t.id, []);
+	}
+
+	for (const t of tasks) {
+		for (const dep of t.dependencies ?? []) {
+			adjList.get(dep)?.push(t.id);
+			inDegree.set(t.id, (inDegree.get(t.id) ?? 0) + 1);
+		}
+	}
+
+	const queue = [...inDegree.entries()]
+		.filter(([, d]) => d === 0)
+		.map(([id]) => id);
+	const result: DecomposedTask[] = [];
+
+	while (queue.length > 0) {
+		const id = queue.shift()!;
+		result.push(taskMap.get(id)!);
+		for (const neighbor of adjList.get(id) ?? []) {
+			const newDeg = (inDegree.get(neighbor) ?? 0) - 1;
+			inDegree.set(neighbor, newDeg);
+			if (newDeg === 0) queue.push(neighbor);
+		}
+	}
+
+	if (result.length !== tasks.length) {
+		throw new Error(
+			"[Scheduler] Cycle detected in task graph — cannot execute. Run decomposer.detectCycle() before executeAll().",
+		);
+	}
+
+	return result;
 }
 
 export class ParallelScheduler {
@@ -41,7 +88,7 @@ export class ParallelScheduler {
 		this.ledger = ledger || new EventLedger();
 		this.providerRouter = providerRouter || new ProviderRouter();
 		this.config = {
-			worktreePoolSize: config?.worktreePoolSize || 3,
+			worktreePoolSize: config?.worktreePoolSize ?? 3,
 			cwd: config?.cwd,
 		};
 		this.worktrees = new Map();
@@ -147,10 +194,13 @@ export class ParallelScheduler {
 			// Create new task
 			const newTask: Task = {
 				id: task.id,
+				role: task.role,
 				description: task.description,
 				status: "in_progress",
 				createdAt: new Date(),
 				updatedAt: new Date(),
+				targetFiles: task.targetFiles,
+				implicitDependencies: task.implicitDependencies,
 			};
 			return {
 				...state,
@@ -329,46 +379,61 @@ export class ParallelScheduler {
 	}
 
 	/**
-	 * Executes all tasks from the decomposition result in parallel across worktrees.
-	 * Returns an array of execution results.
+	 * Executes all tasks from the decomposition result in dependency order,
+	 * with hard concurrency cap enforced by p-limit (backpressure).
+	 *
+	 * Algorithm:
+	 * 1. topoSort() orders tasks so dependencies always precede dependents.
+	 * 2. pLimit(worktreePoolSize) ensures at most N tasks run concurrently.
+	 * 3. Each task polls completedTasks every 50ms before dispatching,
+	 *    so dependency completion is checked at the point of actual execution.
+	 *
+	 * @throws if worktreePoolSize < 1 (configuration error)
+	 * @throws if task graph contains a cycle (topoSort guard)
 	 */
 	public async executeAll(
 		tasks: DecomposedTask[],
 	): Promise<TaskExecutionResult[]> {
+		if (this.config.worktreePoolSize < 1) {
+			throw new Error(
+				"[Scheduler] worktreePoolSize must be ≥ 1",
+			);
+		}
+
+		const limit = pLimit(this.config.worktreePoolSize);
+		const completedTasks = new Set<string>();
 		const results: TaskExecutionResult[] = [];
-		const pendingTasks = [...tasks];
 
-		// Schedule initial batch of tasks
-		const _scheduledWorktrees: Promise<string | null | undefined>[] = [];
-		while (pendingTasks.length > 0) {
-			const task = pendingTasks.shift();
-			if (!task) break;
+		// Topological sort ensures task ordering satisfies explicit + implicit deps
+		const ordered = topoSort(tasks);
 
-			const worktreeId = await this.scheduleTask(task);
-			if (worktreeId === null) {
-				// Re-add to pending if no worktree available
-				pendingTasks.unshift(task);
-				break;
-			}
-		}
+		await Promise.all(
+			ordered.map((task) =>
+				limit(async () => {
+					// Wait until all dependencies have completed before dispatching
+					while (
+						(task.dependencies ?? []).some((dep) => !completedTasks.has(dep))
+					) {
+						await new Promise<void>((resolve) => setTimeout(resolve, 50));
+					}
 
-		// Process until all tasks complete
-		while (this.activeTasks.size > 0 || pendingTasks.length > 0) {
-			// Wait a bit before checking for available worktrees
-			await new Promise((resolve) => setTimeout(resolve, 100));
+					const worktreeId = await this.scheduleTask(task);
+					const resultEntry: TaskExecutionResult = {
+						taskId: task.id,
+						status: worktreeId ? "success" : "error",
+						worktreeId: worktreeId ?? "none",
+						error: worktreeId ? undefined : "No worktree lane available",
+					};
 
-			// Try to schedule more pending tasks
-			while (pendingTasks.length > 0) {
-				const task = pendingTasks.shift();
-				if (!task) break;
+					if (worktreeId) {
+						await this.completeTask(task.id, worktreeId, resultEntry);
+					}
 
-				const worktreeId = await this.scheduleTask(task);
-				if (worktreeId === null) {
-					pendingTasks.unshift(task);
-					break;
-				}
-			}
-		}
+					completedTasks.add(task.id);
+					results.push(resultEntry);
+				}),
+			),
+		);
 
 		return results;
 	}

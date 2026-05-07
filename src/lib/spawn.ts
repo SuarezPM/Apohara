@@ -8,9 +8,9 @@ import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 export interface SpawnOptions {
 	stdout?: "pipe" | "inherit" | "ignore";
 	stderr?: "pipe" | "inherit" | "ignore";
-	stdio?: "pipe" | "inherit" | "ignore";
+	stdio?: "pipe" | "inherit" | "ignore" | ("pipe" | "inherit" | "ignore")[];
 	cwd?: string;
-	env?: Record<string, string>;
+	env?: Record<string, string | undefined>;
 }
 
 export interface SpawnResult {
@@ -57,11 +57,11 @@ export function spawn(
 	options: SpawnOptions = {},
 ): SpawnResult {
 	const spawnOptions: {
-		stdio: ("ignore" | "pipe" | "inherit")[];
+		stdio: any;
 		cwd?: string;
-		env?: Record<string, string>;
+		env?: Record<string, string | undefined>;
 	} = {
-		stdio: [
+		stdio: options.stdio || [
 			"ignore", // stdin
 			options.stdout ?? "pipe",
 			options.stderr ?? "pipe",

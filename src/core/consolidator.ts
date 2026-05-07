@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "../lib/spawn";
 import { EventLedger } from "./ledger";
@@ -253,10 +253,12 @@ export class Consolidator {
 	}
 
 	/**
-	 * Merges changes from successful worktrees into the current branch.
+	 * Merges changes from successful worktrees into the consolidation branch.
+	 * Uses `git merge --no-commit --no-ff` + conflict detection before committing.
+	 * On conflict: aborts, logs, and marks the worktree for sequential retry.
 	 */
 	private async mergeSuccessfulWorktrees(
-		_branchName: string,
+		stagingBranch: string,
 		successfulWorktrees: string[],
 	): Promise<boolean> {
 		if (successfulWorktrees.length === 0) {
@@ -274,32 +276,139 @@ export class Consolidator {
 				continue;
 			}
 
-			// Merge from worktree
+			// Safety guard: ensure we're on the consolidation branch before each merge
+			const branchGuard = await this.git(
+				["symbolic-ref", "--short", "HEAD"],
+				cwd,
+			);
+			const currentBranch = branchGuard.stdout.trim();
+			if (currentBranch !== stagingBranch) {
+				console.error(
+					`[Consolidator] Branch guard failed: expected '${stagingBranch}', got '${currentBranch}'. Skipping merge for ${worktree}.`,
+				);
+				await this.ledger.log(
+					"branch_guard_failed",
+					{ worktree, expected: stagingBranch, actual: currentBranch },
+					"error",
+				);
+				allMerged = false;
+				continue;
+			}
+
+			// Attempt no-commit, no-ff merge for safe conflict detection
 			const mergeResult = await this.git(
-				["merge", worktreePath, "--no-edit"],
+				["merge", "--no-commit", "--no-ff", worktreePath],
 				cwd,
 			);
 
-			if (mergeResult.exitCode !== 0) {
-				// Conflict or merge error
-				console.warn(
-					`Merge conflict or error from ${worktree}: ${mergeResult.stderr}`,
+			if (mergeResult.exitCode === 0) {
+				// Clean merge — commit with a structured message
+				const commitResult = await this.git(
+					[
+						"commit",
+						"-m",
+						`merge(consolidate): integrate ${worktree} into ${stagingBranch}`,
+					],
+					cwd,
 				);
-				// For consolidation, we'll continue with partial success
-				// and note it in the summary
-				allMerged = false;
+				if (commitResult.exitCode !== 0) {
+					// Commit failed (e.g. nothing to commit — working tree already up to date)
+					// This is acceptable; reset merge state and continue
+					await this.git(["merge", "--abort"], cwd).catch(() => {});
+					console.warn(
+						`[Consolidator] Commit skipped for ${worktree}: ${commitResult.stderr.trim()}`,
+					);
+				} else {
+					await this.ledger.log("worktree_merged", { worktree, stagingBranch }, "info");
+				}
+			} else {
+				// Non-zero exit — detect conflict markers
+				const unmergedResult = await this.git(
+					["ls-files", "--unmerged"],
+					cwd,
+				);
+
+				const conflictingFiles = (unmergedResult.stdout ?? "")
+					.split("\n")
+					.filter(Boolean)
+					.map((line) => line.split("\t")[1])
+					.filter(Boolean)
+					// Deduplicate (ls-files emits one line per stage: 1, 2, 3)
+					.filter((v, i, arr) => arr.indexOf(v) === i);
+
+				// Abort merge to restore a clean working tree
+				await this.git(["merge", "--abort"], cwd);
+
+				const hasConflict = conflictingFiles.length > 0;
 
 				await this.ledger.log(
-					"merge_conflict",
-					{ worktree, stderr: mergeResult.stderr },
-					"warning",
+					"consolidation_conflict",
+					{
+						worktree,
+						stagingBranch,
+						conflictingFiles,
+						hasConflict,
+						mergeStderr: mergeResult.stderr.trim(),
+						note: hasConflict
+							? "targetFiles declaration gap — task should have been serialized by DAG collision detection"
+							: "merge failed for non-conflict reason (check mergeStderr)",
+					},
+					"error",
 				);
-			} else {
-				await this.ledger.log("worktree_merged", { worktree }, "info");
+
+				console.warn(
+					`[Consolidator] Merge ${hasConflict ? "conflict" : "error"} from ${worktree}: ` +
+					(hasConflict ? conflictingFiles.join(", ") : mergeResult.stderr.trim()),
+				);
+
+				allMerged = false;
+
+				// Trigger sequential retry hook (full recovery loop is a future phase)
+				await this.retrySequential(worktree);
 			}
 		}
 
 		return allMerged;
+	}
+
+	/**
+	 * Sequential retry hook invoked when a worktree merge fails due to conflict.
+	 * Phase 3 scope: moves conflicting worktree to a /recovery/ directory to isolate it
+	 * and prevent further corruption, then logs the event.
+	 */
+	private async retrySequential(worktreeId: string): Promise<void> {
+		const source = join(this.worktreesDir, worktreeId);
+		const baseDir = this.config.cwd || process.cwd();
+		const recoveryDir = join(baseDir, ".apohara", "recovery", new Date().toISOString().replace(/[:.]/g, "-"));
+		const destination = join(recoveryDir, worktreeId);
+
+		try {
+			await mkdir(recoveryDir, { recursive: true });
+			if (existsSync(source)) {
+				await rename(source, destination);
+			}
+
+			await this.ledger.log(
+				"sequential_retry_triggered",
+				{
+					worktreeId,
+					reason: "merge_conflict",
+					recoveryPath: destination,
+					note: "Isolated for manual review to prevent state corruption.",
+				},
+				"warning",
+			);
+		} catch (err) {
+			await this.ledger.log(
+				"recovery_move_failed",
+				{ worktreeId, error: (err as Error).message },
+				"error",
+			);
+		}
+
+		console.warn(
+			`[Consolidator] Conflict in ${worktreeId} — isolated to ${destination} for manual review`,
+		);
 	}
 
 	/**

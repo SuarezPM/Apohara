@@ -175,7 +175,7 @@ export async function clearApoharaToken(): Promise<void> {
 /**
  * Start a local HTTP server to receive OAuth callback
  */
-function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof import("http").createServer>; code: Promise<string | null> }> {
+function startCallbackServer(port: number): Promise<{ server: import("http").Server; code: Promise<string | null> }> {
 	return new Promise((resolve, reject) => {
 		const http = require("http");
 
@@ -184,7 +184,7 @@ function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof 
 			resolveCode = res;
 		});
 
-		const server = http.createServer((req: ReturnType<typeof import("http").IncomingMessage>, res: ReturnType<typeof import("http").ServerResponse>) => {
+		const server = http.createServer((req: import("http").IncomingMessage, res: import("http").ServerResponse) => {
 			const url = new URL(req.url || "/", `http://localhost:${port}`);
 
 			if (url.pathname === "/callback" || url.pathname === "") {

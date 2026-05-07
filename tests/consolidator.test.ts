@@ -224,3 +224,110 @@ describe("Consolidator Exit Codes", () => {
 		expect(result).toBe(1);
 	});
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DAG Hardening — Phase 3: Git merge conflict detection tests
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Consolidator — Git merge conflict detection", () => {
+	let consolidator: Consolidator;
+	let ledger: EventLedger;
+
+	beforeEach(() => {
+		cleanupConflictTestDirs();
+		mkdirSync(TEST_WORKTREE_DIR, { recursive: true });
+		mkdirSync(join(tmpdir(), "apohara-consolidator-test"), { recursive: true });
+		writeFileSync(
+			TEST_STATE_FILE,
+			JSON.stringify({ currentTaskId: null, tasks: [], status: "idle", failedProviderTimestamps: {} }),
+		);
+
+		ledger = new EventLedger("conflict-test");
+		consolidator = new Consolidator(
+			{ worktreeBaseDir: TEST_WORKTREE_DIR, stateFilePath: TEST_STATE_FILE, cwd: TEST_CWD },
+			ledger,
+		);
+
+		// Create a dummy lane-0 directory so existsSync passes
+		mkdirSync(join(TEST_WORKTREE_DIR, "lane-0"), { recursive: true });
+	});
+
+	function cleanupConflictTestDirs() {
+		try {
+			if (existsSync(TEST_WORKTREE_DIR))
+				rmSync(TEST_WORKTREE_DIR, { recursive: true, force: true });
+			const testDir = join(tmpdir(), "apohara-consolidator-test");
+			if (existsSync(testDir))
+				rmSync(testDir, { recursive: true, force: true });
+		} catch {
+			// ignore
+		}
+	}
+
+	test("returns false immediately when no worktrees are provided", async () => {
+		const result = await consolidator["mergeSuccessfulWorktrees"]("main", []);
+		expect(result).toBe(false);
+	});
+
+	test("marks merge failed and triggers retrySequential on non-zero exit", async () => {
+		// Stub git() to simulate: branch check OK, merge fails, ls-files shows conflict, abort OK
+		let gitCallCount = 0;
+
+		// @ts-expect-error — private method spy
+		const spy = spyOn(consolidator, "git").mockImplementation(async (args: string[]) => {
+			gitCallCount++;
+			const cmd = args.join(" ");
+
+			if (cmd.includes("symbolic-ref")) {
+				// Branch guard passes
+				return { exitCode: 0, stdout: "main\n", stderr: "" };
+			}
+			if (cmd.includes("merge --no-commit")) {
+				// Simulate conflict exit
+				return { exitCode: 1, stdout: "", stderr: "CONFLICT (content): Merge conflict in src/foo.ts" };
+			}
+			if (cmd.includes("ls-files --unmerged")) {
+				// Report one conflicting file (ls-files emits 3 stages, all same file)
+				return { exitCode: 0, stdout: "100644 abc 1\tsrc/foo.ts\n100644 def 2\tsrc/foo.ts\n100644 ghi 3\tsrc/foo.ts\n", stderr: "" };
+			}
+			if (cmd.includes("merge --abort")) {
+				return { exitCode: 0, stdout: "", stderr: "" };
+			}
+			return { exitCode: 0, stdout: "", stderr: "" };
+		});
+
+		let retryTriggered = false;
+		// @ts-expect-error — private method spy
+		spyOn(consolidator, "retrySequential").mockImplementation(async () => {
+			retryTriggered = true;
+		});
+
+		const result = await consolidator["mergeSuccessfulWorktrees"]("main", ["lane-0"]);
+
+		expect(result).toBe(false);
+		expect(retryTriggered).toBe(true);
+		spy.mockRestore?.();
+	});
+
+	test("branch guard failure skips merge and logs branch_guard_failed", async () => {
+		let loggedEvent: string | null = null;
+
+		// @ts-expect-error — private method spy
+		spyOn(consolidator, "git").mockImplementation(async (args: string[]) => {
+			const cmd = args.join(" ");
+			if (cmd.includes("symbolic-ref")) {
+				// Pretend we're on wrong branch
+				return { exitCode: 0, stdout: "feature-wrong\n", stderr: "" };
+			}
+			return { exitCode: 0, stdout: "", stderr: "" };
+		});
+
+		spyOn(ledger, "log").mockImplementation(async (event: string) => {
+			loggedEvent = event;
+		});
+
+		const result = await consolidator["mergeSuccessfulWorktrees"]("main", ["lane-0"]);
+
+		expect(result).toBe(false);
+		expect(loggedEvent).toBe("branch_guard_failed");
+	});
+});

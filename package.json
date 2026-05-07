@@ -13,10 +13,10 @@
 		"scripts"
 	],
 	"optionalDependencies": {
-		"@apohara/cli-darwin-x64": "0.1.0",
 		"@apohara/cli-darwin-arm64": "0.1.0",
-		"@apohara/cli-linux-x64": "0.1.0",
+		"@apohara/cli-darwin-x64": "0.1.0",
 		"@apohara/cli-linux-arm64": "0.1.0",
+		"@apohara/cli-linux-x64": "0.1.0",
 		"@apohara/cli-win32-x64": "0.1.0"
 	},
 	"scripts": {
@@ -37,6 +37,7 @@
 	},
 	"dependencies": {
 		"commander": "^14.0.3",
+		"p-limit": "^7.3.0",
 		"zod": "^4.4.1"
 	}
 }

@@ -5,6 +5,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import * as path from "node:path";
 import * as os from "node:os";
+import type { OAuthToken } from "../oauth-pkce";
 
 // We'll test the module's exported functions
 // Note: Direct testing requires proper module resolution which is handled at runtime
@@ -44,7 +45,7 @@ describe("Gemini OAuth Module", () => {
 	describe("OAuth token structure validation", () => {
 		it("should have correct structure for OAuthToken", () => {
 			// Valid token structure
-			const validToken = {
+			const validToken: OAuthToken = {
 				access_token: "test-token",
 				refresh_token: "test-refresh",
 				token_type: "Bearer",
@@ -57,7 +58,7 @@ describe("Gemini OAuth Module", () => {
 		});
 
 		it("should handle token without refresh_token", () => {
-			const tokenWithoutRefresh = {
+			const tokenWithoutRefresh: OAuthToken = {
 				access_token: "test-token",
 				token_type: "Bearer",
 				expires_at: Date.now() + 3600000,
@@ -69,7 +70,7 @@ describe("Gemini OAuth Module", () => {
 		});
 
 		it("should handle token with scope", () => {
-			const tokenWithScope = {
+			const tokenWithScope: OAuthToken = {
 				access_token: "test-token",
 				refresh_token: "test-refresh",
 				token_type: "Bearer",

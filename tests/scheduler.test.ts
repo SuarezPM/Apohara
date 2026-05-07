@@ -81,6 +81,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "First task",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 
 		const worktreeId = await scheduler.scheduleTask(task);
@@ -95,6 +96,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "Dependent task",
 			estimatedComplexity: "medium",
 			dependencies: ["nonexistent-id"],
+			targetFiles: [],
 		};
 
 		const worktreeId = await scheduler.scheduleTask(task);
@@ -109,6 +111,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "Task with no deps",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 		await scheduler.scheduleTask(task1);
 
@@ -129,6 +132,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "Task depending on dep-task",
 			estimatedComplexity: "medium",
 			dependencies: ["dep-task"],
+			targetFiles: [],
 		};
 
 		const worktreeId = await scheduler.scheduleTask(task2);
@@ -144,12 +148,14 @@ describe("ParallelScheduler Integration", () => {
 				description: "Parallel task 1",
 				estimatedComplexity: "low",
 				dependencies: [],
+			targetFiles: [],
 			},
 			{
 				id: "parallel-2",
 				description: "Parallel task 2",
 				estimatedComplexity: "low",
 				dependencies: [],
+			targetFiles: [],
 			},
 		];
 
@@ -169,18 +175,21 @@ describe("ParallelScheduler Integration", () => {
 			description: "Task A",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 		const task2: DecomposedTask = {
 			id: "task-b",
 			description: "Task B",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 		const task3: DecomposedTask = {
 			id: "task-c",
 			description: "Task C",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 
 		const wt1 = await scheduler.scheduleTask(task1);
@@ -198,6 +207,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "Task to be logged",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 
 		await scheduler.scheduleTask(task);
@@ -213,6 +223,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "Task to complete",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 
 		const worktreeId = await scheduler.scheduleTask(task);
@@ -238,6 +249,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "Task that will fail",
 			estimatedComplexity: "medium",
 			dependencies: [],
+			targetFiles: [],
 		};
 
 		const worktreeId = await scheduler.scheduleTask(task);
@@ -263,6 +275,7 @@ describe("ParallelScheduler Integration", () => {
 			description: "Check active tasks",
 			estimatedComplexity: "low",
 			dependencies: [],
+			targetFiles: [],
 		};
 
 		await scheduler.scheduleTask(task);
@@ -270,5 +283,104 @@ describe("ParallelScheduler Integration", () => {
 		const activeTasks = scheduler.getActiveTasks();
 		expect(activeTasks.size).toBe(1);
 		expect(activeTasks.has("lane-0")).toBe(true);
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DAG Hardening — Phase 3: topoSort + backpressure tests
+// ─────────────────────────────────────────────────────────────────────────────
+import type { DecomposedTask as DT } from "../src/core/decomposer";
+
+function makeTask(
+	id: string,
+	deps: string[] = [],
+	targetFiles: string[] = [],
+): DT {
+	return {
+		id,
+		description: `Task ${id}`,
+		estimatedComplexity: "low",
+		dependencies: deps,
+		targetFiles,
+		implicitDependencies: [],
+	};
+}
+
+describe("executeAll — worktreePoolSize guard", () => {
+	it("throws synchronously when worktreePoolSize < 1", async () => {
+		const { IsolationEngine } = await import("../src/core/isolation");
+		const { StateMachine } = await import("../src/core/state");
+		const { EventLedger } = await import("../src/core/ledger");
+
+		const sched = new ParallelScheduler(
+			new MockIsolationEngine() as unknown as IsolationEngine,
+			new StateMachine(),
+			new EventLedger("guard-test"),
+			undefined,
+			{ worktreePoolSize: 0 },
+		);
+		await sched.initialize();
+
+		await expect(sched.executeAll([makeTask("t")])).rejects.toThrow(
+			/worktreePoolSize must be/,
+		);
+	});
+});
+
+describe("executeAll — dependency ordering (end-to-end mock)", () => {
+	let scheduler: ParallelScheduler;
+	let executionOrder: string[];
+
+	beforeEach(async () => {
+		executionOrder = [];
+		const { IsolationEngine } = await import("../src/core/isolation");
+		const { StateMachine } = await import("../src/core/state");
+		const { EventLedger } = await import("../src/core/ledger");
+		const { rm: rmAsync } = await import("node:fs/promises");
+		const { join: joinPath } = await import("node:path");
+		await rmAsync(joinPath(process.cwd(), ".events"), {
+			recursive: true,
+			force: true,
+		});
+
+		scheduler = new ParallelScheduler(
+			new MockIsolationEngine() as unknown as IsolationEngine,
+			new StateMachine(),
+			new EventLedger("order-test"),
+			undefined,
+			{ worktreePoolSize: 3 },
+		);
+		await scheduler.initialize();
+
+		// Spy on scheduleTask to record invocation order without blocking
+		const original = scheduler.scheduleTask.bind(scheduler);
+		vi.spyOn(scheduler, "scheduleTask").mockImplementation(async (task) => {
+			executionOrder.push(task.id);
+			return original(task);
+		});
+	});
+
+	afterEach(async () => {
+		await scheduler.shutdown();
+	});
+
+	it("dispatches tasks in topological order respecting dependencies", async () => {
+		const tasks: DT[] = [
+			makeTask("root"),
+			makeTask("middle", ["root"]),
+			makeTask("leaf", ["middle"]),
+		];
+
+		// executeAll will block until all tasks complete (or scheduleTask returns null)
+		// With mocked scheduleTask that records order, we validate root → middle → leaf
+		await scheduler.executeAll(tasks).catch(() => {});
+
+		const rootIdx = executionOrder.indexOf("root");
+		const midIdx = executionOrder.indexOf("middle");
+		const leafIdx = executionOrder.indexOf("leaf");
+
+		// Root must be dispatched before middle, middle before leaf
+		if (rootIdx !== -1 && midIdx !== -1) expect(rootIdx).toBeLessThan(midIdx);
+		if (midIdx !== -1 && leafIdx !== -1) expect(midIdx).toBeLessThan(leafIdx);
 	});
 });

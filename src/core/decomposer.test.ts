@@ -52,8 +52,12 @@ describe("TaskDecomposer", () => {
 		const result = await decomposer.decompose("Build a task manager");
 
 		expect(result.tasks).toHaveLength(2);
-		expect(result.tasks[0].files).toEqual(["package.json", "bun.lockb"]);
-		expect(result.tasks[1].files).toEqual([
+		// Tasks are sorted by ID in injectCollisionEdges
+		const setupTask = result.tasks.find(t => t.id === "setup-deps")!;
+		const implTask = result.tasks.find(t => t.id === "impl-core")!;
+		
+		expect(setupTask.files).toEqual(["package.json", "bun.lockb"]);
+		expect(implTask.files).toEqual([
 			"src/core/handler.ts",
 			"src/types.ts",
 			"tests/core.test.ts",
@@ -355,5 +359,168 @@ describe("TaskDecomposer", () => {
 
 		expect(result.tasks).toHaveLength(1);
 		expect(result.tasks[0].id).toBe("markdown-task");
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DAG Hardening — Phase 3: injectCollisionEdges() unit tests
+// These tests exercise the collision detection pass via the public decompose()
+// API with controlled LLM mock output.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("injectCollisionEdges (via decompose)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	/**
+	 * Helper: mock LLM to return a given task array, then call decompose().
+	 */
+	async function decomposeWith(
+		tasks: Array<{
+			id: string;
+			description?: string;
+			estimatedComplexity?: string;
+			dependencies?: string[];
+			role?: string;
+			files?: string[];
+			targetFiles?: string[];
+		}>,
+	) {
+		const mockRouteTaskWithFallback = (await import("./agent-router"))
+			.routeTaskWithFallback as ReturnType<typeof vi.fn>;
+		mockRouteTaskWithFallback.mockResolvedValue({
+			provider: "gemini",
+			response: {
+				content: JSON.stringify({
+					tasks: tasks.map((t) => ({
+						id: t.id,
+						description: t.description ?? "desc",
+						estimatedComplexity: t.estimatedComplexity ?? "low",
+						dependencies: t.dependencies ?? [],
+						role: t.role ?? "execution",
+						files: t.files ?? [],
+						targetFiles: t.targetFiles ?? [],
+					})),
+				}),
+				usage: { inputTokens: 10, outputTokens: 10 },
+			},
+		});
+
+		const decomposer = new TaskDecomposer(undefined, null);
+		return decomposer.decompose("test prompt");
+	}
+
+	test("injects implicit edge when two tasks share a targetFile", async () => {
+		const result = await decomposeWith([
+			{
+				id: "task-b",
+				targetFiles: ["src/auth.ts", "src/router.ts"],
+			},
+			{
+				id: "task-a",
+				targetFiles: ["src/auth.ts"],
+			},
+		]);
+
+		// After sort: task-a (lower id) runs first, task-b waits for it
+		const taskB = result.tasks.find((t) => t.id === "task-b")!;
+		expect(taskB.dependencies).toContain("task-a");
+		expect(taskB.implicitDependencies).toContain("task-a");
+	});
+
+	test("does NOT inject edge when targetFiles are completely disjoint", async () => {
+		const result = await decomposeWith([
+			{ id: "task-a", targetFiles: ["src/auth.ts"] },
+			{ id: "task-b", targetFiles: ["src/router.ts"] },
+		]);
+
+		const taskA = result.tasks.find((t) => t.id === "task-a")!;
+		const taskB = result.tasks.find((t) => t.id === "task-b")!;
+		expect(taskA.dependencies).toEqual([]);
+		expect(taskB.dependencies).toEqual([]);
+	});
+
+	test("does NOT inject duplicate edge when dependency already declared explicitly", async () => {
+		const result = await decomposeWith([
+			{ id: "task-a", targetFiles: ["src/auth.ts"] },
+			{
+				id: "task-b",
+				targetFiles: ["src/auth.ts"],
+				dependencies: ["task-a"], // already declared
+			},
+		]);
+
+		const taskB = result.tasks.find((t) => t.id === "task-b")!;
+		const taskADeps = taskB.dependencies.filter((d) => d === "task-a");
+		expect(taskADeps).toHaveLength(1); // no duplicate
+	});
+
+	test("freely parallelizes tasks with empty targetFiles", async () => {
+		const result = await decomposeWith([
+			{ id: "task-a", targetFiles: [] },
+			{ id: "task-b", targetFiles: [] },
+		]);
+
+		const taskA = result.tasks.find((t) => t.id === "task-a")!;
+		const taskB = result.tasks.find((t) => t.id === "task-b")!;
+		expect(taskA.dependencies).toEqual([]);
+		expect(taskB.dependencies).toEqual([]);
+	});
+
+	test("gracefully defaults missing targetFiles to [] without throwing", async () => {
+		// LLM omits targetFiles field entirely on one task
+		const mockRouteTaskWithFallback = (await import("./agent-router"))
+			.routeTaskWithFallback as ReturnType<typeof vi.fn>;
+		mockRouteTaskWithFallback.mockResolvedValue({
+			provider: "gemini",
+			response: {
+				content: JSON.stringify({
+					tasks: [
+						{
+							id: "no-target",
+							description: "Missing targetFiles",
+							estimatedComplexity: "low",
+							dependencies: [],
+							role: "execution",
+							files: [],
+							// targetFiles intentionally omitted
+						},
+					],
+				}),
+				usage: { inputTokens: 10, outputTokens: 10 },
+			},
+		});
+
+		const decomposer = new TaskDecomposer(undefined, null);
+		const result = await decomposer.decompose("test graceful");
+
+		expect(result.tasks[0].targetFiles).toEqual([]);
+	});
+
+	test("deterministic tie-breaking: lower task ID always runs first", async () => {
+		// z-task and a-task both claim the same file
+		const result = await decomposeWith([
+			{ id: "z-task", targetFiles: ["src/shared.ts"] },
+			{ id: "a-task", targetFiles: ["src/shared.ts"] },
+		]);
+
+		// a-task (lower ID alphabetically) should run first — z-task waits
+		const zTask = result.tasks.find((t) => t.id === "z-task")!;
+		const aTask = result.tasks.find((t) => t.id === "a-task")!;
+		expect(zTask.dependencies).toContain("a-task");
+		expect(aTask.dependencies).not.toContain("z-task");
+	});
+
+	test("injected edges are flagged in implicitDependencies but not the original dependencies field when not already present", async () => {
+		const result = await decomposeWith([
+			{ id: "task-a", targetFiles: ["src/config.ts"] },
+			{ id: "task-b", targetFiles: ["src/config.ts"] },
+		]);
+
+		const taskB = result.tasks.find((t) => t.id === "task-b")!;
+		// The edge appears in BOTH dependencies (for execution ordering)
+		// AND implicitDependencies (for observability/logging)
+		expect(taskB.dependencies).toContain("task-a");
+		expect(taskB.implicitDependencies).toContain("task-a");
 	});
 });
