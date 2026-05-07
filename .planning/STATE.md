@@ -8,7 +8,7 @@
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | Tracer Bullet — Credential Resolution | 🔵 Active |
+| 1 | Tracer Bullet — Credential Resolution | 🟢 Ready to execute (2 plans, 2 waves) |
 | 2 | Auth CLI — Provider Management | ⚪ Pending |
 | 3 | DAG Hardening — Safe Parallel Execution | ⚪ Pending |
 | 4 | Event Ledger v2 — Deterministic Replay | ⚪ Pending |
@@ -28,6 +28,7 @@
 | Date | Stopped At | Resume File |
 |------|-----------|-------------|
 | 2026-05-07 | Phase 1 context gathered | `.planning/phases/01-tracer-bullet-credential-resolution/01-CONTEXT.md` |
+| 2026-05-07 | Phase 1 planned (2 plans) | `.planning/phases/01-tracer-bullet-credential-resolution/01-credential-injection-PLAN.md` |
 
 ---
 *Last updated: 2026-05-07*
