@@ -19,6 +19,32 @@ const FREE_PROVIDERS = new Set(["kiro-ai", "iflow-ai"]);
 // OAuth providers that use token-based auth
 const OAUTH_PROVIDERS = new Set(["claude-ai", "anthropic", "gemini-ai"]);
 
+/**
+ * Maps provider IDs to their canonical environment variable names.
+ * Used by resolveCredential/resolveCredentialSync to resolve credentials
+ * saved via the config wizard (which stores ENV_VAR-style keys).
+ */
+export const PROVIDER_TO_ENV_MAP: Record<string, string> = {
+	"opencode-go": "OPENCODE_API_KEY",
+	"anthropic-api": "ANTHROPIC_API_KEY",
+	"gemini-api": "GOOGLE_AI_STUDIO_API_KEY",
+	"deepseek": "DEEPSEEK_API_KEY",
+	"deepseek-v4": "DEEPSEEK_API_KEY",
+	"gemini": "GEMINI_API_KEY",
+	"tavily": "TAVILY_API_KEY",
+	"moonshot": "MOONSHOT_API_KEY",
+	"xiaomi": "XIAOMI_API_KEY",
+	"alibaba": "ALIBABA_API_KEY",
+	"minimax": "MINIMAX_API_KEY",
+	"deepinfra": "DEEPINFRA_API_KEY",
+	"fireworks": "FIREWORKS_API_KEY",
+	"zai": "ZAI_API_KEY",
+	"groq": "GROQ_API_KEY",
+	"kiro-ai": "KIRO_AI_API_KEY",
+	"mistral": "MISTRAL_API_KEY",
+	"openai": "OPENAI_API_KEY",
+};
+
 function getCredentialsPath(): string {
 	const xdgConfig = process.env.XDG_CONFIG_HOME;
 	if (xdgConfig) {
@@ -67,9 +93,18 @@ export async function resolveCredential(provider: string): Promise<string | null
 		const content = await fs.readFile(credPath, "utf-8");
 		const parsed: CredentialsFile = JSON.parse(content);
 
+		// 1a. Try direct provider-ID lookup first
 		const entry = parsed[provider];
 		const key = extractKey(entry);
 		if (key) return key;
+
+		// 1b. Try ENV_VAR-style key (config wizard format)
+		const envStyleKey = PROVIDER_TO_ENV_MAP[provider];
+		if (envStyleKey) {
+			const envEntry = parsed[envStyleKey];
+			const envKey = extractKey(envEntry);
+			if (envKey) return envKey;
+		}
 	} catch {
 		// File doesn't exist or is invalid — fall through
 	}
@@ -98,9 +133,18 @@ export function resolveCredentialSync(provider: string): string | null {
 	// 1. Try credentials file (sync)
 	const parsed = readCredentialsFileSync();
 	if (parsed) {
+		// 1a. Try direct provider-ID lookup first
 		const entry = parsed[provider];
 		const key = extractKey(entry);
 		if (key) return key;
+
+		// 1b. Try ENV_VAR-style key (config wizard format)
+		const envStyleKey = PROVIDER_TO_ENV_MAP[provider];
+		if (envStyleKey) {
+			const envEntry = parsed[envStyleKey];
+			const envKey = extractKey(envEntry);
+			if (envKey) return envKey;
+		}
 	}
 
 	// 2. Try environment variable
