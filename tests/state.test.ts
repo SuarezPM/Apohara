@@ -4,18 +4,18 @@ import { rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 describe("StateMachine", () => {
-	const TEST_FILE = join(process.cwd(), "tests/tmp-clarity", "state.json");
+	const TEST_FILE = join(process.cwd(), "tests/tmp-apohara", "state.json");
 	const TMP_FILE = `${TEST_FILE}.tmp`;
 
 	beforeEach(async () => {
-		await rm(join(process.cwd(), "tests/tmp-clarity"), {
+		await rm(join(process.cwd(), "tests/tmp-apohara"), {
 			recursive: true,
 			force: true,
 		});
 	});
 
 	afterEach(async () => {
-		await rm(join(process.cwd(), "tests/tmp-clarity"), {
+		await rm(join(process.cwd(), "tests/tmp-apohara"), {
 			recursive: true,
 			force: true,
 		});

@@ -1,4 +1,4 @@
-import { spawn } from "bun";
+import { spawn } from "../lib/spawn";
 
 export interface IsolationResult {
 	status: "success" | "error";
@@ -88,8 +88,8 @@ export class IsolationEngine {
 		});
 
 		const exitCode = await proc.exited;
-		const stdout = await new Response(proc.stdout).text();
-		const stderr = await new Response(proc.stderr).text();
+		const stdout = await proc.stdout.text();
+		const stderr = await proc.stderr.text();
 
 		if (exitCode !== 0 && stdout.trim() === "") {
 			throw new Error(`Binary exited with code ${exitCode}. Stderr: ${stderr}`);

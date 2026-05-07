@@ -1,26 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "bun:test";
 import { TaskDecomposer, type DecompositionResult } from "../src/core/decomposer";
 import { ProviderRouter, type LLMResponse } from "../src/providers/router";
+import type { IndexerClient, SearchResult, BlastRadiusResponse } from "../src/core/indexer-client";
 
-// Mock the ProviderRouter
-vi.mock("../src/providers/router", () => {
-	return {
-		ProviderRouter: vi.fn().mockImplementation(() => ({
-			completion: vi.fn(),
-		})),
-	};
-});
+// NOTE: We intentionally do NOT mock ProviderRouter here because we need
+// to test the real integration between TaskDecomposer and ProviderRouter
+// The mock was causing issues with other test files that import the real class
 
 describe("TaskDecomposer Integration", () => {
 	let decomposer: TaskDecomposer;
 	let mockRouter: ProviderRouter;
+	let mockCompletion: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
-		mockRouter = new ProviderRouter({
-			opencodeApiKey: "test-key",
-			deepseekApiKey: "test-key",
-		});
-		decomposer = new TaskDecomposer(mockRouter as unknown as ProviderRouter);
+		mockCompletion = vi.fn();
+		mockRouter = {
+			completion: mockCompletion,
+		} as unknown as ProviderRouter;
+		decomposer = new TaskDecomposer(mockRouter);
 	});
 
 	it("should decompose a prompt into atomic tasks", async () => {
@@ -192,5 +189,199 @@ describe("TaskDecomposer Integration", () => {
 		expect(result.tasks[0].estimatedComplexity).toBe("low");
 		expect(result.tasks[1].estimatedComplexity).toBe("medium");
 		expect(result.tasks[2].estimatedComplexity).toBe("high");
+	});
+});
+
+describe("TaskDecomposer — Indexer Context Injection", () => {
+	let mockRouter: ProviderRouter;
+	let mockCompletion: ReturnType<typeof vi.fn>;
+	let mockIndexerClient: IndexerClient;
+	let mockSearch: ReturnType<typeof vi.fn>;
+	let mockGetBlastRadius: ReturnType<typeof vi.fn>;
+
+	const twoTaskLLMResponse = (): LLMResponse => ({
+		content: JSON.stringify({
+			tasks: [
+				{
+					id: "impl-core",
+					description: "Implement core logic",
+					estimatedComplexity: "high",
+					dependencies: [],
+					role: "execution",
+					files: ["src/core/handler.ts"],
+				},
+				{
+					id: "write-tests",
+					description: "Write tests",
+					estimatedComplexity: "medium",
+					dependencies: ["impl-core"],
+					role: "verification",
+					files: [],
+				},
+			],
+		}),
+		usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+		costUsd: 0.001,
+		provider: "opencode-go",
+		model: "test-model",
+		durationMs: 200,
+	});
+
+	const fakeSearchResults: SearchResult[] = [
+		{
+			id: 1,
+			distance: 0.2,
+			metadata: {
+				file_path: "src/core/handler.ts",
+				function_name: "handleRequest",
+				parameters: "(req: Request)",
+				return_type: "Promise<Response>",
+				line: 42,
+				column: 0,
+			},
+		},
+		{
+			id: 2,
+			distance: 0.35,
+			metadata: {
+				file_path: "src/lib/utils.ts",
+				function_name: "formatResponse",
+				parameters: "(data: unknown)",
+				return_type: "string",
+				line: 10,
+				column: 0,
+			},
+		},
+	];
+
+	const fakeBlastRadius: BlastRadiusResponse = {
+		files: ["src/core/handler.ts", "src/middleware/auth.ts", "src/types.ts"],
+	};
+
+	beforeEach(() => {
+		mockCompletion = vi.fn();
+		mockRouter = { completion: mockCompletion } as unknown as ProviderRouter;
+
+		mockSearch = vi.fn().mockResolvedValue(fakeSearchResults);
+		mockGetBlastRadius = vi.fn().mockResolvedValue(fakeBlastRadius);
+		mockIndexerClient = {
+			search: mockSearch,
+			getBlastRadius: mockGetBlastRadius,
+		} as unknown as IndexerClient;
+	});
+
+	it("should attach indexerContext to every task when indexer is available", async () => {
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		const result = await decomposer.decompose("Build authentication system");
+
+		expect(result.tasks).toHaveLength(2);
+		for (const task of result.tasks) {
+			expect(task.indexerContext).toBeDefined();
+			expect(task.indexerContext!.searchHits).toHaveLength(2);
+		}
+	});
+
+	it("should perform exactly one broad search call regardless of task count", async () => {
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		await decomposer.decompose("Build authentication system");
+
+		expect(mockSearch).toHaveBeenCalledTimes(1);
+		expect(mockSearch).toHaveBeenCalledWith("Build authentication system", 10);
+	});
+
+	it("should call getBlastRadius once per task that has a primary file", async () => {
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		await decomposer.decompose("Build authentication system");
+
+		// impl-core has files[0] = "src/core/handler.ts"; write-tests has no files
+		expect(mockGetBlastRadius).toHaveBeenCalledTimes(1);
+		expect(mockGetBlastRadius).toHaveBeenCalledWith("src/core/handler.ts");
+	});
+
+	it("should populate blastRadius only for tasks with a primary file target", async () => {
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		const result = await decomposer.decompose("Build authentication system");
+
+		const implTask = result.tasks.find((t) => t.id === "impl-core")!;
+		const testTask = result.tasks.find((t) => t.id === "write-tests")!;
+
+		expect(implTask.indexerContext!.blastRadius).toEqual(fakeBlastRadius.files);
+		expect(testTask.indexerContext!.blastRadius).toEqual([]);
+	});
+
+	it("should map search hit distance to a similarity score (1 - distance)", async () => {
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		const result = await decomposer.decompose("Build authentication system");
+
+		const hits = result.tasks[0].indexerContext!.searchHits;
+		expect(hits[0].score).toBeCloseTo(1 - fakeSearchResults[0].distance);
+		expect(hits[1].score).toBeCloseTo(1 - fakeSearchResults[1].distance);
+		expect(hits[0].filePath).toBe("src/core/handler.ts");
+		expect(hits[0].functionName).toBe("handleRequest");
+		expect(hits[0].line).toBe(42);
+	});
+
+	it("should degrade gracefully when indexer search throws", async () => {
+		mockSearch.mockRejectedValueOnce(new Error("daemon unreachable"));
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		const result = await decomposer.decompose("Build authentication system");
+
+		// Decomposition succeeds; tasks have no indexerContext
+		expect(result.tasks).toHaveLength(2);
+		for (const task of result.tasks) {
+			expect(task.indexerContext).toBeUndefined();
+		}
+	});
+
+	it("should degrade gracefully when getBlastRadius throws for a specific task", async () => {
+		mockGetBlastRadius.mockRejectedValueOnce(new Error("target not indexed"));
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		const result = await decomposer.decompose("Build authentication system");
+
+		// indexerContext is still attached; blastRadius falls back to empty array
+		const implTask = result.tasks.find((t) => t.id === "impl-core")!;
+		expect(implTask.indexerContext).toBeDefined();
+		expect(implTask.indexerContext!.blastRadius).toEqual([]);
+		// searchHits still populated from the successful broad search
+		expect(implTask.indexerContext!.searchHits).toHaveLength(2);
+	});
+
+	it("should not attach indexerContext when indexer is explicitly disabled (null)", async () => {
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, null);
+
+		const result = await decomposer.decompose("Build authentication system");
+
+		expect(mockSearch).not.toHaveBeenCalled();
+		for (const task of result.tasks) {
+			expect(task.indexerContext).toBeUndefined();
+		}
+	});
+
+	it("should preserve the existing files field alongside indexerContext", async () => {
+		mockCompletion.mockResolvedValueOnce(twoTaskLLMResponse());
+		const decomposer = new TaskDecomposer(mockRouter, mockIndexerClient);
+
+		const result = await decomposer.decompose("Build authentication system");
+
+		const implTask = result.tasks.find((t) => t.id === "impl-core")!;
+		// Original files from LLM are untouched
+		expect(implTask.files).toContain("src/core/handler.ts");
+		// indexerContext sits alongside, not replacing
+		expect(implTask.indexerContext).toBeDefined();
 	});
 });

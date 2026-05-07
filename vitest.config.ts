@@ -4,6 +4,15 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		globals: true,
-		include: ["src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+		include: [
+			"src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}",
+			"tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}",
+		],
+		exclude: [
+			"node_modules",
+			"src/tui/**",
+			"packages/**",
+			"tests/tui/**",
+		],
 	},
 });

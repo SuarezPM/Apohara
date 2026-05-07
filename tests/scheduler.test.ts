@@ -59,6 +59,7 @@ describe("ParallelScheduler Integration", () => {
 			mockIsolation as unknown as IsolationEngine,
 			stateMachine,
 			ledger,
+			undefined,
 			{ worktreePoolSize: 2 },
 		);
 

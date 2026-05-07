@@ -13,13 +13,13 @@ import { configCommand } from '../src/commands/config.js';
 describe('CLI Router', () => {
 	it('should parse arguments and show help', async () => {
 		const { stdout } = await execAsync('bun run src/cli.ts --help');
-		expect(stdout).toContain('Clarity CLI');
+		expect(stdout).toContain('Apohara CLI');
 		expect(stdout).toContain('config');
 	});
 
 	it('should show version', async () => {
 		const { stdout } = await execAsync('bun run src/cli.ts --version');
-		expect(stdout).toContain('1.0.0');
+		expect(stdout).toContain('0.1.0');
 	});
 });
 

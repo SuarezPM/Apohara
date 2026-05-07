@@ -29,3 +29,6 @@ vendor/
 coverage/
 .cache/
 tmp/
+.gitnexus
+# CocoIndex Code (ccc)
+/.cocoindex_code/

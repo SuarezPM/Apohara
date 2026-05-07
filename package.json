@@ -1,13 +1,31 @@
 {
-	"name": "clarity-code",
+	"name": "apohara",
+	"version": "0.1.0",
 	"module": "index.ts",
 	"type": "module",
-	"private": true,
+	"main": "dist/cli.js",
 	"bin": {
-		"clarity": "./src/cli.ts"
+		"apohara": "./dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"binaries",
+		"scripts"
+	],
+	"optionalDependencies": {
+		"@apohara/cli-darwin-x64": "0.1.0",
+		"@apohara/cli-darwin-arm64": "0.1.0",
+		"@apohara/cli-linux-x64": "0.1.0",
+		"@apohara/cli-linux-arm64": "0.1.0",
+		"@apohara/cli-win32-x64": "0.1.0"
 	},
 	"scripts": {
+		"postinstall": "node scripts/postinstall.js",
+		"build": "bun build src/cli.ts --target node --outdir dist",
 		"start": "bun run src/cli.ts"
+	},
+	"engines": {
+		"node": ">=22"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.13",
@@ -19,7 +37,6 @@
 	},
 	"dependencies": {
 		"commander": "^14.0.3",
-		"dotenv": "^17.4.2",
 		"zod": "^4.4.1"
 	}
 }

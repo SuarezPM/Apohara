@@ -57,7 +57,7 @@ export class ParallelScheduler {
 		const initPromises: Promise<void>[] = [];
 		for (let i = 0; i < this.config.worktreePoolSize; i++) {
 			const worktreeId = `lane-${i}`;
-			const path = `.clarity/worktrees/${worktreeId}`;
+			const path = `.apohara/worktrees/${worktreeId}`;
 
 			// Create worktree asynchronously
 			const promise = this.isolationEngine
@@ -185,7 +185,7 @@ export class ParallelScheduler {
 				t.id === taskId
 					? {
 							...t,
-							status: result.status === "success" ? "completed" : "failed",
+							status: (result.status === "success" ? "completed" : "failed") as Task["status"],
 							updatedAt: new Date(),
 						}
 					: t,

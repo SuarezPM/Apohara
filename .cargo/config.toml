@@ -1,0 +1,2 @@
+# Cargo config - static linking configuration
+# Note: Full static linking requires musl target with cross-compiler

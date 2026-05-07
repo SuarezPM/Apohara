@@ -61,21 +61,21 @@ describe("Fallback Behavior Integration Tests", () => {
 			// Test the fallback method directly with a mock
 			const fallbackResult = routerWith429.fallback("opencode-go");
 			
-			// Should return deepseek when opencode-go is requested
-			expect(fallbackResult).toBe("deepseek");
+			// Should return next provider in priority list after opencode-go
+			expect(fallbackResult).toBe("minimax-m2.7");
 		});
 
 		it("should fallback on timeout error", () => {
 			// Test isRetryableError logic indirectly through fallback
 			const fallbackResult = router.fallback("opencode-go");
-			// Round-robin should give us the other provider
-			expect(fallbackResult).toBe("deepseek");
+			// Round-robin should give us the next provider in priority list
+			expect(fallbackResult).toBe("minimax-m2.7");
 		});
 
 		it("should fallback on network error", () => {
 			const fallbackResult = router.fallback("deepseek");
-			// Should fallback to opencode-go
-			expect(fallbackResult).toBe("opencode-go");
+			// Should fallback to next provider in priority list after deepseek
+			expect(fallbackResult).toBe("glm-deepinfra");
 		});
 	});
 
@@ -95,7 +95,7 @@ describe("Fallback Behavior Integration Tests", () => {
 			// We can't easily trigger cooldown in tests without real failures
 			// But we can verify the fallback logic handles it
 			const fallbackResult = router.fallback("opencode-go");
-			expect(fallbackResult).toBe("deepseek");
+			expect(fallbackResult).toBe("minimax-m2.7");
 		});
 	});
 
@@ -112,13 +112,13 @@ describe("Fallback Behavior Integration Tests", () => {
 
 	describe("Provider Exhaustion", () => {
 		it("should return alternate provider when one is unavailable", () => {
-			// Test fallback logic - should always return an available provider
+			// Test fallback logic - should always return a different available provider
 			const fallback1 = router.fallback("opencode-go");
 			const fallback2 = router.fallback("deepseek");
-			
-			// Both should work (round-robin)
-			expect(["opencode-go", "deepseek"]).toContain(fallback1);
-			expect(["opencode-go", "deepseek"]).toContain(fallback2);
+
+			// Both should return the next provider in priority list
+			expect(fallback1).toBe("minimax-m2.7");
+			expect(fallback2).toBe("glm-deepinfra");
 		});
 
 		it("should handle exhaustion when all providers return same result", () => {
@@ -236,10 +236,10 @@ describe("Fallback Behavior Integration Tests", () => {
 				opencodeApiKey: "test-key",
 				deepseekApiKey: "test-key",
 			});
-			
-			// The fallback method returns alternate provider
+
+			// The fallback method returns next provider in priority list
 			const alternate = router.fallback("opencode-go");
-			expect(alternate).toBe("deepseek");
+			expect(alternate).toBe("minimax-m2.7");
 		});
 
 		it("should classify timeout as retryable", async () => {
@@ -247,10 +247,10 @@ describe("Fallback Behavior Integration Tests", () => {
 				opencodeApiKey: "test-key",
 				deepseekApiKey: "test-key",
 			});
-			
+
 			// Timeout would trigger fallback in the completion method
 			const alternate = router.fallback("deepseek");
-			expect(alternate).toBe("opencode-go");
+			expect(alternate).toBe("glm-deepinfra");
 		});
 
 		it("should classify network error as retryable", async () => {
@@ -258,10 +258,10 @@ describe("Fallback Behavior Integration Tests", () => {
 				opencodeApiKey: "test-key",
 				deepseekApiKey: "test-key",
 			});
-			
+
 			// Network errors would trigger fallback
 			const alternate = router.fallback("opencode-go");
-			expect(alternate).toBe("deepseek");
+			expect(alternate).toBe("minimax-m2.7");
 		});
 	});
 
@@ -338,9 +338,9 @@ describe("Full Fallback Chain Integration", () => {
 		const fromOpencode = router.fallback("opencode-go");
 		const fromDeepseek = router.fallback("deepseek");
 		
-		// Verify alternation
-		expect(fromOpencode).toBe("deepseek");
-		expect(fromDeepseek).toBe("opencode-go");
+		// Verify next-in-priority fallback from each provider
+		expect(fromOpencode).toBe("minimax-m2.7");
+		expect(fromDeepseek).toBe("glm-deepinfra");
 	});
 
 	it("should log events throughout the fallback chain", async () => {

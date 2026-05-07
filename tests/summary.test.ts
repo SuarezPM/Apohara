@@ -16,8 +16,8 @@ describe("SummaryGenerator", () => {
 	beforeEach(async () => {
 		// Set up test directories
 		testEventsDir = join(process.cwd(), ".events", "test-summary");
-		testRunsDir = join(process.cwd(), ".clarity", "runs", "test-summary");
-		testStateFile = join(process.cwd(), ".clarity", "test-state.json");
+		testRunsDir = join(process.cwd(), ".apohara", "runs", "test-summary");
+		testStateFile = join(process.cwd(), ".apohara", "test-state.json");
 
 		// Clean up
 		await rm(testEventsDir, { recursive: true, force: true });
@@ -58,8 +58,8 @@ describe("SummaryGenerator", () => {
 			const gen = new SummaryGenerator({
 				runId: "custom-run",
 				eventsDir: ".events",
-				stateFilePath: ".clarity/state.json",
-				outputDir: ".clarity/runs",
+				stateFilePath: ".apohara/state.json",
+				outputDir: ".apohara/runs",
 			});
 			expect(gen).toBeDefined();
 		});
@@ -72,7 +72,7 @@ describe("SummaryGenerator", () => {
 			expect(existsSync(outputPath)).toBe(true);
 
 			const content = await readFile(outputPath, "utf-8");
-			expect(content).toContain("Clarity Auto Run Summary");
+			expect(content).toContain("Apohara Auto Run Summary");
 			expect(content).toContain("No tasks recorded");
 		});
 

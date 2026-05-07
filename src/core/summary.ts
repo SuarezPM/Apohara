@@ -75,8 +75,8 @@ export class SummaryGenerator {
 
 		this.config = {
 			eventsDir: options?.eventsDir || ".events",
-			stateFilePath: options?.stateFilePath || ".clarity/state.json",
-			outputDir: options?.outputDir || ".clarity/runs",
+			stateFilePath: options?.stateFilePath || ".apohara/state.json",
+			outputDir: options?.outputDir || ".apohara/runs",
 		};
 
 		this.stateMachine = new StateMachine(this.config.stateFilePath);
@@ -214,19 +214,17 @@ export class SummaryGenerator {
 
 	/**
 	 * Extracts task results from state and events.
+	 * Falls back to scanning events for task IDs if state has no tasks.
 	 */
 	private extractTaskResults(
 		state: OrchestratorState,
 		events: EventLog[],
 	): TaskResult[] {
 		const results: TaskResult[] = [];
+		const seenIds = new Set<string>();
 
-		// Use state tasks
-		for (const task of state.tasks) {
-			const taskEvents = events.filter((e) => e.taskId === task.id);
-			const completionEvent = taskEvents.find(
-				(e) => e.type === "task_completed" || task.status === "completed",
-			);
+		const buildResult = (id: string, status: TaskResult["status"], description: string, taskEvents: EventLog[]): TaskResult => {
+			const completionEvent = taskEvents.find((e) => e.type === "task_completed");
 			const startEvent = taskEvents.find(
 				(e) => e.type === "task_started" || e.type === "task_dispatched",
 			);
@@ -236,24 +234,48 @@ export class SummaryGenerator {
 				const start = new Date(startEvent.timestamp).getTime();
 				const end = new Date(completionEvent.timestamp).getTime();
 				durationMs = end - start;
+			} else if (completionEvent?.metadata?.durationMs) {
+				durationMs = completionEvent.metadata.durationMs as number;
 			}
 
 			const providerEvent = taskEvents.find((e) => e.metadata?.provider);
-
 			const costEvent = taskEvents.find((e) => e.metadata?.costUsd);
 
-			results.push({
-				id: task.id,
-				status: task.status as
-					| "completed"
-					| "failed"
-					| "pending"
-					| "in_progress",
-				description: task.description,
+			return {
+				id,
+				status,
+				description,
 				durationMs,
 				provider: providerEvent?.metadata?.provider as string | undefined,
 				costUsd: costEvent?.metadata?.costUsd as number | undefined,
-			});
+			};
+		};
+
+		// Use state tasks first
+		for (const task of state.tasks) {
+			seenIds.add(task.id);
+			const taskEvents = events.filter((e) => e.taskId === task.id);
+			const completionEvent = taskEvents.find(
+				(e) => e.type === "task_completed" || task.status === "completed",
+			);
+			results.push(buildResult(
+				task.id,
+				task.status as TaskResult["status"],
+				task.description,
+				taskEvents,
+			));
+		}
+
+		// Also scan events for task IDs not in state
+		const eventTaskIds = new Set(
+			events.filter((e) => e.taskId).map((e) => e.taskId as string),
+		);
+		for (const taskId of eventTaskIds) {
+			if (seenIds.has(taskId)) continue;
+			const taskEvents = events.filter((e) => e.taskId === taskId);
+			const completionEvent = taskEvents.find((e) => e.type === "task_completed");
+			const status: TaskResult["status"] = completionEvent ? "completed" : "in_progress";
+			results.push(buildResult(taskId, status, taskId, taskEvents));
 		}
 
 		return results;
@@ -400,7 +422,7 @@ export class SummaryGenerator {
 
 		// Header
 		const date = new Date(summary.timestamp).toISOString();
-		lines.push(`# Clarity Auto Run Summary`);
+		lines.push(`# Apohara Auto Run Summary`);
 		lines.push(``);
 		lines.push(`**Run ID:** ${summary.runId}`);
 		lines.push(`**Timestamp:** ${date}`);

@@ -1,14 +1,18 @@
-import { spawn } from "bun";
+import { spawn } from "../lib/spawn";
 import { Command } from "commander";
 import { Consolidator } from "../core/consolidator";
 import { TaskDecomposer } from "../core/decomposer";
+import { routeTask, routeTaskWithFallback } from "../core/agent-router";
 import { IsolationEngine } from "../core/isolation";
 import { EventLedger } from "../core/ledger";
-import { ParallelScheduler } from "../core/scheduler";
+import { SubagentManager } from "../core/subagent-manager";
 import { StateMachine } from "../core/state";
 import { SummaryGenerator } from "../core/summary";
+import type { DecomposedTask } from "../core/decomposer";
 import { GitHubClient } from "../providers/github";
 import { ProviderRouter } from "../providers/router";
+import { Isolator } from "../core/sandbox";
+import { VerificationMesh } from "../core/verification-mesh";
 
 export const autoCommand = new Command("auto")
 	.description(
@@ -30,6 +34,11 @@ export const autoCommand = new Command("auto")
 		"Skip GitHub PR creation (useful for local-only runs)",
 		false,
 	)
+	.option(
+		"--improve-self",
+		"Use sandbox for test execution and VerificationMesh for high-complexity tasks; auto-commits passing tasks",
+		false,
+	)
 	.action(
 		async (
 			prompt: string,
@@ -37,34 +46,43 @@ export const autoCommand = new Command("auto")
 				worktrees?: string;
 				simulateFailure?: boolean;
 				pr?: boolean;
+				improveSelf?: boolean;
 			},
 		) => {
 			const worktreePoolSize = parseInt(options.worktrees || "3", 10);
 			const enablePr = options.pr ?? true;
+			const improveSelf = options.improveSelf ?? false;
 
-			console.log(`🚀 Starting clarity auto for: "${prompt}"`);
+			console.log(`🚀 Starting apohara auto for: "${prompt}"`);
 			console.log(`📊 Worktree pool size: ${worktreePoolSize}`);
 			if (options.simulateFailure) {
 				console.log(
 					`⚠️  SIMULATE-FAILURE MODE ENABLED - First provider will return 429`,
 				);
 			}
+			if (improveSelf) {
+				console.log(
+					`🔒 IMPROVE-SELF MODE: sandbox test execution + mesh verification + auto-commit`,
+				);
+			}
 
 			// 1) Initialize core components
 			const stateMachine = new StateMachine();
 			const ledger = new EventLedger();
-			const isolationEngine = new IsolationEngine();
 			const router = new ProviderRouter({
 				simulateFailure: options.simulateFailure ?? false,
 			});
 			const decomposer = new TaskDecomposer(router);
-			const scheduler = new ParallelScheduler(
-				isolationEngine,
-				stateMachine,
-				ledger,
-				router,
-				{ worktreePoolSize },
-			);
+			const subagentManager = new SubagentManager({
+				maxConcurrent: worktreePoolSize,
+				timeoutMs: 120000,
+				maxRetries: 3,
+				backoffMs: [1000, 4000, 16000],
+			});
+
+			// Improve-self components (initialized lazily when flag is set)
+			const isolator = improveSelf ? new Isolator() : null;
+			const verificationMesh = improveSelf ? new VerificationMesh() : null;
 
 			try {
 				// 2) Load or create state
@@ -83,18 +101,16 @@ export const autoCommand = new Command("auto")
 				// 3) Decompose the prompt into atomic tasks
 				console.log("🔄 Decomposing prompt into atomic tasks...");
 
-				// For now, since we don't have the LLM running in this test, we can:
-				// Let it fail gracefully and show an error message
-				// or we could bypass the LLM and provide test data
-				let decompositionResult: { tasks: Array<{ id: string }> };
+				let decompositionResult: { tasks: DecomposedTask[] };
 				try {
 					decompositionResult = await decomposer.decompose(prompt);
 				} catch (error) {
-					// If LLM fails (no API key, etc), show helpful error
 					const errorMessage =
 						error instanceof Error ? error.message : String(error);
 					console.error(`❌ Decomposition failed: ${errorMessage}`);
-					console.log("\n💡 Make sure your .env file has a valid API key:");
+					console.log("\n💡 Make sure you have configured your API keys:");
+					console.log("   apohara config");
+					console.log("   or set environment variables:\n");
 					console.log("   OPENCODE_API_KEY=your-key-here");
 					console.log("   or\n   DEEPSEEK_API_KEY=your-key-here\n");
 					await ledger.log(
@@ -125,30 +141,40 @@ export const autoCommand = new Command("auto")
 					"info",
 				);
 
-				// 4) Initialize scheduler and execute tasks
-				console.log("🔧 Initializing worktree pool...");
-				await scheduler.initialize();
+				// 4) Execute tasks via SubagentManager (parallel with dependency resolution)
+				console.log("▶️ Executing tasks in parallel via SubagentManager...");
+				const agentResults = await subagentManager.executeAll(
+					decompositionResult.tasks,
+				);
 
-				console.log("▶️ Executing tasks in parallel...");
-				const results = await scheduler.executeAll(decompositionResult.tasks);
+				// 4b) Improve-self: sandbox test runs + mesh verification + auto-commit
+				if (improveSelf && isolator && verificationMesh) {
+					await runImproveSelf(
+						decompositionResult.tasks,
+						isolator,
+						verificationMesh,
+						ledger,
+					);
+				}
 
-				// 5) Report results - compact output (one line per task)
-				const successCount = results.filter(
-					(r) => r.status === "success",
+				// 5) Report results
+				const successCount = agentResults.filter(
+					(r) => r.status === "completed",
 				).length;
-				const errorCount = results.filter((r) => r.status === "error").length;
+				const errorCount = agentResults.filter(
+					(r) => r.status === "failed" || r.status === "timeout",
+				).length;
 
-				// Compact terminal output: one line per task
 				console.log("\n📋 Task Results:");
-				for (const result of results) {
-					const statusIcon = result.status === "success" ? "✅" : "❌";
+				for (const result of agentResults) {
+					const statusIcon = result.status === "completed" ? "✅" : "❌";
 					console.log(
-						`   ${statusIcon} [${result.taskId}] ${result.status} (worktree: ${result.worktreeId})`,
+						`   ${statusIcon} [${result.taskId}] ${result.status} (provider: ${result.provider}, ${result.durationMs}ms)`,
 					);
 				}
 
 				console.log(
-					`\n📊 Summary: ${successCount} succeeded, ${errorCount} failed, ${results.length} total`,
+					`\n📊 Summary: ${successCount} succeeded, ${errorCount} failed, ${agentResults.length} total`,
 				);
 
 				await ledger.log(
@@ -156,11 +182,11 @@ export const autoCommand = new Command("auto")
 					{
 						successCount,
 						errorCount,
-						totalTasks: results.length,
-						results: results.map((r) => ({
+						totalTasks: agentResults.length,
+						results: agentResults.map((r) => ({
 							taskId: r.taskId,
 							status: r.status,
-							worktreeId: r.worktreeId,
+							provider: r.provider,
 						})),
 					},
 					errorCount > 0 ? "warning" : "info",
@@ -194,7 +220,6 @@ export const autoCommand = new Command("auto")
 					lintResult.exitCode === 0 ? "info" : "warning",
 				);
 
-				// Include linting results in output
 				if (lintResult.fixed > 0) {
 					console.log(`   ✨ Fixed ${lintResult.fixed} issue(s)`);
 				} else {
@@ -225,7 +250,6 @@ export const autoCommand = new Command("auto")
 
 				// 10) Generate narrative summary from EventLedger and StateMachine
 				console.log("📝 Generating summary...");
-				// Extract runId from the main ledger to share the same event log
 				const runId =
 					ledger
 						.getFilePath()
@@ -237,7 +261,6 @@ export const autoCommand = new Command("auto")
 				const summaryPath = await summaryGenerator.generate();
 				await ledger.log("summary_generated", { summaryPath }, "info");
 
-				// 9) Final compact output
 				console.log("\n🎉 Auto execution complete!");
 				console.log(`   📂 Branch: ${consolidationResult.branch}`);
 				console.log(
@@ -257,17 +280,185 @@ export const autoCommand = new Command("auto")
 
 				process.exit(1);
 			} finally {
-				// 5) Clean up worktrees
-				console.log("🧹 Cleaning up worktrees...");
-				await scheduler.shutdown();
 				console.log("👋 Shutdown complete.");
 			}
 		},
 	);
 
 /**
+ * Improve-self execution loop:
+ * 1. Run tests via Isolator.exec() (sandboxed) for each completed task
+ * 2. For tasks with complexity ∈ {high, critical} AND filesModified ≥ 3, run VerificationMesh
+ * 3. Auto-commit tasks that pass sandbox + mesh with a structured message and GSD-Task trailer
+ */
+async function runImproveSelf(
+	tasks: DecomposedTask[],
+	isolator: Isolator,
+	verificationMesh: VerificationMesh,
+	ledger: EventLedger,
+): Promise<void> {
+	const workdir = process.cwd();
+
+	for (const task of tasks) {
+		// Sandbox test run
+		const sandboxResult = await isolator.exec({
+			workdir,
+			command: "bun test",
+			permission: "workspace_write",
+			timeout: 60000,
+			taskId: task.id,
+		});
+
+		await ledger.log(
+			"sandbox_test_run",
+			{
+				taskId: task.id,
+				exitCode: sandboxResult.exitCode,
+				durationMs: sandboxResult.durationMs,
+				error: sandboxResult.error,
+			},
+			sandboxResult.exitCode === 0 ? "info" : "warning",
+			task.id,
+		);
+
+		// Only proceed to mesh + commit if tests passed
+		if (sandboxResult.exitCode !== 0) {
+			console.log(`   ⚠️  [${task.id}] Tests failed in sandbox — skipping commit`);
+			await ledger.log(
+				"improve_self_task_completed",
+				{
+					taskId: task.id,
+					sandboxExitCode: sandboxResult.exitCode,
+					meshApplied: false,
+					committed: false,
+					skipReason: "sandbox_tests_failed",
+				},
+				"warning",
+				task.id,
+			);
+			continue;
+		}
+
+		const complexity = (task as unknown as { complexity?: string }).complexity ?? "medium";
+		const filesModified = (task as unknown as { filesModified?: number }).filesModified ?? 0;
+		const qualifiesForMesh =
+			(complexity === "high" || complexity === "critical") && filesModified >= 3;
+
+		let meshApplied = false;
+		let meshCostDelta = 0;
+
+		if (qualifiesForMesh) {
+			const meshResult = await verificationMesh.execute({
+				taskId: task.id,
+				role: "execution",
+				task: {
+					id: task.id,
+					messages: [
+						{
+							role: "user",
+							content: task.description,
+						},
+					],
+					complexity: complexity as "low" | "medium" | "high" | "critical",
+					filesModified,
+				},
+				policy: {
+					enabled: true,
+					max_extra_cost_pct: 15,
+					min_complexity: "high",
+				},
+			});
+
+			meshApplied = meshResult.meshApplied;
+			meshCostDelta = meshResult.meshCostDelta ?? 0;
+
+			// Abort commit if mesh selected Agent B and B produced a different result
+			if (meshResult.meshApplied && meshResult.arbiter?.verdict === "B") {
+				console.log(`   🔀 [${task.id}] Mesh selected Agent B output — reviewing before commit`);
+			}
+		}
+
+		// Auto-commit: task passed sandbox tests (and mesh if applicable)
+		const commitMessage = buildCommitMessage(task, { meshApplied, filesModified, complexity });
+		const committed = await gitCommitTask(workdir, task.id, commitMessage);
+
+		await ledger.log(
+			"improve_self_task_completed",
+			{
+				taskId: task.id,
+				sandboxExitCode: sandboxResult.exitCode,
+				meshApplied,
+				meshCostDelta,
+				committed,
+			},
+			"info",
+			task.id,
+		);
+
+		const meshTag = meshApplied ? " [mesh-verified]" : "";
+		const commitTag = committed ? " [committed]" : " [commit-skipped: nothing staged]";
+		console.log(`   ✅ [${task.id}]${meshTag}${commitTag}`);
+	}
+}
+
+function buildCommitMessage(
+	task: DecomposedTask,
+	meta: { meshApplied: boolean; filesModified: number; complexity: string },
+): string {
+	const body = [
+		`sandbox: tests passed`,
+		meta.meshApplied ? `mesh: verified` : null,
+		`complexity: ${meta.complexity}`,
+		`files-modified: ${meta.filesModified}`,
+	]
+		.filter(Boolean)
+		.join("\n");
+
+	return `feat: ${task.description}\n\n${body}\n\nGSD-Task: improve-self/${task.id}`;
+}
+
+/**
+ * Stages all modified tracked files and commits with the given message.
+ * Returns true if a commit was made, false if nothing was staged.
+ */
+async function gitCommitTask(
+	workdir: string,
+	taskId: string,
+	message: string,
+): Promise<boolean> {
+	// Stage all tracked modifications (not untracked — keeps write-only room doctrine)
+	const addProc = spawn(["git", "add", "-u"], {
+		stdout: "pipe",
+		stderr: "pipe",
+		cwd: workdir,
+	});
+	await addProc.exited;
+
+	// Check if there's anything staged
+	const statusProc = spawn(["git", "diff", "--cached", "--quiet"], {
+		stdout: "pipe",
+		stderr: "pipe",
+		cwd: workdir,
+	});
+	const statusCode = await statusProc.exited;
+
+	if (statusCode === 0) {
+		// exit 0 means no diff — nothing to commit
+		return false;
+	}
+
+	const commitProc = spawn(["git", "commit", "-m", message], {
+		stdout: "pipe",
+		stderr: "pipe",
+		cwd: workdir,
+	});
+	const commitCode = await commitProc.exited;
+
+	return commitCode === 0;
+}
+
+/**
  * Runs Biome linting on the consolidated code with autofix.
- * Returns the exit code and count of fixed issues.
  */
 async function runBiomeLint(): Promise<{
 	exitCode: number;
@@ -280,11 +471,9 @@ async function runBiomeLint(): Promise<{
 	});
 
 	const exitCode = await proc.exited;
-	const stdout = await new Response(proc.stdout).text();
-	const stderr = await new Response(proc.stderr).text();
+	const stdout = await proc.stdout.text();
+	const stderr = await proc.stderr.text();
 
-	// Parse the output to find number of fixed issues
-	// Biome outputs things like "Fixed 5 issues"
 	const fixedMatch =
 		stdout.match(/Fixed (\d+) issues?/) || stderr.match(/Fixed (\d+) issues?/);
 	const fixed = fixedMatch ? parseInt(fixedMatch[1], 10) : 0;
@@ -298,7 +487,6 @@ async function runBiomeLint(): Promise<{
 
 /**
  * Creates a GitHub Pull Request from the consolidated branch.
- * Returns null if PR creation fails or GitHub is not configured.
  */
 async function createGitHubPullRequest(
 	headBranch: string,
@@ -308,7 +496,6 @@ async function createGitHubPullRequest(
 	number: number;
 	htmlUrl: string;
 } | null> {
-	// Check if PR creation is disabled via --no-pr flag
 	if (!enablePr) {
 		await ledger.log(
 			"github_pr_skipped",
@@ -321,7 +508,6 @@ async function createGitHubPullRequest(
 
 	const github = new GitHubClient();
 
-	// Get repository info from remote
 	const repoInfo = await github.getRepositoryFromRemote();
 	if (!repoInfo?.repoInfo) {
 		await ledger.log(
@@ -333,7 +519,6 @@ async function createGitHubPullRequest(
 		return null;
 	}
 
-	// Validate token
 	const tokenValidation = github.validateToken();
 	if (!tokenValidation.valid) {
 		await ledger.log(

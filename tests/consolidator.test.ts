@@ -6,8 +6,8 @@ import { Consolidator, type ConsolidatorConfig } from "../src/core/consolidator"
 import { EventLedger } from "../src/core/ledger";
 
 // Test constants
-const TEST_WORKTREE_DIR = join(tmpdir(), "clarity-consolidator-test", "worktrees");
-const TEST_STATE_FILE = join(tmpdir(), "clarity-consolidator-test", "state.json");
+const TEST_WORKTREE_DIR = join(tmpdir(), "apohara-consolidator-test", "worktrees");
+const TEST_STATE_FILE = join(tmpdir(), "apohara-consolidator-test", "state.json");
 const TEST_CWD = tmpdir();
 
 describe("Consolidator", () => {
@@ -20,7 +20,7 @@ describe("Consolidator", () => {
 
 		// Create test directories
 		mkdirSync(TEST_WORKTREE_DIR, { recursive: true });
-		mkdirSync(join(tmpdir(), "clarity-consolidator-test"), {
+		mkdirSync(join(tmpdir(), "apohara-consolidator-test"), {
 			recursive: true,
 		});
 
@@ -65,7 +65,7 @@ describe("Consolidator", () => {
 			if (existsSync(TEST_WORKTREE_DIR)) {
 				rmSync(TEST_WORKTREE_DIR, { recursive: true, force: true });
 			}
-			const testDir = join(tmpdir(), "clarity-consolidator-test");
+			const testDir = join(tmpdir(), "apohara-consolidator-test");
 			if (existsSync(testDir)) {
 				rmSync(testDir, { recursive: true, force: true });
 			}
@@ -130,7 +130,7 @@ describe("Consolidator", () => {
 
 	test("should generate summary markdown", async () => {
 		const summaryPath = await consolidator["generateSummary"]({
-			branchName: "clarity/run-test",
+			branchName: "apohara/run-test",
 			timestamp: "2026-04-30T12-00-00",
 			successful: ["lane-0"],
 			failed: ["lane-1"],
@@ -154,7 +154,7 @@ describe("Consolidator", () => {
 		// This test will fail in CI without proper git setup
 		// We're testing the path construction logic here
 		const branchCreated = await consolidator["createBranch"](
-			"clarity/run-test-branch",
+			"apohara/run-test-branch",
 		);
 		// In a real environment with git, this would create a branch
 		// In test environment without git, it may fail gracefully
