@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { resolveCredentialSync } from "./credentials.js";
+import { resolveCredentialSync, PROVIDER_TO_ENV_MAP } from "./credentials.js";
 
 const envSchema = z.object({
 	// Primary execution provider (OpenCode Go)
@@ -88,17 +88,12 @@ export const config = parseEnv();
  * Gets the resolved API key for a provider, checking credentials file first.
  */
 export function getProviderKey(provider: string): string | null {
-	// Map provider IDs to their canonical env var names
-	const ENV_KEY_MAP: Record<string, string> = {
-		"anthropic-api": "ANTHROPIC_API_KEY",
-		"gemini-api": "GOOGLE_AI_STUDIO_API_KEY",
-	};
-	const envKey = ENV_KEY_MAP[provider] ?? (provider.toUpperCase().replace(/-/g, "_") + "_API_KEY");
+	const envKey = PROVIDER_TO_ENV_MAP[provider] ?? (provider.toUpperCase().replace(/-/g, "_") + "_API_KEY");
 	const envValue = process.env[envKey];
 	if (envValue && envValue.length > 0) {
 		return envValue;
 	}
 
-	// Fall back to credentials resolver
+	// Fall back to credentials resolver (which also uses PROVIDER_TO_ENV_MAP)
 	return resolveCredentialSync(provider);
 }
