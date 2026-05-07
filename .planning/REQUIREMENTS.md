@@ -56,19 +56,19 @@
 
 | REQ-ID | Phase | Plan | Status |
 |--------|-------|------|--------|
-| CRED-01 | Alfa | — | Pending |
-| CRED-02 | Alfa | — | Pending |
-| AUTH-01 | Alfa | — | Pending |
-| AUTH-02 | Alfa | — | Pending |
-| AUTH-03 | Alfa | — | Pending |
-| AUTH-04 | Alfa | — | Pending |
-| AUTH-05 | Alfa | — | Pending |
-| LEDGER-01 | Beta | — | Pending |
-| LEDGER-02 | Beta | — | Pending |
-| DAG-01 | Beta | — | Pending |
-| DAG-02 | Beta | — | Pending |
-| TUI-01 | Beta | — | Pending |
-| TUI-02 | Beta | — | Pending |
+| CRED-01 | Phase 1 | — | Pending |
+| CRED-02 | Phase 1 | — | Pending |
+| AUTH-01 | Phase 2 | — | Pending |
+| AUTH-02 | Phase 2 | — | Pending |
+| AUTH-03 | Phase 2 | — | Pending |
+| AUTH-04 | Phase 2 | — | Pending |
+| AUTH-05 | Phase 2 | — | Pending |
+| DAG-01 | Phase 3 | — | Pending |
+| DAG-02 | Phase 3 | — | Pending |
+| LEDGER-01 | Phase 4 | — | Pending |
+| LEDGER-02 | Phase 4 | — | Pending |
+| TUI-01 | Phase 5 | — | Pending |
+| TUI-02 | Phase 5 | — | Pending |
 | ROUTE-01 | Gamma | — | Deferred |
 | ROUTE-02 | Gamma | — | Deferred |
 | ROUTE-03 | Gamma | — | Deferred |
