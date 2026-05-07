@@ -13,8 +13,8 @@ Antes de ejecutar cualquier tarea, razoná en estos 4 pasos:
 
 | Herramienta | Rol | Modelo |
 |---|---|---|
-| **OpenCode (terminal)** | Backend, análisis, debug, arquitectura, planificación | deepseek-v4-pro |
-| **Antigravity (GUI)** | Frontend, UI, edición visual, HTML/CSS, diseño | kimi-k2.6 |
+| **OpenCode (terminal)** | Backend, análisis, debug, arquitectura, planificación, GSD workflows | deepseek-v4-pro |
+| **Antigravity (GUI)** | Frontend, UI, edición visual, HTML/CSS, diseño, GSD workflows | kimi-k2.6 |
 
 ### Reglas
 
@@ -53,12 +53,12 @@ Cada 5 sesiones o cuando el usuario lo pida, ejecutar vía Engram:
 
 Comando de referencia: `engram search --query "contradiction OR outdated"`
 
-## Mixture of Experts (MoE)
+## Decisiones Arquitectónicas
 
-Para decisiones críticas, usar el Council de OMO-Slim:
+Para decisiones críticas, usar GSD con sus agentes especializados:
 
-```
-@council evaluá el impacto de este cambio arquitectónico
-```
+- `gsd-planner` / `gsd-advisor` → deepseek-v4-pro (razonamiento profundo)
+- `gsd-debugger` → deepseek-v4-pro (diagnóstico)
+- `gsd-verifier` → kimi-k2.6 (validación de calidad)
 
-3 councillors de distintos providers analizan en paralelo y sintetizan un veredicto.
+El workflow SDD en AGENTS.md define el proceso completo de 6 fases.
