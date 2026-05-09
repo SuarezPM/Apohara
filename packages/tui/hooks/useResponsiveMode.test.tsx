@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useResponsiveMode } from "./useResponsiveMode.tsx";
 
 describe("useResponsiveMode", () => {
@@ -7,15 +7,20 @@ describe("useResponsiveMode", () => {
 
 	beforeEach(() => {
 		listeners = new Map();
-		vi.spyOn(process.stdout, "on").mockImplementation((event: string | symbol, fn: () => void) => {
-			if (!listeners.has(event as string)) listeners.set(event as string, new Set());
-			listeners.get(event as string)!.add(fn);
-			return process.stdout;
-		});
-		vi.spyOn(process.stdout, "off").mockImplementation((event: string | symbol, fn: () => void) => {
-			listeners.get(event as string)?.delete(fn);
-			return process.stdout;
-		});
+		vi.spyOn(process.stdout, "on").mockImplementation(
+			(event: string | symbol, fn: () => void) => {
+				if (!listeners.has(event as string))
+					listeners.set(event as string, new Set());
+				listeners.get(event as string)!.add(fn);
+				return process.stdout;
+			},
+		);
+		vi.spyOn(process.stdout, "off").mockImplementation(
+			(event: string | symbol, fn: () => void) => {
+				listeners.get(event as string)?.delete(fn);
+				return process.stdout;
+			},
+		);
 	});
 
 	afterEach(() => {

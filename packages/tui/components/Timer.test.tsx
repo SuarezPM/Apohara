@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import React from "react";
 import { renderToString } from "ink";
+import React from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Timer } from "./Timer.tsx";
 
 describe("Timer", () => {

@@ -7,7 +7,11 @@ import * as fs from "node:fs/promises";
 import { Box, Text, useInput } from "ink";
 import type React from "react";
 import { useState } from "react";
-import { ensureDir, getConfigDir, getCredentialsPath } from "../../src/lib/paths.js";
+import {
+	ensureDir,
+	getConfigDir,
+	getCredentialsPath,
+} from "../../src/lib/paths.js";
 
 interface Credentials {
 	OPENCODE_API_KEY?: string;

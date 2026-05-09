@@ -1,17 +1,17 @@
 /**
  * E2E Integration Test for M004 Ecosystem
- * 
+ *
  * Tests the full integration of:
  * - S01: MCP Bridge (GitNexus + cocoindex-code)
  * - S02: Mem0 Memory Integration
  * - S03: Inngest AgentKit Recovery
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { Mem0Client } from "../src/lib/mem0-client";
-import { InngestClient } from "../src/lib/inngest-client";
-import { MCPRegistry, MCPClient } from "../src/lib/mcp-client";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { TaskDecomposer } from "../src/core/decomposer";
+import { InngestClient } from "../src/lib/inngest-client";
+import { MCPClient, MCPRegistry } from "../src/lib/mcp-client";
+import { Mem0Client } from "../src/lib/mem0-client";
 
 describe("M004 Ecosystem E2E Integration", () => {
 	let mem0: Mem0Client;
@@ -47,15 +47,15 @@ describe("M004 Ecosystem E2E Integration", () => {
 		it("can store and retrieve task decisions", async () => {
 			// In a real scenario, this would persist across sessions
 			// Here we verify the interface works
-			
+
 			const decision = "Use deepseek-v4 for execution tasks";
-			
+
 			// Store a decision (would fail without real API, but interface exists)
 			expect(typeof mem0.storeTaskDecision).toBe("function");
-			
+
 			// Store a coding pattern
 			expect(typeof mem0.storeCodingPattern).toBe("function");
-			
+
 			// Retrieve for task
 			expect(typeof mem0.retrieveForTask).toBe("function");
 		});
@@ -78,14 +78,18 @@ describe("M004 Ecosystem E2E Integration", () => {
 
 		it("can recover from step failures", async () => {
 			let attemptCount = 0;
-			
-			const result = await inngest.executeStep("recoverable-step", async () => {
-				attemptCount++;
-				if (attemptCount < 2) {
-					throw new Error("Simulated temporary failure");
-				}
-				return "Recovered successfully!";
-			}, { maxAttempts: 3 });
+
+			const result = await inngest.executeStep(
+				"recoverable-step",
+				async () => {
+					attemptCount++;
+					if (attemptCount < 2) {
+						throw new Error("Simulated temporary failure");
+					}
+					return "Recovered successfully!";
+				},
+				{ maxAttempts: 3 },
+			);
 
 			expect(result).toBe("Recovered successfully!");
 			expect(attemptCount).toBe(2);
@@ -130,11 +134,11 @@ describe("M004 Ecosystem E2E Integration", () => {
 		it("can demonstrate memory persistence concept", async () => {
 			// Test just the interface - actual API call may fail without real keys
 			const client = new Mem0Client({ apiKey: "test-key" });
-			
+
 			expect(typeof client.storeTaskDecision).toBe("function");
 			expect(typeof client.storeCodingPattern).toBe("function");
 			expect(typeof client.retrieveForTask).toBe("function");
-			
+
 			// Verify configured with test key
 			expect(client.isConfigured()).toBe(true);
 		});

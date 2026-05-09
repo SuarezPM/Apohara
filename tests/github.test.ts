@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { GitHubClient } from "../src/providers/github";
 
 // Mock config to return undefined for GITHUB_TOKEN to test missing token case
@@ -19,7 +19,9 @@ describe("GitHubClient", () => {
 		mockFetch = vi.fn();
 		global.fetch = mockFetch;
 		// Use default mock with valid token
-		vi.mock("../src/core/config", () => createMockConfig("ghp_testtoken123456789"));
+		vi.mock("../src/core/config", () =>
+			createMockConfig("ghp_testtoken123456789"),
+		);
 		client = new GitHubClient("ghp_testtoken123456789");
 	});
 
@@ -111,7 +113,9 @@ describe("GitHubClient", () => {
 				]),
 			} as unknown as Response);
 
-			await expect(client.authenticate()).rejects.toThrow("403 Rate Limit Exceeded");
+			await expect(client.authenticate()).rejects.toThrow(
+				"403 Rate Limit Exceeded",
+			);
 		});
 	});
 
@@ -167,9 +171,9 @@ describe("GitHubClient", () => {
 				headers: new Map(),
 			} as unknown as Response);
 
-			await expect(client.getRepository("owner", "nonexistent")).rejects.toThrow(
-				"404 Not Found",
-			);
+			await expect(
+				client.getRepository("owner", "nonexistent"),
+			).rejects.toThrow("404 Not Found");
 		});
 
 		test("throws error on 403 forbidden (not rate limit)", async () => {

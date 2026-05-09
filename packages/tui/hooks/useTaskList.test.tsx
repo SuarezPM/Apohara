@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
-import React from "react";
 import { renderHook } from "@testing-library/react";
+import type React from "react";
+import { describe, expect, it } from "vitest";
+import type { EventLog, Run } from "../types.ts";
 import { DashboardProvider, useActiveRun } from "./useDashboard.tsx";
-import { useTaskList, type TaskItem } from "./useTaskList.tsx";
-import type { Run, EventLog } from "../types.ts";
+import { type TaskItem, useTaskList } from "./useTaskList.tsx";
 
 function wrapper({ children }: { children: React.ReactNode }) {
 	return <DashboardProvider>{children}</DashboardProvider>;
@@ -69,7 +69,9 @@ describe("useTaskList", () => {
 	it("extracts tasks and counts from active run events", () => {
 		const { result } = renderHook(() => useTaskList(), {
 			wrapper: ({ children }) => (
-				<DashboardProvider initialRuns={[mockRun]}>{children}</DashboardProvider>
+				<DashboardProvider initialRuns={[mockRun]}>
+					{children}
+				</DashboardProvider>
 			),
 		});
 

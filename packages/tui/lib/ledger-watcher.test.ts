@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, writeFile, appendFile, rm, chmod } from "node:fs/promises";
+import { appendFile, chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LedgerWatcher } from "./ledger-watcher";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventLog } from "../../../src/core/types";
+import { LedgerWatcher } from "./ledger-watcher";
 
 function makeEvent(overrides: Partial<EventLog> = {}): EventLog {
 	return {
@@ -152,9 +152,11 @@ describe("LedgerWatcher", () => {
 		const filePath = join(tmpDir, "run-f.jsonl");
 		await writeFile(
 			filePath,
-			JSON.stringify(makeEvent()) + "\n" +
+			JSON.stringify(makeEvent()) +
+				"\n" +
 				"not json\n" +
-				JSON.stringify(makeEvent({ type: "unknown_type" })) + "\n",
+				JSON.stringify(makeEvent({ type: "unknown_type" })) +
+				"\n",
 		);
 
 		watcher = new LedgerWatcher({

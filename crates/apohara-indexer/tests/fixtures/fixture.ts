@@ -1,11 +1,11 @@
 export function parseString(input: string): string {
-    return input;
+	return input;
 }
 
 export function calculateSum(a: number, b: number): number {
-    return a + b;
+	return a + b;
 }
 
 export function isValid(data: any): boolean {
-    return true;
+	return true;
 }

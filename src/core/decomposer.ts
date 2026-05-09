@@ -1,9 +1,9 @@
 import { type LLMMessage, ProviderRouter } from "../providers/router";
 import { routeTaskWithFallback } from "./agent-router";
-import { EventLedger } from "./ledger";
 import type { IndexerClient, SearchResult } from "./indexer-client";
-import type { TaskRole } from "./types";
+import { EventLedger } from "./ledger";
 import { fetchAndFormatMemories } from "./memory-injection";
+import type { TaskRole } from "./types";
 
 // Dynamic import for MCP client to avoid build issues when not available
 let mcpRegistry: any = null;
@@ -132,7 +132,11 @@ Example:
 
 		// Use agent-router for role-based provider selection
 		// Decomposition is a "planning" task, which maps to Gemini
-		const result = await routeTaskWithFallback("planning", { messages }, this.router);
+		const result = await routeTaskWithFallback(
+			"planning",
+			{ messages },
+			this.router,
+		);
 		const response = result.response;
 
 		// Parse the LLM response - it should be JSON
@@ -168,7 +172,11 @@ Example:
 				task.role = "execution";
 			}
 			// Validate role is a valid TaskRole
-			if (!["research", "planning", "execution", "verification"].includes(task.role)) {
+			if (
+				!["research", "planning", "execution", "verification"].includes(
+					task.role,
+				)
+			) {
 				task.role = "execution";
 			}
 			// Handle estimated files gracefully - default to empty array if missing or invalid
@@ -186,7 +194,7 @@ Example:
 		if (cycle) {
 			throw new Error(
 				`Dependency cycle detected: ${cycle.join(" -> ")}. ` +
-				"Please ensure dependencies form a DAG (Directed Acyclic Graph).",
+					"Please ensure dependencies form a DAG (Directed Acyclic Graph).",
 			);
 		}
 
@@ -212,7 +220,10 @@ Example:
 		}
 
 		try {
-			return await fetchAndFormatMemories(prompt, this.indexerClient.searchMemory.bind(this.indexerClient));
+			return await fetchAndFormatMemories(
+				prompt,
+				this.indexerClient.searchMemory.bind(this.indexerClient),
+			);
 		} catch (error) {
 			// Graceful degradation - log and continue without memories
 			await this.ledger.log(
@@ -230,7 +241,10 @@ Example:
 	 * per task based on the task's primary file target.
 	 * Fails gracefully — if the daemon is unreachable, tasks are returned unchanged.
 	 */
-	private async injectIndexerContext(tasks: DecomposedTask[], prompt: string): Promise<DecomposedTask[]> {
+	private async injectIndexerContext(
+		tasks: DecomposedTask[],
+		prompt: string,
+	): Promise<DecomposedTask[]> {
 		const client = this.indexerClient;
 		if (!client) {
 			return tasks;
@@ -299,11 +313,16 @@ Example:
 	 * Enhances task file estimates using MCP servers.
 	 * Uses GitNexus for code graph analysis and cocoindex-code for semantic search.
 	 */
-	private async enhanceWithMCP(tasks: DecomposedTask[], prompt: string): Promise<DecomposedTask[]> {
+	private async enhanceWithMCP(
+		tasks: DecomposedTask[],
+		prompt: string,
+	): Promise<DecomposedTask[]> {
 		const registry = await getMCPRegistry();
-		
+
 		if (!registry) {
-			console.log("[TaskDecomposer] MCP not available, using LLM estimates only");
+			console.log(
+				"[TaskDecomposer] MCP not available, using LLM estimates only",
+			);
 			return tasks;
 		}
 
@@ -313,54 +332,81 @@ Example:
 		try {
 			const gitnexusTools = await registry.listTools("gitnexus");
 			if (gitnexusTools.length > 0) {
-				console.log(`[TaskDecomposer] GitNexus MCP available with ${gitnexusTools.length} tools`);
-				
+				console.log(
+					`[TaskDecomposer] GitNexus MCP available with ${gitnexusTools.length} tools`,
+				);
+
 				// Try to call a tool that might estimate affected files
 				// This is a best-effort enhancement - we try but don't fail if it doesn't work
 			}
 		} catch (err) {
-			console.log(`[TaskDecomposer] GitNexus MCP error: ${(err as Error).message}`);
+			console.log(
+				`[TaskDecomposer] GitNexus MCP error: ${(err as Error).message}`,
+			);
 		}
 
 		// Try semantic search via cocoindex-code
 		try {
 			const cocoTools = await registry.listTools("cocoindex-code");
 			if (cocoTools.length > 0) {
-				console.log(`[TaskDecomposer] cocoindex-code MCP available with ${cocoTools.length} tools`);
-				
+				console.log(
+					`[TaskDecomposer] cocoindex-code MCP available with ${cocoTools.length} tools`,
+				);
+
 				// Use semantic search to find relevant files in the codebase
 				try {
-					const searchResults = await registry.callTool("cocoindex-code", "semantic_search", {
-						query: prompt,
-						limit: 10,
-					});
-					if (searchResults && Array.isArray(searchResults) && searchResults.length > 0) {
-						console.log(`[TaskDecomposer] Found ${searchResults.length} relevant files via semantic search`);
-						
+					const searchResults = await registry.callTool(
+						"cocoindex-code",
+						"semantic_search",
+						{
+							query: prompt,
+							limit: 10,
+						},
+					);
+					if (
+						searchResults &&
+						Array.isArray(searchResults) &&
+						searchResults.length > 0
+					) {
+						console.log(
+							`[TaskDecomposer] Found ${searchResults.length} relevant files via semantic search`,
+						);
+
 						// Add relevant files to execution tasks that don't have file estimates yet
-						const relevantFiles = searchResults.map((r: any) => r.file_path || r.path || r.file).filter(Boolean);
-						
+						const relevantFiles = searchResults
+							.map((r: any) => r.file_path || r.path || r.file)
+							.filter(Boolean);
+
 						for (const task of tasks) {
 							// Only enhance execution tasks that have empty or minimal file estimates
-							if (task.role === "execution" && (!task.files || task.files.length < 2)) {
+							if (
+								task.role === "execution" &&
+								(!task.files || task.files.length < 2)
+							) {
 								// Only add files that aren't already in the estimate
-								const newFiles = relevantFiles.filter((f: string) => 
-									!task.files?.includes(f)
-								).slice(0, 3); // Add up to 3 relevant files
-								
+								const newFiles = relevantFiles
+									.filter((f: string) => !task.files?.includes(f))
+									.slice(0, 3); // Add up to 3 relevant files
+
 								if (newFiles.length > 0) {
 									task.files = [...(task.files || []), ...newFiles];
-									console.log(`[TaskDecomposer] Enhanced ${task.id} with ${newFiles.length} files from semantic search`);
+									console.log(
+										`[TaskDecomposer] Enhanced ${task.id} with ${newFiles.length} files from semantic search`,
+									);
 								}
 							}
 						}
 					}
 				} catch (searchErr) {
-					console.log(`[TaskDecomposer] Semantic search error: ${(searchErr as Error).message}`);
+					console.log(
+						`[TaskDecomposer] Semantic search error: ${(searchErr as Error).message}`,
+					);
 				}
 			}
 		} catch (err) {
-			console.log(`[TaskDecomposer] cocoindex-code MCP error: ${(err as Error).message}`);
+			console.log(
+				`[TaskDecomposer] cocoindex-code MCP error: ${(err as Error).message}`,
+			);
 		}
 
 		return tasks;

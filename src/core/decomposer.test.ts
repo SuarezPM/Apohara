@@ -1,5 +1,9 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { TaskDecomposer, type DecomposedTask, type DecompositionResult } from "./decomposer";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import {
+	type DecomposedTask,
+	type DecompositionResult,
+	TaskDecomposer,
+} from "./decomposer";
 import type { TaskRole } from "./types";
 
 // Mock the routeTaskWithFallback function - it returns { provider, response }
@@ -36,7 +40,11 @@ describe("TaskDecomposer", () => {
 						estimatedComplexity: "high",
 						dependencies: ["setup-deps"],
 						role: "execution",
-						files: ["src/core/handler.ts", "src/types.ts", "tests/core.test.ts"],
+						files: [
+							"src/core/handler.ts",
+							"src/types.ts",
+							"tests/core.test.ts",
+						],
 					},
 				],
 			}),
@@ -330,18 +338,21 @@ describe("TaskDecomposer", () => {
 	// Test: Markdown-wrapped JSON parsing
 	test("parses JSON wrapped in markdown code blocks", async () => {
 		const mockLLMResponse = {
-			content: "```json\n" + JSON.stringify({
-				tasks: [
-					{
-						id: "markdown-task",
-						description: "Task in markdown",
-						estimatedComplexity: "low",
-						dependencies: [],
-						role: "research",
-						files: ["src/research.ts"],
-					},
-				],
-			}) + "\n```",
+			content:
+				"```json\n" +
+				JSON.stringify({
+					tasks: [
+						{
+							id: "markdown-task",
+							description: "Task in markdown",
+							estimatedComplexity: "low",
+							dependencies: [],
+							role: "research",
+							files: ["src/research.ts"],
+						},
+					],
+				}) +
+				"\n```",
 			usage: { inputTokens: 100, outputTokens: 200 },
 		};
 

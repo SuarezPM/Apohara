@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
-import React from "react";
 import { renderHook } from "@testing-library/react";
-import { DashboardProvider } from "./useDashboard.tsx";
+import type React from "react";
+import { describe, expect, it } from "vitest";
+import type { EventLog, Run } from "../types.ts";
 import { useCostTable } from "./useCostTable.tsx";
-import type { Run, EventLog } from "../types.ts";
+import { DashboardProvider } from "./useDashboard.tsx";
 
 function wrapper({ children }: { children: React.ReactNode }) {
 	return <DashboardProvider>{children}</DashboardProvider>;
@@ -73,17 +73,23 @@ describe("useCostTable", () => {
 	it("aggregates costs and tokens by provider", () => {
 		const { result } = renderHook(() => useCostTable(), {
 			wrapper: ({ children }) => (
-				<DashboardProvider initialRuns={[mockRun]}>{children}</DashboardProvider>
+				<DashboardProvider initialRuns={[mockRun]}>
+					{children}
+				</DashboardProvider>
 			),
 		});
 
 		expect(result.current.rows).toHaveLength(2);
 
-		const deepseek = result.current.rows.find((r) => r.provider === "deepseek-v4");
+		const deepseek = result.current.rows.find(
+			(r) => r.provider === "deepseek-v4",
+		);
 		expect(deepseek?.costUsd).toBeCloseTo(0.004, 3);
 		expect(deepseek?.tokensTotal).toBe(2500);
 
-		const moonshot = result.current.rows.find((r) => r.provider === "moonshot-k2.6");
+		const moonshot = result.current.rows.find(
+			(r) => r.provider === "moonshot-k2.6",
+		);
 		expect(moonshot?.costUsd).toBeCloseTo(0.005, 3);
 		expect(moonshot?.tokensTotal).toBe(3000);
 
@@ -94,7 +100,9 @@ describe("useCostTable", () => {
 	it("skips events without cost metadata", () => {
 		const { result } = renderHook(() => useCostTable(), {
 			wrapper: ({ children }) => (
-				<DashboardProvider initialRuns={[mockRun]}>{children}</DashboardProvider>
+				<DashboardProvider initialRuns={[mockRun]}>
+					{children}
+				</DashboardProvider>
 			),
 		});
 

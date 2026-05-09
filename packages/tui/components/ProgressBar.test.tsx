@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import React from "react";
 import { renderToString } from "ink";
+import React from "react";
+import { describe, expect, it } from "vitest";
 import { ProgressBar } from "./ProgressBar.tsx";
 
 describe("ProgressBar", () => {

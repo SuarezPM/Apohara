@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { exec as execSync, spawn as spawnSync } from "node:child_process";
-import { promisify } from "node:util";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { promisify } from "node:util";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const execAsync = promisify(execSync);
 
@@ -35,7 +35,9 @@ describe("E2E: apohara auto command", () => {
 		// Clean up test artifacts
 		const existingRuns = await fs.readdir(runsDir).catch(() => []);
 		for (const run of existingRuns.slice(-5)) {
-			await fs.rm(path.join(runsDir, run), { recursive: true, force: true }).catch(() => {});
+			await fs
+				.rm(path.join(runsDir, run), { recursive: true, force: true })
+				.catch(() => {});
 		}
 	});
 
@@ -128,7 +130,10 @@ describe("E2E: apohara auto command", () => {
 
 			// Verify the log file exists
 			const logPath = ledger.getFilePath();
-			const exists = await fs.access(logPath).then(() => true).catch(() => false);
+			const exists = await fs
+				.access(logPath)
+				.then(() => true)
+				.catch(() => false);
 			expect(exists).toBe(true);
 		});
 	});
@@ -158,8 +163,8 @@ describe("E2E: apohara auto command", () => {
 				// Either missing argument error or help/usage
 				expect(
 					output.includes("Missing required argument") ||
-					output.includes("prompt") ||
-					output.includes("usage")
+						output.includes("prompt") ||
+						output.includes("usage"),
 				).toBe(true);
 			}
 		});
@@ -222,7 +227,10 @@ describe("E2E: apohara auto command", () => {
 
 			// Verify the log file was created
 			const logPath = ledger.getFilePath();
-			const exists = await fs.access(logPath).then(() => true).catch(() => false);
+			const exists = await fs
+				.access(logPath)
+				.then(() => true)
+				.catch(() => false);
 			expect(exists).toBe(true);
 
 			// Verify the content contains our event

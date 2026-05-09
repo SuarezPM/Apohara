@@ -1,11 +1,25 @@
 import { describe, expect, test } from "vitest";
-import { CAPABILITY_MANIFEST, getProviderCapability } from "./capability-manifest";
 import type { TaskType } from "./capability-manifest";
-import { ROLE_FALLBACK_ORDER } from "./types";
+import {
+	CAPABILITY_MANIFEST,
+	getProviderCapability,
+} from "./capability-manifest";
 import type { TaskRole } from "./types";
+import { ROLE_FALLBACK_ORDER } from "./types";
 
-const ALL_TASK_TYPES: TaskType[] = ["research", "planning", "codegen", "debugging", "verification"];
-const ALL_ROLES: TaskRole[] = ["research", "planning", "execution", "verification"];
+const ALL_TASK_TYPES: TaskType[] = [
+	"research",
+	"planning",
+	"codegen",
+	"debugging",
+	"verification",
+];
+const ALL_ROLES: TaskRole[] = [
+	"research",
+	"planning",
+	"execution",
+	"verification",
+];
 
 describe("CAPABILITY_MANIFEST", () => {
 	test("contains exactly 21 provider entries", () => {
@@ -18,7 +32,10 @@ describe("CAPABILITY_MANIFEST", () => {
 		// Every entry in the manifest must be findable via getProviderCapability
 		for (const id of manifestIds) {
 			const cap = getProviderCapability(id);
-			expect(cap, `Expected capability entry for provider: ${id}`).toBeDefined();
+			expect(
+				cap,
+				`Expected capability entry for provider: ${id}`,
+			).toBeDefined();
 		}
 	});
 
@@ -40,8 +57,14 @@ describe("CAPABILITY_MANIFEST", () => {
 
 	test("every entry has non-empty sources array and a lastUpdated date", () => {
 		for (const entry of CAPABILITY_MANIFEST) {
-			expect(entry.sources.length, `${entry.provider} should have at least one source`).toBeGreaterThan(0);
-			expect(entry.lastUpdated, `${entry.provider} should have a lastUpdated date`).toBeTruthy();
+			expect(
+				entry.sources.length,
+				`${entry.provider} should have at least one source`,
+			).toBeGreaterThan(0);
+			expect(
+				entry.lastUpdated,
+				`${entry.provider} should have a lastUpdated date`,
+			).toBeTruthy();
 		}
 	});
 });
@@ -49,7 +72,10 @@ describe("CAPABILITY_MANIFEST", () => {
 describe("ROLE_FALLBACK_ORDER", () => {
 	test("has entries for all 4 roles", () => {
 		for (const role of ALL_ROLES) {
-			expect(ROLE_FALLBACK_ORDER[role], `Expected fallback chain for role: ${role}`).toBeDefined();
+			expect(
+				ROLE_FALLBACK_ORDER[role],
+				`Expected fallback chain for role: ${role}`,
+			).toBeDefined();
 		}
 	});
 

@@ -1,5 +1,10 @@
-import { describe, test, expect, beforeEach, beforeAll } from "bun:test";
-import { SubagentManager, createSubagentManager, type SubagentResult, type SubagentManagerConfig } from "./subagent-manager";
+import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+	createSubagentManager,
+	SubagentManager,
+	type SubagentManagerConfig,
+	type SubagentResult,
+} from "./subagent-manager";
 import type { TaskRole } from "./types";
 
 describe("SubagentManager", () => {
@@ -67,18 +72,33 @@ describe("SubagentManager", () => {
 			});
 
 			const tasks = [
-				{ id: "task-1", description: "Task 1", dependencies: [], role: "execution" as TaskRole },
-				{ id: "task-2", description: "Task 2", dependencies: [], role: "execution" as TaskRole },
-				{ id: "task-3", description: "Task 3", dependencies: [], role: "execution" as TaskRole },
+				{
+					id: "task-1",
+					description: "Task 1",
+					dependencies: [],
+					role: "execution" as TaskRole,
+				},
+				{
+					id: "task-2",
+					description: "Task 2",
+					dependencies: [],
+					role: "execution" as TaskRole,
+				},
+				{
+					id: "task-3",
+					description: "Task 3",
+					dependencies: [],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			const results = await manager2.executeAll(tasks);
 			// With maxConcurrent=2, should complete all 3 tasks but not exceed 2 concurrent
 			// Results may have more entries due to retries on failure
 			expect(results.length).toBeGreaterThanOrEqual(3);
-			
+
 			// Verify unique task IDs
-			const uniqueIds = new Set(results.map(r => r.taskId));
+			const uniqueIds = new Set(results.map((r) => r.taskId));
 			expect(uniqueIds.size).toBe(3);
 		});
 
@@ -98,22 +118,34 @@ describe("SubagentManager", () => {
 
 			const results = await manager5.executeAll(tasks);
 			expect(results.length).toBeGreaterThanOrEqual(5);
-			
-			const uniqueIds = new Set(results.map(r => r.taskId));
+
+			const uniqueIds = new Set(results.map((r) => r.taskId));
 			expect(uniqueIds.size).toBe(5);
 		});
 
 		test("handles dependency graph correctly", async () => {
 			const tasks = [
-				{ id: "task-a", description: "First task", dependencies: [], role: "execution" as TaskRole },
-				{ id: "task-b", description: "Second task", dependencies: ["task-a"], role: "execution" as TaskRole },
+				{
+					id: "task-a",
+					description: "First task",
+					dependencies: [],
+					role: "execution" as TaskRole,
+				},
+				{
+					id: "task-b",
+					description: "Second task",
+					dependencies: ["task-a"],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			const results = await manager.executeAll(tasks);
 			expect(results).toHaveLength(2);
-			
+
 			// Verify both tasks completed
-			const completedCount = results.filter(r => r.status === "completed").length;
+			const completedCount = results.filter(
+				(r) => r.status === "completed",
+			).length;
 			expect(completedCount).toBeGreaterThanOrEqual(0); // May complete or fail depending on API
 		});
 	});
@@ -127,7 +159,12 @@ describe("SubagentManager", () => {
 			});
 
 			const tasks = [
-				{ id: "timeout-task", description: "A task that should timeout quickly", dependencies: [], role: "execution" as TaskRole },
+				{
+					id: "timeout-task",
+					description: "A task that should timeout quickly",
+					dependencies: [],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			const results = await fastManager.executeAll(tasks);
@@ -153,7 +190,12 @@ describe("SubagentManager", () => {
 			});
 
 			const tasks = [
-				{ id: "no-retry-task", description: "Test no retry", dependencies: [], role: "execution" as TaskRole },
+				{
+					id: "no-retry-task",
+					description: "Test no retry",
+					dependencies: [],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			const results = await noRetryManager.executeAll(tasks);

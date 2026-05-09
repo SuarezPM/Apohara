@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "bun:test";
-import { SummaryGenerator, type RunSummary } from "../src/core/summary";
-import { EventLedger } from "../src/core/ledger";
-import { StateMachine } from "../src/core/state";
-import { rm, mkdir, writeFile, readFile } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { existsSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import type { EventLedger } from "../src/core/ledger";
+import { StateMachine } from "../src/core/state";
+import { type RunSummary, SummaryGenerator } from "../src/core/summary";
 
 describe("SummaryGenerator", () => {
 	let generator: SummaryGenerator;
@@ -97,19 +97,13 @@ describe("SummaryGenerator", () => {
 		it("should parse events from ledger", async () => {
 			// Log some test events
 			await ledger.log("task_started", { taskId: "T01" }, "info", "T01");
-			await ledger.log(
-				"task_completed",
-				{ taskId: "T01" },
-				"info",
-				"T01",
-				{
-					provider: "opencode-go",
-					model: "opencode-model",
-					tokens: { prompt: 100, completion: 50, total: 150 },
-					costUsd: 0.001,
-					durationMs: 5000,
-				},
-			);
+			await ledger.log("task_completed", { taskId: "T01" }, "info", "T01", {
+				provider: "opencode-go",
+				model: "opencode-model",
+				tokens: { prompt: 100, completion: 50, total: 150 },
+				costUsd: 0.001,
+				durationMs: 5000,
+			});
 
 			const outputPath = await generator.generate();
 			const content = await readFile(outputPath, "utf-8");
@@ -119,16 +113,10 @@ describe("SummaryGenerator", () => {
 		});
 
 		it("should track tokens and cost from events", async () => {
-			await ledger.log(
-				"task_completed",
-				{ taskId: "T01" },
-				"info",
-				"T01",
-				{
-					tokens: { prompt: 100, completion: 50, total: 150 },
-					costUsd: 0.001,
-				},
-			);
+			await ledger.log("task_completed", { taskId: "T01" }, "info", "T01", {
+				tokens: { prompt: 100, completion: 50, total: 150 },
+				costUsd: 0.001,
+			});
 
 			const outputPath = await generator.generate();
 			const content = await readFile(outputPath, "utf-8");
@@ -171,20 +159,16 @@ describe("SummaryGenerator", () => {
 		});
 
 		it("should calculate provider statistics", async () => {
-			await ledger.log(
-				"task_completed",
-				{ taskId: "T01" },
-				"info",
-				"T01",
-				{ provider: "opencode-go", tokens: { prompt: 100, completion: 50, total: 150 }, costUsd: 0.001 },
-			);
-			await ledger.log(
-				"task_completed",
-				{ taskId: "T02" },
-				"info",
-				"T02",
-				{ provider: "deepseek", tokens: { prompt: 200, completion: 100, total: 300 }, costUsd: 0.002 },
-			);
+			await ledger.log("task_completed", { taskId: "T01" }, "info", "T01", {
+				provider: "opencode-go",
+				tokens: { prompt: 100, completion: 50, total: 150 },
+				costUsd: 0.001,
+			});
+			await ledger.log("task_completed", { taskId: "T02" }, "info", "T02", {
+				provider: "deepseek",
+				tokens: { prompt: 200, completion: 100, total: 300 },
+				costUsd: 0.002,
+			});
 
 			const outputPath = await generator.generate();
 			const content = await readFile(outputPath, "utf-8");
@@ -304,13 +288,7 @@ describe("SummaryGenerator", () => {
 				],
 			}));
 
-			await ledger.log(
-				"task_completed",
-				{},
-				"info",
-				"T01",
-				{ costUsd: 0.001 },
-			);
+			await ledger.log("task_completed", {}, "info", "T01", { costUsd: 0.001 });
 
 			const outputPath = await generator.generate();
 			const content = await readFile(outputPath, "utf-8");
@@ -353,9 +331,13 @@ describe("SummaryGenerator", () => {
 	describe("duration tracking", () => {
 		it("should calculate duration from events", async () => {
 			// Log events at different times
-			await ledger.log("run_started", {}, "info", undefined, { durationMs: 1000 });
+			await ledger.log("run_started", {}, "info", undefined, {
+				durationMs: 1000,
+			});
 			await new Promise((r) => setTimeout(r, 100));
-			await ledger.log("run_completed", {}, "info", undefined, { durationMs: 2000 });
+			await ledger.log("run_completed", {}, "info", undefined, {
+				durationMs: 2000,
+			});
 
 			const outputPath = await generator.generate();
 			const content = await readFile(outputPath, "utf-8");

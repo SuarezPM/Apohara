@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ResponsiveMode } from "../types.ts";
 
 function getModeFromColumns(columns: number): ResponsiveMode {

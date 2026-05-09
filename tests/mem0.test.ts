@@ -2,8 +2,12 @@
  * Tests for Mem0 Memory Integration
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { Mem0Client, type MemoryEntry, type MemorySearchResult } from "../src/lib/mem0-client";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import {
+	Mem0Client,
+	type MemoryEntry,
+	type MemorySearchResult,
+} from "../src/lib/mem0-client";
 
 describe("Mem0 Memory Integration", () => {
 	describe("Mem0Client", () => {
@@ -18,7 +22,7 @@ describe("Mem0 Memory Integration", () => {
 				userId: "test-user",
 				baseUrl: "http://localhost:8000/v1",
 			});
-			
+
 			expect(client).toBeDefined();
 		});
 
@@ -31,7 +35,7 @@ describe("Mem0 Memory Integration", () => {
 
 		it("should have required methods", () => {
 			const client = new Mem0Client();
-			
+
 			expect(typeof client.add).toBe("function");
 			expect(typeof client.search).toBe("function");
 			expect(typeof client.getAll).toBe("function");
@@ -67,7 +71,7 @@ describe("Mem0 Memory Integration", () => {
 
 		it("should allow different roles", () => {
 			const roles: MemoryEntry["role"][] = ["user", "assistant", "system"];
-			
+
 			for (const role of roles) {
 				const entry: MemoryEntry = {
 					role,
@@ -97,20 +101,20 @@ describe("Mem0 Memory Integration", () => {
 	describe("Helper methods", () => {
 		it("storeTaskDecision should exist and be callable", async () => {
 			const client = new Mem0Client();
-			
+
 			// This will fail due to no API, but method exists
 			expect(typeof client.storeTaskDecision).toBe("function");
 		});
 
 		it("storeCodingPattern should exist and be callable", async () => {
 			const client = new Mem0Client();
-			
+
 			expect(typeof client.storeCodingPattern).toBe("function");
 		});
 
 		it("retrieveForTask should exist and be callable", async () => {
 			const client = new Mem0Client();
-			
+
 			expect(typeof client.retrieveForTask).toBe("function");
 		});
 	});

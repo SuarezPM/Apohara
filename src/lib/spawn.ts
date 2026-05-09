@@ -3,7 +3,7 @@
  * This allows the codebase to run on Node.js while maintaining
  * the same interface as Bun's spawn.
  */
-import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
 
 export interface SpawnOptions {
 	stdout?: "pipe" | "inherit" | "ignore";
@@ -52,10 +52,7 @@ function collectStream(stream: NodeJS.ReadableStream | null): Promise<Buffer> {
  * Mimics Bun.spawn API using Node.js child_process.
  * Usage: spawn(["git", "status"], { stdout: "pipe", stderr: "pipe" })
  */
-export function spawn(
-	args: string[],
-	options: SpawnOptions = {},
-): SpawnResult {
+export function spawn(args: string[], options: SpawnOptions = {}): SpawnResult {
 	const spawnOptions: {
 		stdio: ("ignore" | "pipe" | "inherit")[];
 		cwd?: string;

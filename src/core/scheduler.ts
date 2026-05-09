@@ -185,7 +185,9 @@ export class ParallelScheduler {
 				t.id === taskId
 					? {
 							...t,
-							status: (result.status === "success" ? "completed" : "failed") as Task["status"],
+							status: (result.status === "success"
+								? "completed"
+								: "failed") as Task["status"],
 							updatedAt: new Date(),
 						}
 					: t,

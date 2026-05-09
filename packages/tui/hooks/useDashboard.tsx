@@ -1,12 +1,21 @@
-import React, { createContext, useContext, useReducer, useCallback } from "react";
-import type { DashboardState, DashboardAction, Run, EventLog } from "../types.ts";
+import type React from "react";
+import { createContext, useCallback, useContext, useReducer } from "react";
+import type {
+	DashboardAction,
+	DashboardState,
+	EventLog,
+	Run,
+} from "../types.ts";
 
 const initialState: DashboardState = {
 	runs: [],
 	activeRunIndex: 0,
 };
 
-function dashboardReducer(state: DashboardState, action: DashboardAction): DashboardState {
+function dashboardReducer(
+	state: DashboardState,
+	action: DashboardAction,
+): DashboardState {
 	switch (action.type) {
 		case "SET_RUNS":
 			return { ...state, runs: action.payload, activeRunIndex: 0 };
@@ -47,7 +56,10 @@ export interface DashboardProviderProps {
  * Provides dashboard state to the component tree.
  * Accepts optional initial runs for testing / hydration.
  */
-export function DashboardProvider({ children, initialRuns }: DashboardProviderProps) {
+export function DashboardProvider({
+	children,
+	initialRuns,
+}: DashboardProviderProps) {
 	const [state, dispatch] = useReducer(dashboardReducer, {
 		...initialState,
 		runs: initialRuns ?? initialState.runs,

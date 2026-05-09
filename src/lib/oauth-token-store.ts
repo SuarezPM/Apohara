@@ -3,11 +3,11 @@
  * Persistent storage and refresh logic for OAuth tokens
  */
 
-import { readFileSync, existsSync } from "node:fs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import * as path from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as os from "node:os";
-import { type OAuthToken, isTokenExpired } from "./oauth-pkce";
+import * as path from "node:path";
+import { isTokenExpired, type OAuthToken } from "./oauth-pkce";
 
 /**
  * Token store configuration
@@ -20,9 +20,7 @@ export interface TokenStoreConfig {
 /**
  * Token refresh handler function type
  */
-export type TokenRefreshHandler = (
-	refreshToken: string
-) => Promise<OAuthToken>;
+export type TokenRefreshHandler = (refreshToken: string) => Promise<OAuthToken>;
 
 /**
  * OAuth Token Store with persistence and auto-refresh
@@ -69,7 +67,9 @@ export class OAuthTokenStore {
 		if (forceRefresh || (this.refreshHandler && isTokenExpired(this.token))) {
 			if (!this.refreshHandler) {
 				// No refresh handler - token is expired and cannot be refreshed
-				console.log(`[OAuth:${this.provider}] Token expired, no refresh handler available`);
+				console.log(
+					`[OAuth:${this.provider}] Token expired, no refresh handler available`,
+				);
 				return null;
 			}
 
@@ -101,7 +101,9 @@ export class OAuthTokenStore {
 	async setToken(token: OAuthToken): Promise<void> {
 		this.token = token;
 		await this.saveToken(token);
-		console.log(`[OAuth:${this.provider}] Token stored, expires at ${new Date(token.expires_at).toISOString()}`);
+		console.log(
+			`[OAuth:${this.provider}] Token stored, expires at ${new Date(token.expires_at).toISOString()}`,
+		);
 	}
 
 	/**
@@ -195,7 +197,7 @@ export function createOAuthTokenStore(
 	provider: string,
 	tokenEndpoint: string,
 	clientId: string,
-	clientSecret?: string
+	clientSecret?: string,
 ): OAuthTokenStore {
 	return new OAuthTokenStore({ provider }, async (refreshToken: string) => {
 		const response = await fetch(tokenEndpoint, {
@@ -214,10 +216,12 @@ export function createOAuthTokenStore(
 		});
 
 		if (!response.ok) {
-			throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Token refresh failed: ${response.status} ${response.statusText}`,
+			);
 		}
 
-		const data = await response.json() as {
+		const data = (await response.json()) as {
 			access_token: string;
 			refresh_token?: string;
 			token_type: string;

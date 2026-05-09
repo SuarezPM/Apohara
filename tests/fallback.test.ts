@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "bun:test";
-import { ProviderRouter, type ProviderId } from "../src/providers/router";
-import { ParallelScheduler } from "../src/core/scheduler";
-import { EventLedger } from "../src/core/ledger";
-import { StateMachine } from "../src/core/state";
-import { IsolationEngine } from "../src/core/isolation";
-import { rm, writeFile, readFile } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DecomposedTask } from "../src/core/decomposer";
+import { IsolationEngine } from "../src/core/isolation";
+import { EventLedger } from "../src/core/ledger";
+import { ParallelScheduler } from "../src/core/scheduler";
+import { StateMachine } from "../src/core/state";
+import { type ProviderId, ProviderRouter } from "../src/providers/router";
 
 describe("Fallback Behavior Integration Tests", () => {
 	let router: ProviderRouter;
@@ -57,10 +57,10 @@ describe("Fallback Behavior Integration Tests", () => {
 
 			// Override the callProvider method to simulate 429
 			const originalCall = routerWith429.completion.bind(routerWith429);
-			
+
 			// Test the fallback method directly with a mock
 			const fallbackResult = routerWith429.fallback("opencode-go");
-			
+
 			// Should return next provider in priority list after opencode-go
 			expect(fallbackResult).toBe("minimax-m2.7");
 		});
@@ -133,7 +133,7 @@ describe("Fallback Behavior Integration Tests", () => {
 		it("should log fallback_cooldown events", async () => {
 			// This verifies the ledger exists and can log
 			const ledger = new EventLedger("cooldown-test");
-			
+
 			await ledger.log(
 				"fallback_cooldown",
 				{ provider: "opencode-go", cooldownMinutes: 5 },
@@ -146,7 +146,7 @@ describe("Fallback Behavior Integration Tests", () => {
 
 		it("should log provider_fallback events", async () => {
 			const ledger = new EventLedger("fallback-test");
-			
+
 			await ledger.log(
 				"provider_fallback",
 				{
@@ -163,7 +163,7 @@ describe("Fallback Behavior Integration Tests", () => {
 
 		it("should log task_exhausted events", async () => {
 			const ledger = new EventLedger("exhausted-test");
-			
+
 			await ledger.log(
 				"task_exhausted",
 				{ providers: ["opencode-go", "deepseek"] },
@@ -205,7 +205,7 @@ describe("Fallback Behavior Integration Tests", () => {
 			// When one task fails, independent tasks should still be schedulable
 			// This is tested through the scheduler's dependency checking
 			await stateMachine.load();
-			
+
 			// Add T1 as completed
 			await stateMachine.update((state) => ({
 				...state,
@@ -268,19 +268,21 @@ describe("Fallback Behavior Integration Tests", () => {
 	describe("Console Notification Format", () => {
 		it("should support console notification logging", async () => {
 			const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-			
+
 			// This simulates what logFallbackEvent does
 			const fromProvider: ProviderId = "opencode-go";
 			const toProvider: ProviderId = "deepseek";
 			const reason = "429 Rate Limit exceeded";
-			
-			console.warn(`⚠ ${fromProvider} ${reason} → reasignando a ${toProvider}...`);
-			
+
+			console.warn(
+				`⚠ ${fromProvider} ${reason} → reasignando a ${toProvider}...`,
+			);
+
 			expect(consoleSpy).toHaveBeenCalled();
 			expect(consoleSpy.mock.calls[0][0]).toContain(fromProvider);
 			expect(consoleSpy.mock.calls[0][0]).toContain("reasignando");
 			expect(consoleSpy.mock.calls[0][0]).toContain(toProvider);
-			
+
 			consoleSpy.mockRestore();
 		});
 	});
@@ -288,21 +290,21 @@ describe("Fallback Behavior Integration Tests", () => {
 	describe("State Persistence for Cooldown", () => {
 		it("should track failed provider timestamps in state", async () => {
 			await stateMachine.load();
-			
+
 			// Record a provider failure
 			await stateMachine.recordProviderFailure("opencode-go");
-			
+
 			const lastFailure = stateMachine.getProviderLastFailure("opencode-go");
 			expect(lastFailure).toBeGreaterThan(0);
 		});
 
 		it("should clear provider cooldown in state", async () => {
 			await stateMachine.load();
-			
+
 			// Record then clear
 			await stateMachine.recordProviderFailure("deepseek");
 			await stateMachine.clearProviderCooldown("deepseek");
-			
+
 			const lastFailure = stateMachine.getProviderLastFailure("deepseek");
 			expect(lastFailure).toBeNull();
 		});
@@ -320,16 +322,16 @@ describe("Full Fallback Chain Integration", () => {
 			deepseekApiKey: "test-key",
 		});
 		ledger = new EventLedger("full-chain-test");
-		await rm(join(process.cwd(), ".events", "full-chain-test"), { 
-			recursive: true, 
-			force: true 
+		await rm(join(process.cwd(), ".events", "full-chain-test"), {
+			recursive: true,
+			force: true,
 		});
 	});
 
 	afterEach(async () => {
-		await rm(join(process.cwd(), ".events", "full-chain-test"), { 
-			recursive: true, 
-			force: true 
+		await rm(join(process.cwd(), ".events", "full-chain-test"), {
+			recursive: true,
+			force: true,
 		});
 	});
 
@@ -337,7 +339,7 @@ describe("Full Fallback Chain Integration", () => {
 		// Verify round-robin fallback works both ways
 		const fromOpencode = router.fallback("opencode-go");
 		const fromDeepseek = router.fallback("deepseek");
-		
+
 		// Verify next-in-priority fallback from each provider
 		expect(fromOpencode).toBe("minimax-m2.7");
 		expect(fromDeepseek).toBe("glm-deepinfra");
@@ -345,10 +347,18 @@ describe("Full Fallback Chain Integration", () => {
 
 	it("should log events throughout the fallback chain", async () => {
 		// Verify ledger can log multiple event types
-		await ledger.log("fallback_cooldown", { provider: "opencode-go" }, "warning");
-		await ledger.log("provider_fallback", { from: "opencode-go", to: "deepseek" }, "warning");
+		await ledger.log(
+			"fallback_cooldown",
+			{ provider: "opencode-go" },
+			"warning",
+		);
+		await ledger.log(
+			"provider_fallback",
+			{ from: "opencode-go", to: "deepseek" },
+			"warning",
+		);
 		await ledger.log("task_exhausted", { providers: [] }, "error");
-		
+
 		const path = ledger.getFilePath();
 		expect(path).toBeDefined();
 	});

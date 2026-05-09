@@ -1,7 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { Box, renderToString, Text } from "ink";
 import React from "react";
-import { renderToString } from "ink";
-import { Box, Text } from "ink";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./Dashboard.tsx";
 
 describe("Dashboard", () => {

@@ -1,13 +1,24 @@
-import { describe, expect, test, beforeEach, spyOn } from "bun:test";
-import { existsSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { Consolidator, type ConsolidatorConfig } from "../src/core/consolidator";
+import { join } from "node:path";
+import {
+	Consolidator,
+	type ConsolidatorConfig,
+} from "../src/core/consolidator";
 import { EventLedger } from "../src/core/ledger";
 
 // Test constants
-const TEST_WORKTREE_DIR = join(tmpdir(), "apohara-consolidator-test", "worktrees");
-const TEST_STATE_FILE = join(tmpdir(), "apohara-consolidator-test", "state.json");
+const TEST_WORKTREE_DIR = join(
+	tmpdir(),
+	"apohara-consolidator-test",
+	"worktrees",
+);
+const TEST_STATE_FILE = join(
+	tmpdir(),
+	"apohara-consolidator-test",
+	"state.json",
+);
 const TEST_CWD = tmpdir();
 
 describe("Consolidator", () => {
@@ -166,10 +177,9 @@ describe("Consolidator", () => {
 		mkdirSync(join(TEST_WORKTREE_DIR, "lane-0"), { recursive: true });
 
 		// Without actual git repos, merge returns false gracefully
-		const mergeResult = await consolidator["mergeSuccessfulWorktrees"](
-			"main",
-			["lane-0"],
-		);
+		const mergeResult = await consolidator["mergeSuccessfulWorktrees"]("main", [
+			"lane-0",
+		]);
 		expect(typeof mergeResult).toBe("boolean");
 	});
 

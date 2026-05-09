@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { StateMachine } from "../src/core/state";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { rm, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { StateMachine } from "../src/core/state";
 
 describe("StateMachine", () => {
 	const TEST_FILE = join(process.cwd(), "tests/tmp-apohara", "state.json");

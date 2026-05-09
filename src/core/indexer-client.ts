@@ -9,11 +9,11 @@
  * - Typed methods for all RPC calls
  */
 
-import * as net from "net";
 import * as child_process from "child_process";
-import * as path from "path";
-import * as os from "os";
 import * as fs from "fs/promises";
+import * as net from "net";
+import * as os from "os";
+import * as path from "path";
 
 /**
  * Simple event emitter for the client
@@ -64,7 +64,8 @@ class EventEmitter {
 const DEFAULT_SOCKET_PATH = ".apohara/indexer.sock";
 
 /** Path to the daemon binary */
-const DEFAULT_BINARY_PATH = "crates/apohara-indexer/target/release/apohara-indexer";
+const DEFAULT_BINARY_PATH =
+	"crates/apohara-indexer/target/release/apohara-indexer";
 
 /** Maximum reconnection attempts */
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -167,14 +168,22 @@ export interface FileSignaturesResponse {
 }
 
 /** Connection state */
-export type ConnectionState = "disconnected" | "connecting" | "connected" | "reconnecting";
+export type ConnectionState =
+	| "disconnected"
+	| "connecting"
+	| "connected"
+	| "reconnecting";
 
 // ============================================================================
 // Memory Types
 // ============================================================================
 
 /** Types of memories stored in the system */
-export type MemoryType = "correction" | "preference" | "architecture" | "past_error";
+export type MemoryType =
+	| "correction"
+	| "preference"
+	| "architecture"
+	| "past_error";
 
 /** Memory entry returned from search */
 export interface Memory {
@@ -216,7 +225,10 @@ export class IndexerClient extends EventEmitter {
 	private process: child_process.ChildProcessWithoutNullStreams | null = null;
 	private state: ConnectionState = "disconnected";
 	private requestId = 0;
-	private pendingRequests = new Map<number | string, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
+	private pendingRequests = new Map<
+		number | string,
+		{ resolve: (value: unknown) => void; reject: (reason: unknown) => void }
+	>();
 	private reconnectAttempts = 0;
 	private reconnectTimer: NodeJS.Timeout | null = null;
 	private connectResolver: ((value: boolean) => void) | null = null;
@@ -285,23 +297,25 @@ export class IndexerClient extends EventEmitter {
 			try {
 				// Ensure the parent directory exists
 				const socketDir = path.dirname(this.socketPath);
-				fs.mkdir(socketDir, { recursive: true }).then(() => {
-					this.process = child_process.spawn(this.binaryPath, [], {
-						detached: true,
-						stdio: "ignore",
-					});
+				fs.mkdir(socketDir, { recursive: true })
+					.then(() => {
+						this.process = child_process.spawn(this.binaryPath, [], {
+							detached: true,
+							stdio: "ignore",
+						});
 
-					this.process.on("error", (err) => {
-						this.lastError = err;
-						this.emit("error", err);
-						reject(err);
-					});
+						this.process.on("error", (err) => {
+							this.lastError = err;
+							this.emit("error", err);
+							reject(err);
+						});
 
-					// Wait for socket to become available
-					setTimeout(() => {
-						resolve();
-					}, SOCKET_READY_DELAY_MS);
-				}).catch(reject);
+						// Wait for socket to become available
+						setTimeout(() => {
+							resolve();
+						}, SOCKET_READY_DELAY_MS);
+					})
+					.catch(reject);
 			} catch (err) {
 				this.lastError = err instanceof Error ? err : new Error(String(err));
 				reject(this.lastError);
@@ -402,7 +416,11 @@ export class IndexerClient extends EventEmitter {
 
 				if (pending) {
 					if (response.error) {
-						pending.reject(new Error(`JSON-RPC error: ${response.error.message} (code: ${response.error.code})`));
+						pending.reject(
+							new Error(
+								`JSON-RPC error: ${response.error.message} (code: ${response.error.code})`,
+							),
+						);
 					} else {
 						pending.resolve(response.result);
 					}
@@ -417,7 +435,10 @@ export class IndexerClient extends EventEmitter {
 	/**
 	 * Send a JSON-RPC request
 	 */
-	private async sendRequest(method: string, params?: unknown): Promise<unknown> {
+	private async sendRequest(
+		method: string,
+		params?: unknown,
+	): Promise<unknown> {
 		if (this.state !== "connected") {
 			const connected = await this.connect();
 			if (!connected) {
@@ -479,7 +500,9 @@ export class IndexerClient extends EventEmitter {
 	 * Generate embedding for text
 	 */
 	public async embed(text: string): Promise<EmbedResponse> {
-		const result = await this.sendRequest("embed", { text }) as { embedding: number[] };
+		const result = (await this.sendRequest("embed", { text })) as {
+			embedding: number[];
+		};
 		return result;
 	}
 
@@ -487,7 +510,9 @@ export class IndexerClient extends EventEmitter {
 	 * Search the index
 	 */
 	public async search(query: string, k: number = 10): Promise<SearchResult[]> {
-		const result = await this.sendRequest("search", { query, k }) as { results: SearchResult[] };
+		const result = (await this.sendRequest("search", { query, k })) as {
+			results: SearchResult[];
+		};
 		return result.results;
 	}
 
@@ -495,7 +520,9 @@ export class IndexerClient extends EventEmitter {
 	 * Index a file
 	 */
 	public async indexFile(filePath: string): Promise<IndexFileResponse> {
-		const result = await this.sendRequest("index_file", { path: filePath }) as { ids: number[] };
+		const result = (await this.sendRequest("index_file", {
+			path: filePath,
+		})) as { ids: number[] };
 		return result;
 	}
 
@@ -503,7 +530,9 @@ export class IndexerClient extends EventEmitter {
 	 * Get blast radius (transitive dependencies) for a target
 	 */
 	public async getBlastRadius(target: string): Promise<BlastRadiusResponse> {
-		const result = await this.sendRequest("get_blast_radius", { target }) as { files: string[] };
+		const result = (await this.sendRequest("get_blast_radius", { target })) as {
+			files: string[];
+		};
 		return result;
 	}
 
@@ -511,8 +540,12 @@ export class IndexerClient extends EventEmitter {
 	 * Get file signatures (AST functions/classes) for a specific file
 	 * Returns exact signatures without using semantic/vector search
 	 */
-	public async getFileSignatures(filePath: string): Promise<FileSignaturesResponse> {
-		const result = await this.sendRequest("get_file_signatures", { file_path: filePath }) as FileSignaturesResponse;
+	public async getFileSignatures(
+		filePath: string,
+	): Promise<FileSignaturesResponse> {
+		const result = (await this.sendRequest("get_file_signatures", {
+			file_path: filePath,
+		})) as FileSignaturesResponse;
 		return result;
 	}
 
@@ -523,11 +556,14 @@ export class IndexerClient extends EventEmitter {
 	 * @param memoryType - Type of memory: "correction", "preference", "architecture", "past_error"
 	 * @returns Promise resolving to the memory ID (UUID)
 	 */
-	public async storeMemory(content: string, memoryType: MemoryType): Promise<string> {
-		const result = await this.sendRequest("store_memory", {
+	public async storeMemory(
+		content: string,
+		memoryType: MemoryType,
+	): Promise<string> {
+		const result = (await this.sendRequest("store_memory", {
 			content,
 			memory_type: memoryType,
-		}) as StoreMemoryResponse;
+		})) as StoreMemoryResponse;
 		return result.memory_id;
 	}
 
@@ -538,11 +574,14 @@ export class IndexerClient extends EventEmitter {
 	 * @param topK - Maximum number of results to return (default: 5)
 	 * @returns Promise resolving to array of memories with similarity scores
 	 */
-	public async searchMemory(query: string, topK: number = 5): Promise<Memory[]> {
-		const result = await this.sendRequest("search_memory", {
+	public async searchMemory(
+		query: string,
+		topK: number = 5,
+	): Promise<Memory[]> {
+		const result = (await this.sendRequest("search_memory", {
 			query,
 			top_k: topK,
-		}) as SearchMemoryResponse;
+		})) as SearchMemoryResponse;
 		return result.memories;
 	}
 

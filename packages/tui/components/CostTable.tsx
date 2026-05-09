@@ -1,7 +1,7 @@
-import React, { useMemo } from "react";
 import { Box, Text } from "ink";
-import { useActiveRun } from "../hooks/useDashboard.tsx";
+import React, { useMemo } from "react";
 import { useCostTable } from "../hooks/useCostTable.tsx";
+import { useActiveRun } from "../hooks/useDashboard.tsx";
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
 
 export interface CostTableProps {
@@ -19,7 +19,10 @@ function formatTokens(n: number): string {
 	return n.toString();
 }
 
-function countTasksByProvider(events: import("../types.ts").EventLog[], provider: string): number {
+function countTasksByProvider(
+	events: import("../types.ts").EventLog[],
+	provider: string,
+): number {
 	return events.filter(
 		(e) =>
 			e.metadata?.provider === provider &&
@@ -65,9 +68,10 @@ export function CostTable({ mode: modeProp }: CostTableProps) {
 					{mode === "normal" && (
 						<Box>
 							<Text bold dimColor>
-								{"Provider"}{"         "}
-								{"Tareas"}{" "}
-								{"Cost"}{"       "}
+								{"Provider"}
+								{"         "}
+								{"Tareas"} {"Cost"}
+								{"       "}
 								{"Tokens"}
 							</Text>
 						</Box>
@@ -80,8 +84,7 @@ export function CostTable({ mode: modeProp }: CostTableProps) {
 								</Text>
 							) : (
 								<Text>
-									{row.provider.padEnd(16)}{" "}
-									{String(row.taskCount).padStart(6)}{" "}
+									{row.provider.padEnd(16)} {String(row.taskCount).padStart(6)}{" "}
 									{formatCost(row.costUsd).padStart(10)}{" "}
 									{formatTokens(row.tokensTotal).padStart(8)}
 								</Text>
@@ -92,7 +95,9 @@ export function CostTable({ mode: modeProp }: CostTableProps) {
 						<Box marginTop={1}>
 							<Text bold>
 								{"Total"}{" "}
-								{String(enrichedRows.reduce((s, r) => s + r.taskCount, 0)).padStart(20)}{" "}
+								{String(
+									enrichedRows.reduce((s, r) => s + r.taskCount, 0),
+								).padStart(20)}{" "}
 								{formatCost(totalCostUsd).padStart(10)}{" "}
 								{formatTokens(totalTokens).padStart(8)}
 							</Text>

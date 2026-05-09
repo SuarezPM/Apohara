@@ -1,18 +1,18 @@
-import { spawn } from "../lib/spawn";
 import { Command } from "commander";
-import { Consolidator } from "../core/consolidator";
-import { TaskDecomposer } from "../core/decomposer";
 import { routeTask, routeTaskWithFallback } from "../core/agent-router";
+import { Consolidator } from "../core/consolidator";
+import type { DecomposedTask } from "../core/decomposer";
+import { TaskDecomposer } from "../core/decomposer";
 import { IsolationEngine } from "../core/isolation";
 import { EventLedger } from "../core/ledger";
-import { SubagentManager } from "../core/subagent-manager";
+import { Isolator } from "../core/sandbox";
 import { StateMachine } from "../core/state";
+import { SubagentManager } from "../core/subagent-manager";
 import { SummaryGenerator } from "../core/summary";
-import type { DecomposedTask } from "../core/decomposer";
+import { VerificationMesh } from "../core/verification-mesh";
+import { spawn } from "../lib/spawn";
 import { GitHubClient } from "../providers/github";
 import { ProviderRouter } from "../providers/router";
-import { Isolator } from "../core/sandbox";
-import { VerificationMesh } from "../core/verification-mesh";
 
 export const autoCommand = new Command("auto")
 	.description(
@@ -323,7 +323,9 @@ async function runImproveSelf(
 
 		// Only proceed to mesh + commit if tests passed
 		if (sandboxResult.exitCode !== 0) {
-			console.log(`   ⚠️  [${task.id}] Tests failed in sandbox — skipping commit`);
+			console.log(
+				`   ⚠️  [${task.id}] Tests failed in sandbox — skipping commit`,
+			);
 			await ledger.log(
 				"improve_self_task_completed",
 				{
@@ -339,10 +341,13 @@ async function runImproveSelf(
 			continue;
 		}
 
-		const complexity = (task as unknown as { complexity?: string }).complexity ?? "medium";
-		const filesModified = (task as unknown as { filesModified?: number }).filesModified ?? 0;
+		const complexity =
+			(task as unknown as { complexity?: string }).complexity ?? "medium";
+		const filesModified =
+			(task as unknown as { filesModified?: number }).filesModified ?? 0;
 		const qualifiesForMesh =
-			(complexity === "high" || complexity === "critical") && filesModified >= 3;
+			(complexity === "high" || complexity === "critical") &&
+			filesModified >= 3;
 
 		let meshApplied = false;
 		let meshCostDelta = 0;
@@ -374,12 +379,18 @@ async function runImproveSelf(
 
 			// Abort commit if mesh selected Agent B and B produced a different result
 			if (meshResult.meshApplied && meshResult.arbiter?.verdict === "B") {
-				console.log(`   🔀 [${task.id}] Mesh selected Agent B output — reviewing before commit`);
+				console.log(
+					`   🔀 [${task.id}] Mesh selected Agent B output — reviewing before commit`,
+				);
 			}
 		}
 
 		// Auto-commit: task passed sandbox tests (and mesh if applicable)
-		const commitMessage = buildCommitMessage(task, { meshApplied, filesModified, complexity });
+		const commitMessage = buildCommitMessage(task, {
+			meshApplied,
+			filesModified,
+			complexity,
+		});
 		const committed = await gitCommitTask(workdir, task.id, commitMessage);
 
 		await ledger.log(
@@ -396,7 +407,9 @@ async function runImproveSelf(
 		);
 
 		const meshTag = meshApplied ? " [mesh-verified]" : "";
-		const commitTag = committed ? " [committed]" : " [commit-skipped: nothing staged]";
+		const commitTag = committed
+			? " [committed]"
+			: " [commit-skipped: nothing staged]";
 		console.log(`   ✅ [${task.id}]${meshTag}${commitTag}`);
 	}
 }

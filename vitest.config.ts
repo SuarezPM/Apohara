@@ -8,11 +8,6 @@ export default defineConfig({
 			"src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}",
 			"tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts}",
 		],
-		exclude: [
-			"node_modules",
-			"src/tui/**",
-			"packages/**",
-			"tests/tui/**",
-		],
+		exclude: ["node_modules", "src/tui/**", "packages/**", "tests/tui/**"],
 	},
 });

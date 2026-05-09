@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import * as os from "node:os";
+import * as path from "node:path";
 import type { OAuthTokenStore } from "../lib/oauth-token-store";
 
 // Dynamic imports to avoid circular dependencies
@@ -60,7 +60,9 @@ function extractKey(entry: unknown): string | null {
  * 3. Free-tier anonymous token
  * 4. null if not found
  */
-export async function resolveCredential(provider: string): Promise<string | null> {
+export async function resolveCredential(
+	provider: string,
+): Promise<string | null> {
 	// 1. Try credentials file
 	try {
 		const credPath = getCredentialsPath();
@@ -134,12 +136,14 @@ function getTokenStore(provider: string): OAuthTokenStore {
 		let store = tokenStores.get(provider);
 		if (!store) {
 			const { createGeminiTokenStore } = require("../lib/oauth-token-store");
-			
+
 			// Load client ID and secret from credentials
 			// For Google OAuth, we need client credentials
 			// This will be handled via the gemini OAuth module directly for login
 			// For token refresh, we need proper configuration
-			store = createGeminiTokenStore("" /* clientId will be loaded on refresh */);
+			store = createGeminiTokenStore(
+				"" /* clientId will be loaded on refresh */,
+			);
 			tokenStores.set(provider, store);
 		}
 		return store;
@@ -149,15 +153,17 @@ function getTokenStore(provider: string): OAuthTokenStore {
 	if (!store) {
 		// Import the token store class dynamically
 		const { OAuthTokenStore: OAuthStore } = require("../lib/oauth-token-store");
-		
+
 		// Create refresh handler for the provider
-		const refreshHandler = async (refreshToken: string): Promise<OAuthToken> => {
+		const refreshHandler = async (
+			refreshToken: string,
+		): Promise<OAuthToken> => {
 			// Load client ID from credentials
 			const clientId = await loadClientId(provider);
 			if (!clientId) {
 				throw new Error(`No client ID configured for ${provider}`);
 			}
-			
+
 			const response = await fetch(CLAUDE_TOKEN_ENDPOINT, {
 				method: "POST",
 				headers: {
@@ -171,10 +177,12 @@ function getTokenStore(provider: string): OAuthTokenStore {
 			});
 
 			if (!response.ok) {
-				throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`);
+				throw new Error(
+					`Token refresh failed: ${response.status} ${response.statusText}`,
+				);
 			}
 
-			const data = await response.json() as {
+			const data = (await response.json()) as {
 				access_token: string;
 				refresh_token?: string;
 				token_type: string;
@@ -211,7 +219,7 @@ async function loadClientId(provider: string): Promise<string> {
 		// Map provider names to credential keys
 		const keyMap: Record<string, string> = {
 			"claude-ai": "claude-oauth-client-id",
-			"anthropic": "claude-oauth-client-id",
+			anthropic: "claude-oauth-client-id",
 		};
 		const key = keyMap[provider] || `${provider}-oauth-client-id`;
 		return parsed[key] || "";
@@ -227,7 +235,9 @@ async function loadClientId(provider: string): Promise<string> {
  * @param provider - The OAuth provider (e.g., "claude-ai", "anthropic")
  * @returns The access token string, or null if not available
  */
-export async function resolveOAuthToken(provider: string): Promise<string | null> {
+export async function resolveOAuthToken(
+	provider: string,
+): Promise<string | null> {
 	// Only attempt OAuth for known OAuth providers
 	if (!OAUTH_PROVIDERS.has(provider)) {
 		return null;
@@ -239,7 +249,10 @@ export async function resolveOAuthToken(provider: string): Promise<string | null
 			const gemini = await getGeminiOAuth();
 			return await gemini.getGeminiAccessToken();
 		} catch (error) {
-			console.error(`[credentials] Failed to resolve OAuth token for ${provider}:`, error);
+			console.error(
+				`[credentials] Failed to resolve OAuth token for ${provider}:`,
+				error,
+			);
 			return null;
 		}
 	}
@@ -249,7 +262,10 @@ export async function resolveOAuthToken(provider: string): Promise<string | null
 		const token = await store.getToken();
 		return token?.access_token ?? null;
 	} catch (error) {
-		console.error(`[credentials] Failed to resolve OAuth token for ${provider}:`, error);
+		console.error(
+			`[credentials] Failed to resolve OAuth token for ${provider}:`,
+			error,
+		);
 		return null;
 	}
 }
@@ -385,7 +401,9 @@ export function validateApiKeyFormat(
 /**
  * Gets sanitized OAuth token info for logging
  */
-export async function getOAuthTokenInfo(provider: string): Promise<Record<string, unknown>> {
+export async function getOAuthTokenInfo(
+	provider: string,
+): Promise<Record<string, unknown>> {
 	if (!OAUTH_PROVIDERS.has(provider)) {
 		return { provider, oauth_supported: false };
 	}

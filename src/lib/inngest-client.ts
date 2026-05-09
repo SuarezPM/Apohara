@@ -1,9 +1,9 @@
 /**
  * Inngest Client - Durable workflow execution for agent dispatch
- * 
+ *
  * Inngest provides durable execution that survives crashes.
  * Each agent dispatch becomes a step that can replay after failure.
- * 
+ *
  * Docs: https://www.inngest.com/docs
  */
 
@@ -51,9 +51,12 @@ export class InngestClient {
 	 * Dispatch a durable workflow
 	 * Returns a dispatch ID that can be used to track status
 	 */
-	async dispatch<T>(name: string, data: Record<string, unknown>): Promise<DispatchResult> {
+	async dispatch<T>(
+		name: string,
+		data: Record<string, unknown>,
+	): Promise<DispatchResult> {
 		const dispatchId = `${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-		
+
 		// For now, simulate dispatch (real Inngest requires more complex setup)
 		// In production, this would call the Inngest API
 		const result: DispatchResult = {
@@ -62,7 +65,7 @@ export class InngestClient {
 		};
 
 		this.activeDispatches.set(dispatchId, result);
-		
+
 		return result;
 	}
 
@@ -73,29 +76,31 @@ export class InngestClient {
 	async executeStep<T>(
 		stepId: string,
 		execute: () => Promise<T>,
-		options?: { maxAttempts?: number; retryInterval?: number }
+		options?: { maxAttempts?: number; retryInterval?: number },
 	): Promise<T> {
 		const maxAttempts = options?.maxAttempts || 3;
-		
+
 		let lastError: Error | undefined;
-		
+
 		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 			try {
 				const result = await execute();
 				return result;
 			} catch (error) {
 				lastError = error as Error;
-				console.log(`[Inngest] Step ${stepId} attempt ${attempt} failed: ${lastError.message}`);
-				
+				console.log(
+					`[Inngest] Step ${stepId} attempt ${attempt} failed: ${lastError.message}`,
+				);
+
 				if (attempt < maxAttempts) {
 					// Wait before retry
-					await new Promise(resolve => 
-						setTimeout(resolve, (options?.retryInterval || 1000) * attempt)
+					await new Promise((resolve) =>
+						setTimeout(resolve, (options?.retryInterval || 1000) * attempt),
 					);
 				}
 			}
 		}
-		
+
 		throw lastError;
 	}
 
@@ -126,14 +131,17 @@ export class InngestClient {
 	/**
 	 * Send event to trigger workflow
 	 */
-	async sendEvent(eventName: string, payload: Record<string, unknown>): Promise<{ id: string }> {
+	async sendEvent(
+		eventName: string,
+		payload: Record<string, unknown>,
+	): Promise<{ id: string }> {
 		const eventId = `${eventName}-${Date.now()}`;
-		
+
 		const response = await fetch(`${this.baseUrl}/send`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Bearer ${this.apiKey}`,
+				Authorization: `Bearer ${this.apiKey}`,
 				"Inngest-Signature": "", // Would be set by Inngest
 			},
 			body: JSON.stringify({
@@ -157,7 +165,7 @@ export class InngestClient {
 	 */
 	createStepFunction<T>(
 		name: string,
-		execute: () => Promise<T>
+		execute: () => Promise<T>,
 	): WorkflowStep<T> {
 		return {
 			id: name,

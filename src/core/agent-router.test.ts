@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import type { ProviderId, TaskRole, RouteResult } from "./agent-router";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProviderId, RouteResult, TaskRole } from "./agent-router";
 
 // Mock the config module to avoid loading actual .env during tests
 vi.mock("../core/config", () => ({
@@ -13,20 +13,20 @@ vi.mock("../core/config", () => ({
 	getProviderKey: (provider: string) => {
 		const keys: Record<string, string> = {
 			"opencode-go": "test-opencode-key",
-			"deepseek": "test-deepseek-key",
-			"tavily": "test-tavily-key",
-			"gemini": "test-gemini-key",
-			"moonshot": "test-moonshot-key",
-			"xiaomi": "test-xiaomi-key",
-			"alibaba": "test-alibaba-key",
-			"minimax": "test-minimax-key",
-			"deepinfra": "test-deepinfra-key",
-			"fireworks": "test-fireworks-key",
-			"zai": "test-zai-key",
-			"groq": "test-groq-key",
+			deepseek: "test-deepseek-key",
+			tavily: "test-tavily-key",
+			gemini: "test-gemini-key",
+			moonshot: "test-moonshot-key",
+			xiaomi: "test-xiaomi-key",
+			alibaba: "test-alibaba-key",
+			minimax: "test-minimax-key",
+			deepinfra: "test-deepinfra-key",
+			fireworks: "test-fireworks-key",
+			zai: "test-zai-key",
+			groq: "test-groq-key",
 			"kiro-ai": "anonymous",
-			"mistral": "test-mistral-key",
-			"openai": "test-openai-key",
+			mistral: "test-mistral-key",
+			openai: "test-openai-key",
 		};
 		return keys[provider] || null;
 	},
@@ -71,7 +71,9 @@ describe("Agent Router", () => {
 			});
 
 			// With capability manifest, may select deepseek-v4 (score 0.92) or groq (score 0.9)
-			expect(result.provider).toMatch(/^(groq|deepseek|deepseek-v4|openai|kiro-ai)$/);
+			expect(result.provider).toMatch(
+				/^(groq|deepseek|deepseek-v4|openai|kiro-ai)$/,
+			);
 			expect(result.fallbackProviders.length).toBeGreaterThan(0);
 		});
 
@@ -82,7 +84,9 @@ describe("Agent Router", () => {
 			});
 
 			// With capability manifest, may select openai (score 0.85) or groq (score 0.8)
-			expect(result.provider).toMatch(/^(groq|openai|deepseek|deepseek-v4|kiro-ai)$/);
+			expect(result.provider).toMatch(
+				/^(groq|openai|deepseek|deepseek-v4|kiro-ai)$/,
+			);
 			expect(result.fallbackProviders.length).toBeGreaterThan(0);
 		});
 
@@ -124,7 +128,7 @@ describe("Agent Router", () => {
 		});
 
 		it("should return false for unknown provider", () => {
-			// @ts-ignore - testing invalid provider
+			// @ts-expect-error - testing invalid provider
 			const result = agentRouter.validateToken("unknown-provider");
 			expect(result).toBe(false);
 		});
@@ -158,13 +162,15 @@ describe("Agent Router", () => {
 
 	describe("default export", () => {
 		it("should have routeTask in default export", async () => {
-			const router = (await import(`./agent-router?default=${Date.now()}`)).default;
+			const router = (await import(`./agent-router?default=${Date.now()}`))
+				.default;
 			expect(router.routeTask).toBeDefined();
 			expect(typeof router.routeTask).toBe("function");
 		});
 
 		it("should have validateToken in default export", async () => {
-			const router = (await import(`./agent-router?default2=${Date.now()}`)).default;
+			const router = (await import(`./agent-router?default2=${Date.now()}`))
+				.default;
 			expect(router.validateToken).toBeDefined();
 			expect(typeof router.validateToken).toBe("function");
 		});

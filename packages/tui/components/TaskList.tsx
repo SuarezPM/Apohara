@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
 import { Box, Text } from "ink";
+import React, { useMemo } from "react";
 import { useActiveRun } from "../hooks/useDashboard.tsx";
-import { useTaskList, type TaskStatus } from "../hooks/useTaskList.tsx";
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
+import { type TaskStatus, useTaskList } from "../hooks/useTaskList.tsx";
 import type { EventLog } from "../types.ts";
 
 const STATUS_ICON: Record<TaskStatus, string> = {
@@ -26,7 +26,10 @@ export interface TaskListProps {
 	maxItems?: number;
 }
 
-function findTaskProvider(events: EventLog[], taskId: string): string | undefined {
+function findTaskProvider(
+	events: EventLog[],
+	taskId: string,
+): string | undefined {
 	for (const event of events) {
 		if (event.taskId === taskId && event.metadata?.provider) {
 			return event.metadata.provider as string;
@@ -35,12 +38,19 @@ function findTaskProvider(events: EventLog[], taskId: string): string | undefine
 	return undefined;
 }
 
-function findTaskDuration(events: EventLog[], taskId: string): number | undefined {
+function findTaskDuration(
+	events: EventLog[],
+	taskId: string,
+): number | undefined {
 	const startEvent = events.find(
-		(e) => e.taskId === taskId && (e.type === "task_started" || e.type === "task_scheduled"),
+		(e) =>
+			e.taskId === taskId &&
+			(e.type === "task_started" || e.type === "task_scheduled"),
 	);
 	const endEvent = events.find(
-		(e) => e.taskId === taskId && (e.type === "task_completed" || e.type === "task_failed"),
+		(e) =>
+			e.taskId === taskId &&
+			(e.type === "task_completed" || e.type === "task_failed"),
 	);
 	if (startEvent && endEvent) {
 		return (
@@ -69,7 +79,12 @@ export function TaskList({ mode: modeProp, maxItems }: TaskListProps) {
 	const mode = modeProp ?? useResponsiveMode();
 
 	const enrichedTasks = useMemo(() => {
-		if (!activeRun) return tasks.map((t) => ({ ...t, provider: undefined, duration: undefined }));
+		if (!activeRun)
+			return tasks.map((t) => ({
+				...t,
+				provider: undefined,
+				duration: undefined,
+			}));
 		return tasks.map((task) => ({
 			...task,
 			provider: findTaskProvider(activeRun.events, task.id),
@@ -87,14 +102,17 @@ export function TaskList({ mode: modeProp, maxItems }: TaskListProps) {
 		);
 	}
 
-	const displayTasks = maxItems ? enrichedTasks.slice(0, maxItems) : enrichedTasks;
+	const displayTasks = maxItems
+		? enrichedTasks.slice(0, maxItems)
+		: enrichedTasks;
 
 	return (
 		<Box flexDirection="column" marginTop={1}>
 			<Box marginBottom={1}>
 				<Text bold>Tasks</Text>
 				<Text dimColor>
-					{" "}({counts.completed}/{tasks.length})
+					{" "}
+					({counts.completed}/{tasks.length})
 				</Text>
 			</Box>
 			{displayTasks.length === 0 ? (
@@ -108,28 +126,16 @@ export function TaskList({ mode: modeProp, maxItems }: TaskListProps) {
 						{mode === "compact" ? (
 							<Text>
 								{task.description.slice(0, 30)}
-								{task.provider && (
-									<Text dimColor> ({task.provider})</Text>
-								)}
+								{task.provider && <Text dimColor> ({task.provider})</Text>}
 							</Text>
 						) : (
 							<>
 								<Text>{task.description}</Text>
-								{task.provider && (
-									<Text dimColor>
-										{" "}({task.provider})
-									</Text>
-								)}
+								{task.provider && <Text dimColor> ({task.provider})</Text>}
 								{task.duration !== undefined && (
-									<Text dimColor>
-										{" "}[{formatDuration(task.duration)}]
-									</Text>
+									<Text dimColor> [{formatDuration(task.duration)}]</Text>
 								)}
-								{task.role && (
-									<Text dimColor>
-										{" "}[{task.role}]
-									</Text>
-								)}
+								{task.role && <Text dimColor> [{task.role}]</Text>}
 							</>
 						)}
 					</Box>

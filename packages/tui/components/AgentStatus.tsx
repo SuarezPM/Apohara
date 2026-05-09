@@ -1,8 +1,8 @@
-import React from "react";
 import { Box, Text } from "ink";
+import React from "react";
+import type { ProviderId } from "../../../src/core/types.ts";
 import { useActiveRun } from "../hooks/useDashboard.tsx";
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
-import type { ProviderId } from "../../../src/core/types.ts";
 
 export interface AgentStatusProps {
 	/** Override to force a specific responsive mode */
@@ -16,14 +16,18 @@ interface AgentInfo {
 	lastSeen: string; // ISO timestamp
 }
 
-export function extractAgents(events: import("../../core/types.ts").EventLog[]): {
+export function extractAgents(
+	events: import("../../core/types.ts").EventLog[],
+): {
 	agents: AgentInfo[];
 	fallbackCount: number;
 	latestFallback?: { from: ProviderId; to: ProviderId; reason?: string };
 } {
 	const agentMap = new Map<ProviderId, AgentInfo>();
 	let fallbackCount = 0;
-	let latestFallback: { from: ProviderId; to: ProviderId; reason?: string } | undefined;
+	let latestFallback:
+		| { from: ProviderId; to: ProviderId; reason?: string }
+		| undefined;
 
 	for (const event of events) {
 		const provider = event.metadata?.provider;
@@ -97,15 +101,9 @@ export function AgentStatus({ mode: modeProp }: AgentStatusProps) {
 					<Box key={agent.provider}>
 						<Text>● {agent.provider}</Text>
 						{mode === "normal" && agent.modelName && (
-							<Text dimColor>
-								{" "}({agent.modelName})
-							</Text>
+							<Text dimColor> ({agent.modelName})</Text>
 						)}
-						{agent.role && (
-							<Text dimColor>
-								{" "}[{agent.role}]
-							</Text>
-						)}
+						{agent.role && <Text dimColor> [{agent.role}]</Text>}
 					</Box>
 				))
 			)}

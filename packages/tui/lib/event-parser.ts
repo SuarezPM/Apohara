@@ -77,9 +77,20 @@ export class EventParser {
 		if (typeof e.type !== "string") return false;
 		if (typeof e.severity !== "string") return false;
 		if (!["info", "warning", "error"].includes(e.severity)) return false;
-		if (typeof e.payload !== "object" || e.payload === null || Array.isArray(e.payload)) return false;
+		if (
+			typeof e.payload !== "object" ||
+			e.payload === null ||
+			Array.isArray(e.payload)
+		)
+			return false;
 		if (e.taskId !== undefined && typeof e.taskId !== "string") return false;
-		if (e.metadata !== undefined && (typeof e.metadata !== "object" || e.metadata === null || Array.isArray(e.metadata))) return false;
+		if (
+			e.metadata !== undefined &&
+			(typeof e.metadata !== "object" ||
+				e.metadata === null ||
+				Array.isArray(e.metadata))
+		)
+			return false;
 		return true;
 	}
 }
