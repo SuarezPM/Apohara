@@ -2,11 +2,15 @@
  * Auth command - OAuth authentication for Claude.ai and other providers
  */
 
-import { Command } from "commander";
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as fs from "node:fs/promises";
-import { generateCodeVerifier, generateCodeChallenge, calculateExpiresAt } from "../lib/oauth-pkce.js";
+import { Command } from "commander";
+import {
+	calculateExpiresAt,
+	generateCodeChallenge,
+	generateCodeVerifier,
+} from "../lib/oauth-pkce.js";
 
 // Claude.ai OAuth configuration
 const CLAUDE_OAUTH_CONFIG = {
@@ -51,7 +55,10 @@ async function loadClientId(): Promise<string> {
 /**
  * Start a local HTTP server to receive OAuth callback
  */
-function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof import("http").createServer>; code: Promise<string> }> {
+function startCallbackServer(port: number): Promise<{
+	server: ReturnType<typeof import("http").createServer>;
+	code: Promise<string>;
+}> {
 	return new Promise((resolve, reject) => {
 		const http = require("http");
 
@@ -60,49 +67,67 @@ function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof 
 			resolveCode = res;
 		});
 
-		const server = http.createServer((req: ReturnType<typeof import("http").IncomingMessage>, res: ReturnType<typeof import("http").ServerResponse>) => {
-			const url = new URL(req.url || "/", `http://localhost:${port}`);
+		const server = http.createServer(
+			(
+				req: ReturnType<typeof import("http").IncomingMessage>,
+				res: ReturnType<typeof import("http").ServerResponse>,
+			) => {
+				const url = new URL(req.url || "/", `http://localhost:${port}`);
 
-			if (url.pathname === "/callback") {
-				const code = url.searchParams.get("code");
-				const error = url.searchParams.get("error");
+				if (url.pathname === "/callback") {
+					const code = url.searchParams.get("code");
+					const error = url.searchParams.get("error");
 
-				if (error) {
+					if (error) {
+						res.writeHead(400, { "Content-Type": "text/html" });
+						res.end(
+							"<html><body><h1>Authentication Failed</h1><p>Error: " +
+								error +
+								"</p></body></html>",
+						);
+						resolveCode(null as unknown as string);
+						server.close();
+						return;
+					}
+
+					if (code) {
+						res.writeHead(200, { "Content-Type": "text/html" });
+						res.end(
+							"<html><body><h1>Authentication Successful!</h1><p>You may close this window.</p></body></html>",
+						);
+						resolveCode(code);
+						server.close();
+						return;
+					}
+
 					res.writeHead(400, { "Content-Type": "text/html" });
-					res.end("<html><body><h1>Authentication Failed</h1><p>Error: " + error + "</p></body></html>");
-					resolveCode(null as unknown as string);
+					res.end(
+						"<html><body><h1>Error</h1><p>No authorization code received.</p></body></html>",
+					);
 					server.close();
-					return;
+				} else {
+					res.writeHead(404, { "Content-Type": "text/plain" });
+					res.end("Not found");
 				}
-
-				if (code) {
-					res.writeHead(200, { "Content-Type": "text/html" });
-					res.end("<html><body><h1>Authentication Successful!</h1><p>You may close this window.</p></body></html>");
-					resolveCode(code);
-					server.close();
-					return;
-				}
-
-				res.writeHead(400, { "Content-Type": "text/html" });
-				res.end("<html><body><h1>Error</h1><p>No authorization code received.</p></body></html>");
-				server.close();
-			} else {
-				res.writeHead(404, { "Content-Type": "text/plain" });
-				res.end("Not found");
-			}
-		});
+			},
+		);
 
 		server.listen(port, () => {
-			console.log(`[Auth] Callback server listening on http://localhost:${port}`);
+			console.log(
+				`[Auth] Callback server listening on http://localhost:${port}`,
+			);
 		});
 
 		server.on("error", reject);
 
 		// Timeout after 5 minutes
-		setTimeout(() => {
-			server.close();
-			reject(new Error("OAuth callback timed out"));
-		}, 5 * 60 * 1000);
+		setTimeout(
+			() => {
+				server.close();
+				reject(new Error("OAuth callback timed out"));
+			},
+			5 * 60 * 1000,
+		);
 
 		resolve({ server, code: codePromise });
 	});
@@ -145,8 +170,12 @@ async function loginClaude(): Promise<void> {
 	// Load client ID from credentials
 	const clientId = await loadClientId();
 	if (!clientId) {
-		console.error("❌ No client ID configured. Please add 'claude-oauth-client-id' to credentials.json");
-		console.log("   Run: apohara config --set claude-oauth-client-id=YOUR_CLIENT_ID");
+		console.error(
+			"❌ No client ID configured. Please add 'claude-oauth-client-id' to credentials.json",
+		);
+		console.log(
+			"   Run: apohara config --set claude-oauth-client-id=YOUR_CLIENT_ID",
+		);
 		process.exit(1);
 	}
 
@@ -176,7 +205,9 @@ async function loginClaude(): Promise<void> {
 		authUrl.searchParams.set("code_challenge_method", "S256");
 
 		console.log("[Auth] Opening browser for authentication...");
-		console.log(`[Auth] Authorization URL: ${authUrl.toString().replace(clientId, "***")}`);
+		console.log(
+			`[Auth] Authorization URL: ${authUrl.toString().replace(clientId, "***")}`,
+		);
 
 		// Open browser
 		await openBrowser(authUrl.toString());
@@ -210,11 +241,15 @@ async function loginClaude(): Promise<void> {
 
 		if (!tokenResponse.ok) {
 			const errorText = await tokenResponse.text();
-			console.error("❌ Token exchange failed:", tokenResponse.status, errorText);
+			console.error(
+				"❌ Token exchange failed:",
+				tokenResponse.status,
+				errorText,
+			);
 			process.exit(1);
 		}
 
-		const tokenData = await tokenResponse.json() as {
+		const tokenData = (await tokenResponse.json()) as {
 			access_token: string;
 			refresh_token?: string;
 			token_type: string;
@@ -243,7 +278,6 @@ async function loginClaude(): Promise<void> {
 		console.log(`✅ Authentication successful!`);
 		console.log(`   Token saved to: ${tokenPath}`);
 		console.log(`   Expires at: ${new Date(expiresAt).toLocaleString()}`);
-
 	} finally {
 		server.close();
 	}
@@ -287,7 +321,9 @@ async function showStatus(provider: string): Promise<void> {
 		const expiresAt = new Date(token.expires_at);
 		const now = new Date();
 		const isExpired = expiresAt < now;
-		const expiresIn = Math.round((expiresAt.getTime() - now.getTime()) / 1000 / 60); // minutes
+		const expiresIn = Math.round(
+			(expiresAt.getTime() - now.getTime()) / 1000 / 60,
+		); // minutes
 
 		console.log(`\n📋 ${provider} Authentication Status:`);
 		console.log(`   Token type: ${token.token_type}`);
@@ -312,7 +348,6 @@ async function showStatus(provider: string): Promise<void> {
 		}
 
 		console.log("");
-
 	} catch {
 		console.log(`\n📋 ${provider} Authentication Status:`);
 		console.log(`   Status: ❌ Not authenticated`);
@@ -322,8 +357,9 @@ async function showStatus(provider: string): Promise<void> {
 }
 
 // Export auth command
-export const authCommand = new Command("auth")
-	.description("Manage OAuth authentication for Claude.ai and other providers");
+export const authCommand = new Command("auth").description(
+	"Manage OAuth authentication for Claude.ai and other providers",
+);
 
 // Login subcommand
 authCommand
@@ -336,15 +372,16 @@ authCommand
 			await loginClaude();
 		} else if (provider === "gemini") {
 			// Import and use gemini OAuth
-			const { loginWithGoogleOAuth, saveApoharaToken, loadClientId } = await import("../lib/oauth/gemini.js");
-			
+			const { loginWithGoogleOAuth, saveApoharaToken, loadClientId } =
+				await import("../lib/oauth/gemini.js");
+
 			console.log("[Auth] Starting Gemini OAuth login...");
-			
+
 			// Load client ID from credentials
 			const credPath = process.env.XDG_CONFIG_HOME
 				? path.join(process.env.XDG_CONFIG_HOME, "apohara", "credentials.json")
 				: path.join(os.homedir(), ".apohara", "credentials.json");
-			
+
 			let clientId = "";
 			try {
 				const content = await fs.readFile(credPath, "utf-8");
@@ -353,19 +390,25 @@ authCommand
 			} catch {
 				// No credentials file
 			}
-			
+
 			if (!clientId) {
-				console.error("❌ No client ID configured. Please add 'gemini-oauth-client-id' to credentials.json");
-				console.log("   Run: apohara config --set gemini-oauth-client-id=YOUR_CLIENT_ID");
+				console.error(
+					"❌ No client ID configured. Please add 'gemini-oauth-client-id' to credentials.json",
+				);
+				console.log(
+					"   Run: apohara config --set gemini-oauth-client-id=YOUR_CLIENT_ID",
+				);
 				process.exit(1);
 			}
 
 			// Perform OAuth flow
 			const token = await loginWithGoogleOAuth(clientId);
 			await saveApoharaToken(token);
-			
+
 			console.log(`✅ Gemini authentication successful!`);
-			console.log(`   Expires at: ${new Date(token.expires_at).toLocaleString()}`);
+			console.log(
+				`   Expires at: ${new Date(token.expires_at).toLocaleString()}`,
+			);
 		} else {
 			console.error(`❌ Unknown provider: ${provider}`);
 			console.log("   Supported providers: claude, gemini");
@@ -379,22 +422,26 @@ authCommand
 	.description("Show authentication status (default: claude)")
 	.action(async (provider?: string) => {
 		const targetProvider = provider || "claude";
-		
+
 		if (targetProvider === "gemini") {
 			// Show gemini status using the gemini OAuth module
 			const { getGeminiTokenInfo } = await import("../lib/oauth/gemini.js");
-			
+
 			try {
 				const info = await getGeminiTokenInfo();
-				
+
 				console.log("\n📋 Gemini Authentication Status:");
 				console.log(`   Source: ${info.source || "none"}`);
-				
+
 				if (info.present) {
 					console.log(`   Token type: ${info.token_type}`);
 					console.log(`   Expires at: ${info.expires_at}`);
-					console.log(`   Status: ${info.is_expired ? "❌ Expired" : "✅ Valid"}`);
-					console.log(`   Refresh token: ${info.has_refresh_token ? "✅ Available" : "❌ Not available"}`);
+					console.log(
+						`   Status: ${info.is_expired ? "❌ Expired" : "✅ Valid"}`,
+					);
+					console.log(
+						`   Refresh token: ${info.has_refresh_token ? "✅ Available" : "❌ Not available"}`,
+					);
 				} else {
 					console.log(`   Status: ❌ Not authenticated`);
 					console.log(`   Run: apohara auth login gemini`);
@@ -405,6 +452,6 @@ authCommand
 			}
 			return;
 		}
-		
+
 		await showStatus(targetProvider);
 	});

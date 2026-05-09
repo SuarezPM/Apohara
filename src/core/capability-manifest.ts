@@ -6,7 +6,12 @@
 
 import type { ProviderId, TaskRole } from "./types";
 
-export type TaskType = "research" | "planning" | "codegen" | "debugging" | "verification";
+export type TaskType =
+	| "research"
+	| "planning"
+	| "codegen"
+	| "debugging"
+	| "verification";
 
 /**
  * Capability scores for a single provider across all task types.
@@ -291,7 +296,9 @@ export function getCapabilityScore(
 /**
  * Gets all capability data for a provider.
  */
-export function getProviderCapability(provider: ProviderId): ProviderCapability | undefined {
+export function getProviderCapability(
+	provider: ProviderId,
+): ProviderCapability | undefined {
 	return CAPABILITY_MANIFEST.find((c) => c.provider === provider);
 }
 
@@ -303,8 +310,10 @@ export function rankProvidersForTask(
 	taskType: TaskType,
 	minScore: number = 0.0,
 ): Array<{ provider: ProviderId; score: number }> {
-	return CAPABILITY_MANIFEST
-		.map((c) => ({ provider: c.provider, score: c.scores[taskType] }))
+	return CAPABILITY_MANIFEST.map((c) => ({
+		provider: c.provider,
+		score: c.scores[taskType],
+	}))
 		.filter((c) => c.score >= minScore)
 		.sort((a, b) => b.score - a.score);
 }

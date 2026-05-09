@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
 import { Text } from "ink";
+import React, { useEffect, useState } from "react";
 
 export interface TimerProps {
 	/** ISO timestamp when the run started */

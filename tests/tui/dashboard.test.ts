@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
-import { extractTasks } from "../../packages/tui/hooks/useTaskList.tsx";
-import { extractCosts } from "../../packages/tui/hooks/useCostTable.tsx";
+import { describe, expect, it } from "bun:test";
 import { extractAgents } from "../../packages/tui/components/AgentStatus.tsx";
+import { extractCosts } from "../../packages/tui/hooks/useCostTable.tsx";
+import { extractTasks } from "../../packages/tui/hooks/useTaskList.tsx";
 import type { EventLog } from "../../src/core/types.ts";
 
 function makeEvent(partial: Partial<EventLog>): EventLog {

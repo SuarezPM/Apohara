@@ -1,10 +1,10 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
-	parseGitRemoteUrl,
 	detectRemoteFormat,
 	detectRepositoryFromRemote,
-	isValidRepoName,
 	isValidOwnerName,
+	isValidRepoName,
+	parseGitRemoteUrl,
 } from "../src/lib/git";
 
 describe("git remote URL parsing", () => {

@@ -9,7 +9,7 @@ export type { EventLog };
 export interface Run {
 	id: string;
 	startedAt: string; // ISO string
-	endedAt?: string;  // ISO string
+	endedAt?: string; // ISO string
 	events: EventLog[];
 }
 

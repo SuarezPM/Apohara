@@ -1,5 +1,5 @@
-import React from "react";
 import { Box, Text } from "ink";
+import React from "react";
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
 
 export interface ProgressBarProps {

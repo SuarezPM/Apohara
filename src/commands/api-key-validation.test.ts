@@ -4,19 +4,27 @@ import { validateApiKeyFormat } from "../core/credentials";
 describe("validateApiKeyFormat", () => {
 	describe("empty / missing values", () => {
 		test("returns valid for empty string (user can skip)", () => {
-			expect(validateApiKeyFormat("ANTHROPIC_API_KEY", "")).toEqual({ valid: true });
+			expect(validateApiKeyFormat("ANTHROPIC_API_KEY", "")).toEqual({
+				valid: true,
+			});
 		});
 
 		test("returns valid for empty string on any key name", () => {
-			expect(validateApiKeyFormat("GOOGLE_AI_STUDIO_API_KEY", "")).toEqual({ valid: true });
-			expect(validateApiKeyFormat("OPENCODE_API_KEY", "")).toEqual({ valid: true });
+			expect(validateApiKeyFormat("GOOGLE_AI_STUDIO_API_KEY", "")).toEqual({
+				valid: true,
+			});
+			expect(validateApiKeyFormat("OPENCODE_API_KEY", "")).toEqual({
+				valid: true,
+			});
 		});
 	});
 
 	describe("ANTHROPIC_API_KEY", () => {
 		test("accepts valid sk-ant-api03- key with sufficient length", () => {
 			const validKey = "sk-ant-api03-" + "a".repeat(30); // 13 + 30 = 43 chars
-			expect(validateApiKeyFormat("ANTHROPIC_API_KEY", validKey)).toEqual({ valid: true });
+			expect(validateApiKeyFormat("ANTHROPIC_API_KEY", validKey)).toEqual({
+				valid: true,
+			});
 		});
 
 		test("rejects OAuth token format sk-ant-oat01-*", () => {
@@ -56,16 +64,23 @@ describe("validateApiKeyFormat", () => {
 	describe("OPENCODE_API_KEY", () => {
 		test("accepts oc- prefix key with sufficient length", () => {
 			const validKey = "oc-" + "a".repeat(20); // 3 + 20 = 23 chars
-			expect(validateApiKeyFormat("OPENCODE_API_KEY", validKey)).toEqual({ valid: true });
+			expect(validateApiKeyFormat("OPENCODE_API_KEY", validKey)).toEqual({
+				valid: true,
+			});
 		});
 
 		test("accepts opencode- prefix key with sufficient length", () => {
 			const validKey = "opencode-" + "a".repeat(20);
-			expect(validateApiKeyFormat("OPENCODE_API_KEY", validKey)).toEqual({ valid: true });
+			expect(validateApiKeyFormat("OPENCODE_API_KEY", validKey)).toEqual({
+				valid: true,
+			});
 		});
 
 		test("rejects key without oc- or opencode- prefix", () => {
-			const result = validateApiKeyFormat("OPENCODE_API_KEY", "invalid-key-format-here");
+			const result = validateApiKeyFormat(
+				"OPENCODE_API_KEY",
+				"invalid-key-format-here",
+			);
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain("oc-");
 			expect(result.error).toContain("opencode-");
@@ -79,7 +94,10 @@ describe("validateApiKeyFormat", () => {
 		});
 
 		test("rejects sk-ant- key passed to OpenCode slot", () => {
-			const result = validateApiKeyFormat("OPENCODE_API_KEY", "sk-ant-api03-wrong-slot-key-padding");
+			const result = validateApiKeyFormat(
+				"OPENCODE_API_KEY",
+				"sk-ant-api03-wrong-slot-key-padding",
+			);
 			expect(result.valid).toBe(false);
 		});
 	});
@@ -90,11 +108,16 @@ describe("validateApiKeyFormat", () => {
 
 		test("accepts exactly 39-char AIza key", () => {
 			expect(VALID_GOOGLE_KEY).toHaveLength(39);
-			expect(validateApiKeyFormat("GOOGLE_AI_STUDIO_API_KEY", VALID_GOOGLE_KEY)).toEqual({ valid: true });
+			expect(
+				validateApiKeyFormat("GOOGLE_AI_STUDIO_API_KEY", VALID_GOOGLE_KEY),
+			).toEqual({ valid: true });
 		});
 
 		test("rejects key without AIza prefix", () => {
-			const result = validateApiKeyFormat("GOOGLE_AI_STUDIO_API_KEY", "Biza" + "A".repeat(35));
+			const result = validateApiKeyFormat(
+				"GOOGLE_AI_STUDIO_API_KEY",
+				"Biza" + "A".repeat(35),
+			);
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain("AIza");
 		});
@@ -114,7 +137,10 @@ describe("validateApiKeyFormat", () => {
 		});
 
 		test("rejects random string", () => {
-			const result = validateApiKeyFormat("GOOGLE_AI_STUDIO_API_KEY", "notavalidgooglekey");
+			const result = validateApiKeyFormat(
+				"GOOGLE_AI_STUDIO_API_KEY",
+				"notavalidgooglekey",
+			);
 			expect(result.valid).toBe(false);
 		});
 	});
@@ -122,16 +148,23 @@ describe("validateApiKeyFormat", () => {
 	describe("OPENAI_API_KEY", () => {
 		test("accepts sk- prefix key with sufficient length", () => {
 			const validKey = "sk-" + "a".repeat(50);
-			expect(validateApiKeyFormat("OPENAI_API_KEY", validKey)).toEqual({ valid: true });
+			expect(validateApiKeyFormat("OPENAI_API_KEY", validKey)).toEqual({
+				valid: true,
+			});
 		});
 
 		test("accepts sk-proj- prefix key", () => {
 			const validKey = "sk-proj-" + "a".repeat(50);
-			expect(validateApiKeyFormat("OPENAI_API_KEY", validKey)).toEqual({ valid: true });
+			expect(validateApiKeyFormat("OPENAI_API_KEY", validKey)).toEqual({
+				valid: true,
+			});
 		});
 
 		test("rejects key without sk- prefix", () => {
-			const result = validateApiKeyFormat("OPENAI_API_KEY", "openai-wrongprefix-" + "x".repeat(40));
+			const result = validateApiKeyFormat(
+				"OPENAI_API_KEY",
+				"openai-wrongprefix-" + "x".repeat(40),
+			);
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain("sk-");
 		});
@@ -146,16 +179,23 @@ describe("validateApiKeyFormat", () => {
 	describe("DEEPSEEK_API_KEY", () => {
 		test("accepts sk- prefix key with sufficient length", () => {
 			const validKey = "sk-" + "a".repeat(20);
-			expect(validateApiKeyFormat("DEEPSEEK_API_KEY", validKey)).toEqual({ valid: true });
+			expect(validateApiKeyFormat("DEEPSEEK_API_KEY", validKey)).toEqual({
+				valid: true,
+			});
 		});
 
 		test("accepts deepseek- prefix key", () => {
 			const validKey = "deepseek-" + "a".repeat(20);
-			expect(validateApiKeyFormat("DEEPSEEK_API_KEY", validKey)).toEqual({ valid: true });
+			expect(validateApiKeyFormat("DEEPSEEK_API_KEY", validKey)).toEqual({
+				valid: true,
+			});
 		});
 
 		test("rejects key without recognized prefix", () => {
-			const result = validateApiKeyFormat("DEEPSEEK_API_KEY", "ds-wrongprefix-" + "x".repeat(20));
+			const result = validateApiKeyFormat(
+				"DEEPSEEK_API_KEY",
+				"ds-wrongprefix-" + "x".repeat(20),
+			);
 			expect(result.valid).toBe(false);
 		});
 
@@ -168,7 +208,9 @@ describe("validateApiKeyFormat", () => {
 
 	describe("unknown / default key names", () => {
 		test("accepts key with at least 10 characters", () => {
-			expect(validateApiKeyFormat("SOME_OTHER_API_KEY", "longenoughkey")).toEqual({ valid: true });
+			expect(
+				validateApiKeyFormat("SOME_OTHER_API_KEY", "longenoughkey"),
+			).toEqual({ valid: true });
 		});
 
 		test("rejects key shorter than 10 characters", () => {
@@ -181,7 +223,10 @@ describe("validateApiKeyFormat", () => {
 	describe("cross-provider format confusion", () => {
 		test("rejects Anthropic key in Google slot (wrong length)", () => {
 			const anthropicKey = "sk-ant-api03-" + "a".repeat(30);
-			const result = validateApiKeyFormat("GOOGLE_AI_STUDIO_API_KEY", anthropicKey);
+			const result = validateApiKeyFormat(
+				"GOOGLE_AI_STUDIO_API_KEY",
+				anthropicKey,
+			);
 			expect(result.valid).toBe(false);
 		});
 

@@ -223,8 +223,15 @@ export class SummaryGenerator {
 		const results: TaskResult[] = [];
 		const seenIds = new Set<string>();
 
-		const buildResult = (id: string, status: TaskResult["status"], description: string, taskEvents: EventLog[]): TaskResult => {
-			const completionEvent = taskEvents.find((e) => e.type === "task_completed");
+		const buildResult = (
+			id: string,
+			status: TaskResult["status"],
+			description: string,
+			taskEvents: EventLog[],
+		): TaskResult => {
+			const completionEvent = taskEvents.find(
+				(e) => e.type === "task_completed",
+			);
 			const startEvent = taskEvents.find(
 				(e) => e.type === "task_started" || e.type === "task_dispatched",
 			);
@@ -258,12 +265,14 @@ export class SummaryGenerator {
 			const completionEvent = taskEvents.find(
 				(e) => e.type === "task_completed" || task.status === "completed",
 			);
-			results.push(buildResult(
-				task.id,
-				task.status as TaskResult["status"],
-				task.description,
-				taskEvents,
-			));
+			results.push(
+				buildResult(
+					task.id,
+					task.status as TaskResult["status"],
+					task.description,
+					taskEvents,
+				),
+			);
 		}
 
 		// Also scan events for task IDs not in state
@@ -273,8 +282,12 @@ export class SummaryGenerator {
 		for (const taskId of eventTaskIds) {
 			if (seenIds.has(taskId)) continue;
 			const taskEvents = events.filter((e) => e.taskId === taskId);
-			const completionEvent = taskEvents.find((e) => e.type === "task_completed");
-			const status: TaskResult["status"] = completionEvent ? "completed" : "in_progress";
+			const completionEvent = taskEvents.find(
+				(e) => e.type === "task_completed",
+			);
+			const status: TaskResult["status"] = completionEvent
+				? "completed"
+				: "in_progress";
 			results.push(buildResult(taskId, status, taskId, taskEvents));
 		}
 

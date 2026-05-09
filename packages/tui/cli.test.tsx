@@ -1,13 +1,13 @@
-import { describe, it, expect } from "vitest";
-import React from "react";
-import { renderToString } from "ink";
 import { execSync } from "node:child_process";
-import { Dashboard } from "./components/Dashboard.tsx";
-import { TaskList } from "./components/TaskList.tsx";
+import { renderToString } from "ink";
+import React from "react";
+import { describe, expect, it } from "vitest";
 import { AgentStatus } from "./components/AgentStatus.tsx";
 import { CostTable } from "./components/CostTable.tsx";
+import { Dashboard } from "./components/Dashboard.tsx";
+import { TaskList } from "./components/TaskList.tsx";
 import { DashboardProvider } from "./hooks/useDashboard.tsx";
-import type { Run, EventLog } from "./types.ts";
+import type { EventLog, Run } from "./types.ts";
 
 const mockEvents: EventLog[] = [
 	{
@@ -50,7 +50,13 @@ const mockRun: Run = {
 	events: mockEvents,
 };
 
-function MockApp({ showCostTable = false, debugMode = false }: { showCostTable?: boolean; debugMode?: boolean }) {
+function MockApp({
+	showCostTable = false,
+	debugMode = false,
+}: {
+	showCostTable?: boolean;
+	debugMode?: boolean;
+}) {
 	return (
 		<DashboardProvider initialRuns={[mockRun]}>
 			<Dashboard

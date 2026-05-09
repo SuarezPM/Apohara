@@ -1,11 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import * as os from "node:os";
-import { resolveCredential, resolveCredentialSync } from "../src/core/credentials";
+import * as path from "node:path";
+import {
+	resolveCredential,
+	resolveCredentialSync,
+} from "../src/core/credentials";
 
 describe("credentials", () => {
-	const testDir = path.join(os.tmpdir(), "apohara-test-credentials-" + Date.now());
+	const testDir = path.join(
+		os.tmpdir(),
+		"apohara-test-credentials-" + Date.now(),
+	);
 	const originalXdgConfig = process.env.XDG_CONFIG_HOME;
 	const originalOpencodeKey = process.env.OPENCODE_API_KEY;
 	const originalHome = process.env.HOME;
@@ -33,7 +39,11 @@ describe("credentials", () => {
 		const apoharaDir = path.join(testDir, "apohara");
 		await fs.mkdir(apoharaDir, { recursive: true });
 		const credPath = path.join(apoharaDir, "credentials.json");
-		await fs.writeFile(credPath, JSON.stringify({ "opencode-go": { apiKey: "file-key-123" } }), "utf-8");
+		await fs.writeFile(
+			credPath,
+			JSON.stringify({ "opencode-go": { apiKey: "file-key-123" } }),
+			"utf-8",
+		);
 
 		const result = await resolveCredential("opencode-go");
 		expect(result).toBe("file-key-123");

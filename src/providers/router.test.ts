@@ -18,7 +18,8 @@ describe("ProviderRouter", () => {
 			status,
 			statusText,
 			json: async () => data,
-			text: async () => (typeof data === "string" ? data : JSON.stringify(data)),
+			text: async () =>
+				typeof data === "string" ? data : JSON.stringify(data),
 		};
 	}
 
@@ -296,7 +297,9 @@ describe("Paid API provider routing", () => {
 	});
 
 	test("anthropic-api rejects OAuth token format", async () => {
-		router = new ProviderRouter({ anthropicApiKey: "sk-ant-oat01-xxxxxxxxxxxxxxxxxxxxxxxx" });
+		router = new ProviderRouter({
+			anthropicApiKey: "sk-ant-oat01-xxxxxxxxxxxxxxxxxxxxxxxx",
+		});
 		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
 		await expect(
 			router.completion({ messages, provider: "anthropic-api" }),
@@ -304,7 +307,9 @@ describe("Paid API provider routing", () => {
 	});
 
 	test("anthropic-api accepts sk-ant-api03- keys and returns Anthropic format", async () => {
-		router = new ProviderRouter({ anthropicApiKey: "sk-ant-api03-valid-test-key-long-enough" });
+		router = new ProviderRouter({
+			anthropicApiKey: "sk-ant-api03-valid-test-key-long-enough",
+		});
 		vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
 			ok: true,
 			status: 200,
@@ -317,7 +322,10 @@ describe("Paid API provider routing", () => {
 		} as unknown as Response);
 
 		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
-		const response = await router.completion({ messages, provider: "anthropic-api" });
+		const response = await router.completion({
+			messages,
+			provider: "anthropic-api",
+		});
 		expect(response.content).toBe("Hello from Anthropic");
 		expect(response.provider).toBe("anthropic-api");
 		expect(response.usage.promptTokens).toBe(5);
@@ -341,34 +349,45 @@ describe("Paid API provider routing", () => {
 	});
 
 	test("gemini-api accepts AIza keys and uses x-goog-api-key header", async () => {
-		router = new ProviderRouter({ geminiApiKeyDirect: "AIzaTestKey12345678901234567890123456789" });
+		router = new ProviderRouter({
+			geminiApiKeyDirect: "AIzaTestKey12345678901234567890123456789",
+		});
 		let capturedHeaders: Record<string, string> = {};
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
-			capturedHeaders = init?.headers as Record<string, string> || {};
+			capturedHeaders = (init?.headers as Record<string, string>) || {};
 			return {
 				ok: true,
 				status: 200,
 				statusText: "OK",
 				json: async () => ({
 					candidates: [{ content: { parts: [{ text: "Hello from Gemini" }] } }],
-					usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 7, totalTokenCount: 10 },
+					usageMetadata: {
+						promptTokenCount: 3,
+						candidatesTokenCount: 7,
+						totalTokenCount: 10,
+					},
 				}),
 				text: async () => "",
 			} as unknown as Response;
 		});
 
 		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
-		const response = await router.completion({ messages, provider: "gemini-api" });
+		const response = await router.completion({
+			messages,
+			provider: "gemini-api",
+		});
 		expect(response.content).toBe("Hello from Gemini");
 		expect(response.provider).toBe("gemini-api");
 		expect(capturedHeaders["x-goog-api-key"]).toBeDefined();
 	});
 
 	test("opencode-go uses x-api-key and anthropic-version headers", async () => {
-		router = new ProviderRouter({ opencodeApiKey: "oc-test-key-valid-long-enough-key" });
+		router = new ProviderRouter({
+			opencodeApiKey: "oc-test-key-valid-long-enough-key",
+		});
 		let capturedHeaders: Record<string, string> = {};
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
-			capturedHeaders = init?.headers as Record<string, string> || {};
+			capturedHeaders = (init?.headers as Record<string, string>) || {};
 			return {
 				ok: true,
 				status: 200,
@@ -382,14 +401,19 @@ describe("Paid API provider routing", () => {
 		});
 
 		const messages: LLMMessage[] = [{ role: "user", content: "test" }];
-		const response = await router.completion({ messages, provider: "opencode-go" });
+		const response = await router.completion({
+			messages,
+			provider: "opencode-go",
+		});
 		expect(response.content).toBe("Hello from OpenCode");
 		expect(capturedHeaders["x-api-key"]).toBeDefined();
 		expect(capturedHeaders["anthropic-version"]).toBe("2023-06-01");
 	});
 
 	test("opencode-go URL is api.opencode.ai/v1/messages", async () => {
-		router = new ProviderRouter({ opencodeApiKey: "oc-test-key-valid-long-enough-key" });
+		router = new ProviderRouter({
+			opencodeApiKey: "oc-test-key-valid-long-enough-key",
+		});
 		let capturedUrl = "";
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
 			capturedUrl = url.toString();

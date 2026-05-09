@@ -1,5 +1,5 @@
 import type { EventLog } from "../../../src/core/types";
-import type { Run, DebugCounters } from "../types";
+import type { DebugCounters, Run } from "../types";
 import { LedgerWatcher } from "./ledger-watcher";
 
 export interface RunManagerOptions {
@@ -20,7 +20,10 @@ export class RunManager {
 	private watcher: LedgerWatcher;
 	private runs = new Map<string, Run>();
 	private options: RunManagerOptions;
-	private lastCounters: DebugCounters = { malformedLines: 0, unknownEventTypes: 0 };
+	private lastCounters: DebugCounters = {
+		malformedLines: 0,
+		unknownEventTypes: 0,
+	};
 
 	constructor(options: RunManagerOptions) {
 		this.options = options;
@@ -44,7 +47,8 @@ export class RunManager {
 
 	getRuns(): Run[] {
 		return Array.from(this.runs.values()).sort(
-			(a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+			(a, b) =>
+				new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
 		);
 	}
 

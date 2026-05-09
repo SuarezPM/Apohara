@@ -65,7 +65,10 @@ export interface OAuthToken {
  * @param bufferSeconds - Additional buffer time before considering expired (default: 60s)
  * @returns true if token is expired or will expire within bufferSeconds
  */
-export function isTokenExpired(token: OAuthToken, bufferSeconds: number = 60): boolean {
+export function isTokenExpired(
+	token: OAuthToken,
+	bufferSeconds: number = 60,
+): boolean {
 	const now = Date.now();
 	return token.expires_at <= now + bufferSeconds * 1000;
 }
@@ -84,7 +87,9 @@ export function calculateExpiresAt(expiresIn: number): number {
  * @param token - The OAuth token to sanitize
  * @returns Object with redacted sensitive fields
  */
-export function sanitizeTokenForLogging(token: OAuthToken | null): Record<string, unknown> {
+export function sanitizeTokenForLogging(
+	token: OAuthToken | null,
+): Record<string, unknown> {
 	if (!token) return { present: false };
 
 	return {

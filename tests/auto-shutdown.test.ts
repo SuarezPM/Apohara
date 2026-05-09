@@ -1,18 +1,18 @@
 /**
  * Auto-shutdown test for the indexer daemon
- * 
+ *
  * Tests:
  * 1. Daemon exits after inactivity timeout
  * 2. No zombie processes remain after shutdown
  * 3. Socket file is cleaned up on exit
- * 
+ *
  * Uses a 65-second timeout (shorter than the 30-min default) for practical testing.
  */
 
-import { test, expect, beforeAll, afterAll, describe } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import * as child_process from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as child_process from "child_process";
 
 // Paths - use release binary for reliability
 const SOCKET_PATH = ".apohara/indexer.sock";
@@ -31,7 +31,9 @@ describe("Auto-Shutdown Mechanism", () => {
 	beforeAll(async () => {
 		// Ensure clean state
 		try {
-			child_process.execSync("pkill -f apohara-indexer || true", { stdio: "ignore" });
+			child_process.execSync("pkill -f apohara-indexer || true", {
+				stdio: "ignore",
+			});
 		} catch {
 			// Ignore
 		}
@@ -57,7 +59,9 @@ describe("Auto-Shutdown Mechanism", () => {
 	afterAll(async () => {
 		// Clean up any remaining daemon
 		try {
-			child_process.execSync("pkill -f apohara-indexer || true", { stdio: "ignore" });
+			child_process.execSync("pkill -f apohara-indexer || true", {
+				stdio: "ignore",
+			});
 		} catch {
 			// Ignore
 		}
@@ -103,28 +107,36 @@ describe("Auto-Shutdown Mechanism", () => {
 		const isRunning = await checkProcessRunning(daemonPid!);
 		expect(isRunning).toBe(true);
 
-		console.log(`Daemon started with PID ${daemonPid}, timeout set to ${TEST_TIMEOUT_SECS}s`);
+		console.log(
+			`Daemon started with PID ${daemonPid}, timeout set to ${TEST_TIMEOUT_SECS}s`,
+		);
 	}, 10000);
 
-	test("2. Daemon exits after inactivity timeout", async () => {
-		// Skip if no daemon was started in previous test
-		if (!daemonPid) {
-			console.log("No daemon started, skipping test");
-			return;
-		}
+	test(
+		"2. Daemon exits after inactivity timeout",
+		async () => {
+			// Skip if no daemon was started in previous test
+			if (!daemonPid) {
+				console.log("No daemon started, skipping test");
+				return;
+			}
 
-		// Wait for timeout + buffer
-		const waitTime = (TEST_TIMEOUT_SECS + WAIT_BUFFER_SECS) * 1000;
-		console.log(`Waiting ${TEST_TIMEOUT_SECS + WAIT_BUFFER_SECS} seconds for auto-shutdown...`);
-		
-		await new Promise((resolve) => setTimeout(resolve, waitTime));
+			// Wait for timeout + buffer
+			const waitTime = (TEST_TIMEOUT_SECS + WAIT_BUFFER_SECS) * 1000;
+			console.log(
+				`Waiting ${TEST_TIMEOUT_SECS + WAIT_BUFFER_SECS} seconds for auto-shutdown...`,
+			);
 
-		// Verify daemon has exited
-		const isRunning = await checkProcessRunning(daemonPid);
-		expect(isRunning).toBe(false);
+			await new Promise((resolve) => setTimeout(resolve, waitTime));
 
-		console.log("Daemon exited after inactivity timeout");
-	}, (TEST_TIMEOUT_SECS + WAIT_BUFFER_SECS) * 1000 + 5000);
+			// Verify daemon has exited
+			const isRunning = await checkProcessRunning(daemonPid);
+			expect(isRunning).toBe(false);
+
+			console.log("Daemon exited after inactivity timeout");
+		},
+		(TEST_TIMEOUT_SECS + WAIT_BUFFER_SECS) * 1000 + 5000,
+	);
 
 	test("3. No zombie processes remain", async () => {
 		// Wait a moment for any processes to fully terminate
@@ -133,7 +145,7 @@ describe("Auto-Shutdown Mechanism", () => {
 		// Check for any zombie apohara-indexer processes
 		const result = child_process.execSync(
 			"ps aux | grep '[a]pohara-indexer' | grep -c 'Z' || true",
-			{ encoding: "utf8" }
+			{ encoding: "utf8" },
 		);
 
 		const zombieCount = parseInt(result.trim(), 10) || 0;
@@ -142,7 +154,7 @@ describe("Auto-Shutdown Mechanism", () => {
 		// Also verify no orphan daemon processes remain (excluding current test process)
 		const orphanResult = child_process.execSync(
 			"pgrep -f 'target/release/apohara-indexer' || true",
-			{ encoding: "utf8" }
+			{ encoding: "utf8" },
 		);
 
 		const orphanPids = orphanResult.trim().split("\n").filter(Boolean);
@@ -176,7 +188,10 @@ async function fileExists(filePath: string): Promise<boolean> {
 /**
  * Wait for socket file to appear
  */
-async function waitForSocket(socketPath: string, timeoutMs: number): Promise<void> {
+async function waitForSocket(
+	socketPath: string,
+	timeoutMs: number,
+): Promise<void> {
 	const start = Date.now();
 	while (Date.now() - start < timeoutMs) {
 		if (await fileExists(socketPath)) {
@@ -192,7 +207,7 @@ async function waitForSocket(socketPath: string, timeoutMs: number): Promise<voi
  */
 async function makeRpcCall(
 	socketPath: string,
-	request: { jsonrpc: string; method: string; id: number }
+	request: { jsonrpc: string; method: string; id: number },
 ): Promise<{ result?: unknown; error?: unknown }> {
 	return new Promise((resolve, reject) => {
 		const client = require("net").createConnection(socketPath);

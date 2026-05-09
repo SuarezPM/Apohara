@@ -1,13 +1,16 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "bun:test";
-import { SubagentManager, type SubagentResult, type SubagentManagerConfig } from "../src/core/subagent-manager";
-import type { TaskRole, ProviderId } from "../src/core/types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-
+import { routeTask } from "../src/core/agent-router";
+import {
+	SubagentManager,
+	type SubagentManagerConfig,
+	type SubagentResult,
+} from "../src/core/subagent-manager";
+import type { ProviderId, TaskRole } from "../src/core/types";
 // Since SubagentManager creates its own ProviderRouter internally,
 // we'll spy on the module after import
 import { ProviderRouter } from "../src/providers/router";
-import { routeTask } from "../src/core/agent-router";
 
 // Create mock completion function that can be configured per test
 let mockCompletionFn: ReturnType<typeof vi.fn>;
@@ -35,28 +38,26 @@ describe("SubagentManager", () => {
 
 		// Reset and set up mock completion function
 		mockCompletionFn = vi.fn();
-		
+
 		// Spy on the ProviderRouter prototype - this allows us to mock all instances
 		providerRouterSpy = vi.spyOn(ProviderRouter.prototype, "completion" as any);
 		providerRouterSpy.mockImplementation(mockCompletionFn);
 
 		// Spy on routeTask
 		routeTaskSpy = vi.spyOn({ routeTask }, "routeTask");
-		routeTaskSpy.mockImplementation(
-			async (role: TaskRole) => {
-				const providerMap: Record<TaskRole, ProviderId> = {
-					research: "tavily",
-					planning: "moonshot-k2.6",
-					execution: "deepseek-v4",
-					verification: "deepseek-v4",
-				};
-				return {
-					provider: providerMap[role],
-					requiresFallback: false,
-					fallbackProviders: [],
-				};
-			},
-		);
+		routeTaskSpy.mockImplementation(async (role: TaskRole) => {
+			const providerMap: Record<TaskRole, ProviderId> = {
+				research: "tavily",
+				planning: "moonshot-k2.6",
+				execution: "deepseek-v4",
+				verification: "deepseek-v4",
+			};
+			return {
+				provider: providerMap[role],
+				requiresFallback: false,
+				fallbackProviders: [],
+			};
+		});
 	});
 
 	afterEach(async () => {
@@ -74,7 +75,9 @@ describe("SubagentManager", () => {
 			id: `task-${i + 1}`,
 			description: `Test task ${i + 1}`,
 			dependencies: [] as string[],
-			role: (["research", "planning", "execution", "verification"][i % 4]) as TaskRole,
+			role: ["research", "planning", "execution", "verification"][
+				i % 4
+			] as TaskRole,
 		}));
 	};
 
@@ -102,9 +105,24 @@ describe("SubagentManager", () => {
 
 		it("2. respects dependency graph ordering", async () => {
 			const tasks = [
-				{ id: "task-a", description: "Task A", dependencies: [] as string[], role: "research" as TaskRole },
-				{ id: "task-b", description: "Task B", dependencies: ["task-a"], role: "planning" as TaskRole },
-				{ id: "task-c", description: "Task C", dependencies: ["task-b"], role: "execution" as TaskRole },
+				{
+					id: "task-a",
+					description: "Task A",
+					dependencies: [] as string[],
+					role: "research" as TaskRole,
+				},
+				{
+					id: "task-b",
+					description: "Task B",
+					dependencies: ["task-a"],
+					role: "planning" as TaskRole,
+				},
+				{
+					id: "task-c",
+					description: "Task C",
+					dependencies: ["task-b"],
+					role: "execution" as TaskRole,
+				},
 			];
 			const executionOrder: string[] = [];
 
@@ -129,7 +147,12 @@ describe("SubagentManager", () => {
 
 		it("3. timeout enforces 120s hard kill", async () => {
 			const tasks = [
-				{ id: "slow-task", description: "Slow task", dependencies: [] as string[], role: "research" as TaskRole },
+				{
+					id: "slow-task",
+					description: "Slow task",
+					dependencies: [] as string[],
+					role: "research" as TaskRole,
+				},
 			];
 
 			// Create manager with very short timeout
@@ -139,7 +162,10 @@ describe("SubagentManager", () => {
 			});
 
 			// Mock implementation that checks signal
-			const fastRouterSpy = vi.spyOn(ProviderRouter.prototype, "completion" as any);
+			const fastRouterSpy = vi.spyOn(
+				ProviderRouter.prototype,
+				"completion" as any,
+			);
 			fastRouterSpy.mockImplementation(async (params: any) => {
 				// If abort signal is triggered, throw timeout error
 				if (params.signal?.aborted) {
@@ -159,7 +185,12 @@ describe("SubagentManager", () => {
 
 		it("4. retry with exponential backoff (1s, 4s, 16s) on 429/timeout", async () => {
 			const tasks = [
-				{ id: "retry-task", description: "Retry task", dependencies: [] as string[], role: "execution" as TaskRole },
+				{
+					id: "retry-task",
+					description: "Retry task",
+					dependencies: [] as string[],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			const attempts: number[] = [];
@@ -189,7 +220,12 @@ describe("SubagentManager", () => {
 
 		it("5. no retry on 401 auth errors", async () => {
 			const tasks = [
-				{ id: "auth-task", description: "Auth task", dependencies: [] as string[], role: "verification" as TaskRole },
+				{
+					id: "auth-task",
+					description: "Auth task",
+					dependencies: [] as string[],
+					role: "verification" as TaskRole,
+				},
 			];
 
 			const attempts: number[] = [];
@@ -209,9 +245,24 @@ describe("SubagentManager", () => {
 
 		it("6. routeTask called with correct role per task", async () => {
 			const tasks = [
-				{ id: "task-1", description: "Research task", dependencies: [] as string[], role: "research" as TaskRole },
-				{ id: "task-2", description: "Planning task", dependencies: [] as string[], role: "planning" as TaskRole },
-				{ id: "task-3", description: "Execution task", dependencies: [] as string[], role: "execution" as TaskRole },
+				{
+					id: "task-1",
+					description: "Research task",
+					dependencies: [] as string[],
+					role: "research" as TaskRole,
+				},
+				{
+					id: "task-2",
+					description: "Planning task",
+					dependencies: [] as string[],
+					role: "planning" as TaskRole,
+				},
+				{
+					id: "task-3",
+					description: "Execution task",
+					dependencies: [] as string[],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			mockCompletionFn.mockResolvedValue({ content: "result" });
@@ -245,7 +296,12 @@ describe("SubagentManager", () => {
 
 		it("8. retry display shows 'retrying (N/3)...'", async () => {
 			const tasks = [
-				{ id: "retry-task", description: "Retry task", dependencies: [] as string[], role: "research" as TaskRole },
+				{
+					id: "retry-task",
+					description: "Retry task",
+					dependencies: [] as string[],
+					role: "research" as TaskRole,
+				},
 			];
 
 			const logs: string[] = [];
@@ -317,7 +373,12 @@ describe("SubagentManager", () => {
 
 		it("11. failed tasks marked in results", async () => {
 			const tasks = [
-				{ id: "fail-task", description: "Fail task", dependencies: [] as string[], role: "execution" as TaskRole },
+				{
+					id: "fail-task",
+					description: "Fail task",
+					dependencies: [] as string[],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			mockCompletionFn.mockImplementation(async () => {
@@ -423,10 +484,30 @@ describe("SubagentManager", () => {
 	describe("Dependency graph", () => {
 		it("should handle complex dependency chains", async () => {
 			const tasks = [
-				{ id: "a", description: "A", dependencies: [] as string[], role: "research" as TaskRole },
-				{ id: "b", description: "B", dependencies: ["a"], role: "planning" as TaskRole },
-				{ id: "c", description: "C", dependencies: ["a"], role: "execution" as TaskRole },
-				{ id: "d", description: "D", dependencies: ["b", "c"], role: "verification" as TaskRole },
+				{
+					id: "a",
+					description: "A",
+					dependencies: [] as string[],
+					role: "research" as TaskRole,
+				},
+				{
+					id: "b",
+					description: "B",
+					dependencies: ["a"],
+					role: "planning" as TaskRole,
+				},
+				{
+					id: "c",
+					description: "C",
+					dependencies: ["a"],
+					role: "execution" as TaskRole,
+				},
+				{
+					id: "d",
+					description: "D",
+					dependencies: ["b", "c"],
+					role: "verification" as TaskRole,
+				},
 			];
 			const executionOrder: string[] = [];
 
@@ -444,9 +525,24 @@ describe("SubagentManager", () => {
 
 		it("should handle parallel branches correctly", async () => {
 			const tasks = [
-				{ id: "root", description: "Root", dependencies: [] as string[], role: "research" as TaskRole },
-				{ id: "branch1", description: "Branch 1", dependencies: ["root"], role: "planning" as TaskRole },
-				{ id: "branch2", description: "Branch 2", dependencies: ["root"], role: "execution" as TaskRole },
+				{
+					id: "root",
+					description: "Root",
+					dependencies: [] as string[],
+					role: "research" as TaskRole,
+				},
+				{
+					id: "branch1",
+					description: "Branch 1",
+					dependencies: ["root"],
+					role: "planning" as TaskRole,
+				},
+				{
+					id: "branch2",
+					description: "Branch 2",
+					dependencies: ["root"],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			mockCompletionFn.mockImplementation(async (params: any) => {
@@ -465,7 +561,12 @@ describe("SubagentManager", () => {
 	describe("Retry logic", () => {
 		it("should retry on timeout errors", async () => {
 			const tasks = [
-				{ id: "timeout-task", description: "Timeout task", dependencies: [] as string[], role: "execution" as TaskRole },
+				{
+					id: "timeout-task",
+					description: "Timeout task",
+					dependencies: [] as string[],
+					role: "execution" as TaskRole,
+				},
 			];
 
 			const attempts: number[] = [];
@@ -488,7 +589,12 @@ describe("SubagentManager", () => {
 
 		it("should not retry non-retryable errors", async () => {
 			const tasks = [
-				{ id: "error-task", description: "Error task", dependencies: [] as string[], role: "verification" as TaskRole },
+				{
+					id: "error-task",
+					description: "Error task",
+					dependencies: [] as string[],
+					role: "verification" as TaskRole,
+				},
 			];
 
 			const attempts: number[] = [];

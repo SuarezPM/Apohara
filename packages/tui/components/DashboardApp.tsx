@@ -1,11 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Box, Text, useApp, useInput } from "ink";
 import { join } from "node:path";
-import { AgentList } from "./AgentList.tsx";
-import { CostTable } from "./CostTable.tsx";
-import { Dashboard } from "./Dashboard.tsx";
-import { ProgressBar } from "./ProgressBar.tsx";
-import { TaskList } from "./TaskList.tsx";
+import { Box, Text, useApp, useInput } from "ink";
+import React, { useEffect, useRef, useState } from "react";
 import {
 	DashboardProvider,
 	useActiveRun,
@@ -14,6 +9,11 @@ import {
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
 import { RunManager } from "../lib/run-manager.ts";
 import type { DebugCounters } from "../types.ts";
+import { AgentList } from "./AgentList.tsx";
+import { CostTable } from "./CostTable.tsx";
+import { Dashboard } from "./Dashboard.tsx";
+import { ProgressBar } from "./ProgressBar.tsx";
+import { TaskList } from "./TaskList.tsx";
 
 const EVENTS_DIR = join(process.cwd(), ".events");
 

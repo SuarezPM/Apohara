@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import type { DecomposedTask } from "../src/core/decomposer";
+import type { IsolationEngine, IsolationResult } from "../src/core/isolation";
+import { EventLedger } from "../src/core/ledger";
 import {
 	ParallelScheduler,
 	type TaskExecutionResult,
 } from "../src/core/scheduler";
-import { IsolationEngine, type IsolationResult } from "../src/core/isolation";
-import { EventLedger } from "../src/core/ledger";
 import { StateMachine } from "../src/core/state";
-import type { DecomposedTask } from "../src/core/decomposer";
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
 
 // Create a mock IsolationEngine that doesn't actually create worktrees
 class MockIsolationEngine {
@@ -23,10 +23,7 @@ class MockIsolationEngine {
 		return { status: "success", message: `Mock worktree created: ${path}` };
 	}
 
-	async destroyWorktree(
-		path: string,
-		_cwd?: string,
-	): Promise<IsolationResult> {
+	async destroyWorktree(path: string, _cwd?: string): Promise<IsolationResult> {
 		for (const [id, p] of this.worktrees.entries()) {
 			if (p === path) {
 				this.worktrees.delete(id);

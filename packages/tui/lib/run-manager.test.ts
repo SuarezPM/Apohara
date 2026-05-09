@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, writeFile, appendFile, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RunManager } from "./run-manager";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EventLog } from "../../../src/core/types";
+import { RunManager } from "./run-manager";
 
 function makeEvent(overrides: Partial<EventLog> = {}): EventLog {
 	return {
@@ -20,7 +20,9 @@ describe("RunManager", () => {
 	let tmpDir: string;
 	let manager: RunManager;
 	let runsChanged: Array<{ runs: ReturnType<RunManager["getRuns"]> }>;
-	let countersChanged: Array<{ counters: ReturnType<RunManager["getCounters"]> }>;
+	let countersChanged: Array<{
+		counters: ReturnType<RunManager["getCounters"]>;
+	}>;
 	let errors: Error[];
 
 	beforeEach(async () => {
@@ -36,7 +38,9 @@ describe("RunManager", () => {
 		await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 	});
 
-	function createManager(opts: Partial<ConstructorParameters<typeof RunManager>[0]> = {}) {
+	function createManager(
+		opts: Partial<ConstructorParameters<typeof RunManager>[0]> = {},
+	) {
 		manager = new RunManager({
 			eventsDir: tmpDir,
 			onRunsChanged: (runs) => runsChanged.push({ runs }),
@@ -117,7 +121,11 @@ describe("RunManager", () => {
 			const ts = `20260430-${String(i).padStart(6, "0")}`;
 			await writeFile(
 				join(tmpDir, `run-${ts}.jsonl`),
-				JSON.stringify(makeEvent({ timestamp: `2026-04-30T${String(i % 24).padStart(2, "0")}:00:00Z` })) + "\n",
+				JSON.stringify(
+					makeEvent({
+						timestamp: `2026-04-30T${String(i % 24).padStart(2, "0")}:00:00Z`,
+					}),
+				) + "\n",
 			);
 		}
 
@@ -147,10 +155,16 @@ describe("RunManager", () => {
 		const filePath = join(tmpDir, "run-ended.jsonl");
 		await writeFile(
 			filePath,
-			JSON.stringify(makeEvent({ id: "e1", timestamp: "2026-04-30T10:00:00Z" })) +
+			JSON.stringify(
+				makeEvent({ id: "e1", timestamp: "2026-04-30T10:00:00Z" }),
+			) +
 				"\n" +
 				JSON.stringify(
-					makeEvent({ id: "e2", timestamp: "2026-04-30T10:05:00Z", type: "auto_command_completed" }),
+					makeEvent({
+						id: "e2",
+						timestamp: "2026-04-30T10:05:00Z",
+						type: "auto_command_completed",
+					}),
 				) +
 				"\n",
 		);
@@ -167,9 +181,13 @@ describe("RunManager", () => {
 		const filePath = join(tmpDir, "run-ongoing.jsonl");
 		await writeFile(
 			filePath,
-			JSON.stringify(makeEvent({ id: "e1", timestamp: "2026-04-30T10:00:00Z" })) +
+			JSON.stringify(
+				makeEvent({ id: "e1", timestamp: "2026-04-30T10:00:00Z" }),
+			) +
 				"\n" +
-				JSON.stringify(makeEvent({ id: "e2", timestamp: "2026-04-30T10:02:00Z" })) +
+				JSON.stringify(
+					makeEvent({ id: "e2", timestamp: "2026-04-30T10:02:00Z" }),
+				) +
 				"\n",
 		);
 
@@ -192,7 +210,10 @@ describe("RunManager", () => {
 
 		// Fire multiple appends rapidly
 		for (let i = 2; i <= 10; i++) {
-			await appendFile(filePath, JSON.stringify(makeEvent({ id: `e${i}` })) + "\n");
+			await appendFile(
+				filePath,
+				JSON.stringify(makeEvent({ id: `e${i}` })) + "\n",
+			);
 		}
 		await (manager as any).watcher.scan();
 		await new Promise((r) => setTimeout(r, 50));
@@ -313,10 +334,16 @@ describe("RunManager", () => {
 		const filePath = join(tmpDir, "run-terminal.jsonl");
 		await writeFile(
 			filePath,
-			JSON.stringify(makeEvent({ id: "e1", timestamp: "2026-04-30T10:00:00Z" })) +
+			JSON.stringify(
+				makeEvent({ id: "e1", timestamp: "2026-04-30T10:00:00Z" }),
+			) +
 				"\n" +
 				JSON.stringify(
-					makeEvent({ id: "e2", timestamp: "2026-04-30T10:05:00Z", type: "task_exhausted" }),
+					makeEvent({
+						id: "e2",
+						timestamp: "2026-04-30T10:05:00Z",
+						type: "task_exhausted",
+					}),
 				) +
 				"\n",
 		);

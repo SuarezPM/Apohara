@@ -84,7 +84,11 @@ describe("live updates integration", () => {
 		);
 
 		// Force scan since fs.watch may not fire in test environment
-		await (result.current.managerRef.current as unknown as { watcher: { scan: () => Promise<void> } })?.watcher?.scan();
+		await (
+			result.current.managerRef.current as unknown as {
+				watcher: { scan: () => Promise<void> };
+			}
+		)?.watcher?.scan();
 
 		await waitFor(() =>
 			expect(result.current.state.runs[0].events.length).toBe(2),
@@ -136,7 +140,11 @@ describe("live updates integration", () => {
 		// counters are not stored in dashboard state by default, but we can verify
 		// the manager itself tracks them
 		expect(
-			(result.current.managerRef.current as unknown as { getCounters: () => unknown })?.getCounters?.(),
+			(
+				result.current.managerRef.current as unknown as {
+					getCounters: () => unknown;
+				}
+			)?.getCounters?.(),
 		).toBeDefined();
 	});
 });

@@ -61,7 +61,7 @@ export interface RouterConfig {
 	mistralApiKey?: string;
 	// OpenAI
 	openaiApiKey?: string;
-	
+
 	cooldownMinutes?: number;
 	maxFailuresBeforeCooldown?: number;
 	simulateFailure?: boolean;
@@ -84,7 +84,8 @@ const API_ENDPOINTS = {
 	deepseek: "https://api.deepseek.com/v1/chat/completions",
 	"deepseek-v4": "https://api.deepseek.com/v1/chat/completions",
 	// Google
-	gemini: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+	gemini:
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
 	// Tavily - Real-time web search for AI agents
 	tavily: "https://api.tavily.com/search",
 	// Moonshot (Kimi)
@@ -93,8 +94,10 @@ const API_ENDPOINTS = {
 	// Xiaomi (MiMo)
 	"xiaomi-mimo": "https://api.mimi.finance/v1/chat/completions",
 	// Alibaba (Qwen)
-	"qwen3.5-plus": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
-	"qwen3.6-plus": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
+	"qwen3.5-plus":
+		"https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
+	"qwen3.6-plus":
+		"https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
 	// MiniMax
 	"minimax-m2.5": "https://api.minimax.chat/v1/text/chatcompletion_v2",
 	"minimax-m2.7": "https://api.minimax.chat/v1/text/chatcompletion_v2",
@@ -153,7 +156,7 @@ interface ProviderHealth {
 export class ProviderRouter {
 	// Provider endpoints
 	private readonly API_URLS = API_ENDPOINTS;
-	
+
 	// API Keys
 	private opencodeApiKey: string;
 	private anthropicApiKey: string;
@@ -190,38 +193,61 @@ export class ProviderRouter {
 
 	constructor(cfg?: RouterConfig) {
 		// Initialize all API keys
-		this.opencodeApiKey = cfg?.opencodeApiKey || getProviderKey("opencode-go") || "";
-		this.anthropicApiKey = cfg?.anthropicApiKey || getProviderKey("anthropic-api") || "";
-		this.geminiApiKeyDirect = cfg?.geminiApiKeyDirect || getProviderKey("gemini-api") || "";
-		this.deepseekApiKey = cfg?.deepseekApiKey || getProviderKey("deepseek") || "";
+		this.opencodeApiKey =
+			cfg?.opencodeApiKey || getProviderKey("opencode-go") || "";
+		this.anthropicApiKey =
+			cfg?.anthropicApiKey || getProviderKey("anthropic-api") || "";
+		this.geminiApiKeyDirect =
+			cfg?.geminiApiKeyDirect || getProviderKey("gemini-api") || "";
+		this.deepseekApiKey =
+			cfg?.deepseekApiKey || getProviderKey("deepseek") || "";
 		this.geminiApiKey = cfg?.geminiApiKey || getProviderKey("gemini") || "";
 		this.tavilyApiKey = cfg?.tavilyApiKey || getProviderKey("tavily") || "";
-		this.moonshotApiKey = cfg?.moonshotApiKey || getProviderKey("moonshot") || "";
+		this.moonshotApiKey =
+			cfg?.moonshotApiKey || getProviderKey("moonshot") || "";
 		this.xiaomiApiKey = cfg?.xiaomiApiKey || getProviderKey("xiaomi") || "";
 		this.alibabaApiKey = cfg?.alibabaApiKey || getProviderKey("alibaba") || "";
 		this.minimaxApiKey = cfg?.minimaxApiKey || getProviderKey("minimax") || "";
-		this.deepinfraApiKey = cfg?.deepinfraApiKey || getProviderKey("deepinfra") || "";
-		this.fireworksApiKey = cfg?.fireworksApiKey || getProviderKey("fireworks") || "";
+		this.deepinfraApiKey =
+			cfg?.deepinfraApiKey || getProviderKey("deepinfra") || "";
+		this.fireworksApiKey =
+			cfg?.fireworksApiKey || getProviderKey("fireworks") || "";
 		this.zaiApiKey = cfg?.zaiApiKey || getProviderKey("zai") || "";
 		this.groqApiKey = cfg?.groqApiKey || getProviderKey("groq") || "";
-		this.kiroAiApiKey = cfg?.kiroAiApiKey || getProviderKey("kiro-ai") || "anonymous";
+		this.kiroAiApiKey =
+			cfg?.kiroAiApiKey || getProviderKey("kiro-ai") || "anonymous";
 		this.mistralApiKey = cfg?.mistralApiKey || getProviderKey("mistral") || "";
 		this.openaiApiKey = cfg?.openaiApiKey || getProviderKey("openai") || "";
-		
+
 		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5;
 		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3;
 		this.simulateFailure = cfg?.simulateFailure ?? false;
 
 		// Initialize health tracking for each provider
 		const allProviders: ProviderId[] = [
-			"opencode-go", "anthropic-api", "gemini-api",
-			"deepseek", "deepseek-v4", "gemini", "tavily",
-			"moonshot-k2.5", "moonshot-k2.6", "xiaomi-mimo",
-			"qwen3.5-plus", "qwen3.6-plus", "minimax-m2.5", "minimax-m2.7",
-			"glm-deepinfra", "glm-fireworks", "glm-zai", "groq",
-			"kiro-ai", "mistral", "openai"
+			"opencode-go",
+			"anthropic-api",
+			"gemini-api",
+			"deepseek",
+			"deepseek-v4",
+			"gemini",
+			"tavily",
+			"moonshot-k2.5",
+			"moonshot-k2.6",
+			"xiaomi-mimo",
+			"qwen3.5-plus",
+			"qwen3.6-plus",
+			"minimax-m2.5",
+			"minimax-m2.7",
+			"glm-deepinfra",
+			"glm-fireworks",
+			"glm-zai",
+			"groq",
+			"kiro-ai",
+			"mistral",
+			"openai",
 		];
-		
+
 		for (const provider of allProviders) {
 			this.providerHealth.set(provider, {
 				failureCount: 0,
@@ -344,13 +370,30 @@ export class ProviderRouter {
 		// Priority order: most capable first, then fallbacks
 		const providers: ProviderId[] = [
 			// Paid API providers first (highest quality)
-			"anthropic-api", "gemini-api",
+			"anthropic-api",
+			"gemini-api",
 			// Execution role - most powerful coding models first
-			"groq", "deepseek-v4", "kiro-ai", "openai", "moonshot-k2.6", "qwen3.6-plus", "opencode-go", "minimax-m2.7",
+			"groq",
+			"deepseek-v4",
+			"kiro-ai",
+			"openai",
+			"moonshot-k2.6",
+			"qwen3.6-plus",
+			"opencode-go",
+			"minimax-m2.7",
 			// Planning/Research
-			"mistral", "moonshot-k2.5", "gemini", "tavily", "qwen3.5-plus",
+			"mistral",
+			"moonshot-k2.5",
+			"gemini",
+			"tavily",
+			"qwen3.5-plus",
 			// Legacy fallbacks
-			"deepseek", "glm-deepinfra", "glm-fireworks", "glm-zai", "xiaomi-mimo", "minimax-m2.5"
+			"deepseek",
+			"glm-deepinfra",
+			"glm-fireworks",
+			"glm-zai",
+			"xiaomi-mimo",
+			"minimax-m2.5",
 		];
 
 		// Try the other provider first (round-robin)
@@ -431,7 +474,10 @@ export class ProviderRouter {
 		// Log provider selection for observability
 		await this.logEvent(
 			"provider_selected",
-			{ provider: currentProvider, message: `Routing request to ${currentProvider}` },
+			{
+				provider: currentProvider,
+				message: `Routing request to ${currentProvider}`,
+			},
 			"info",
 			{ provider: currentProvider },
 		);
@@ -557,18 +603,24 @@ export class ProviderRouter {
 		}
 
 		if (!this.opencodeApiKey) {
-			throw new Error("OpenCode API key not configured. Keys must start with 'oc-' or 'opencode-'.");
+			throw new Error(
+				"OpenCode API key not configured. Keys must start with 'oc-' or 'opencode-'.",
+			);
 		}
 
 		// OpenCode uses the Anthropic Messages API format
-		const systemMessages = messages.filter(m => m.role === "system");
-		const nonSystemMessages = messages.filter(m => m.role !== "system");
-		const systemPrompt = systemMessages.map(m => m.content).join("\n") || undefined;
+		const systemMessages = messages.filter((m) => m.role === "system");
+		const nonSystemMessages = messages.filter((m) => m.role !== "system");
+		const systemPrompt =
+			systemMessages.map((m) => m.content).join("\n") || undefined;
 
 		const body: Record<string, unknown> = {
 			model: MODEL_NAMES["opencode-go"],
 			max_tokens: 8096,
-			messages: nonSystemMessages.map(m => ({ role: m.role, content: m.content })),
+			messages: nonSystemMessages.map((m) => ({
+				role: m.role,
+				content: m.content,
+			})),
 		};
 		if (systemPrompt) body.system = systemPrompt;
 
@@ -591,14 +643,16 @@ export class ProviderRouter {
 				"error",
 				{ provider: "opencode-go" },
 			);
-			throw new Error(`OpenCode Go API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`OpenCode Go API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
-		const data = await response.json() as {
+		const data = (await response.json()) as {
 			content?: Array<{ type: string; text?: string }>;
 			usage?: { input_tokens?: number; output_tokens?: number };
 		};
-		const content = data.content?.find(b => b.type === "text")?.text || "";
+		const content = data.content?.find((b) => b.type === "text")?.text || "";
 		return {
 			content,
 			provider: "opencode-go",
@@ -606,14 +660,17 @@ export class ProviderRouter {
 			usage: {
 				promptTokens: data.usage?.input_tokens || 0,
 				completionTokens: data.usage?.output_tokens || 0,
-				totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+				totalTokens:
+					(data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
 			},
 		};
 	}
 
 	private async callAnthropicApi(messages: LLMMessage[]): Promise<LLMResponse> {
 		if (!this.anthropicApiKey) {
-			throw new Error("Anthropic API key not configured. Keys must start with 'sk-ant-api03-'.");
+			throw new Error(
+				"Anthropic API key not configured. Keys must start with 'sk-ant-api03-'.",
+			);
 		}
 
 		// Validate key format - reject OAuth tokens
@@ -621,21 +678,31 @@ export class ProviderRouter {
 			const sanitized = this.anthropicApiKey.slice(-4);
 			await this.logEvent(
 				"api_key_validation_failed",
-				{ provider: "anthropic-api", keyLastFour: sanitized, reason: "format mismatch: must start with sk-ant-api03-" },
+				{
+					provider: "anthropic-api",
+					keyLastFour: sanitized,
+					reason: "format mismatch: must start with sk-ant-api03-",
+				},
 				"error",
 				{ provider: "anthropic-api" },
 			);
-			throw new Error("Invalid Anthropic API key format. Keys must start with 'sk-ant-api03-'. OAuth tokens (sk-ant-oat01-*) are not supported.");
+			throw new Error(
+				"Invalid Anthropic API key format. Keys must start with 'sk-ant-api03-'. OAuth tokens (sk-ant-oat01-*) are not supported.",
+			);
 		}
 
-		const systemMessages = messages.filter(m => m.role === "system");
-		const nonSystemMessages = messages.filter(m => m.role !== "system");
-		const systemPrompt = systemMessages.map(m => m.content).join("\n") || undefined;
+		const systemMessages = messages.filter((m) => m.role === "system");
+		const nonSystemMessages = messages.filter((m) => m.role !== "system");
+		const systemPrompt =
+			systemMessages.map((m) => m.content).join("\n") || undefined;
 
 		const body: Record<string, unknown> = {
 			model: MODEL_NAMES["anthropic-api"],
 			max_tokens: 8096,
-			messages: nonSystemMessages.map(m => ({ role: m.role, content: m.content })),
+			messages: nonSystemMessages.map((m) => ({
+				role: m.role,
+				content: m.content,
+			})),
 		};
 		if (systemPrompt) body.system = systemPrompt;
 
@@ -655,18 +722,25 @@ export class ProviderRouter {
 			const sanitized = this.anthropicApiKey.slice(-4);
 			await this.logEvent(
 				"api_call_failed",
-				{ provider: "anthropic-api", status: response.status, keyLastFour: sanitized, error: errorText },
+				{
+					provider: "anthropic-api",
+					status: response.status,
+					keyLastFour: sanitized,
+					error: errorText,
+				},
 				"error",
 				{ provider: "anthropic-api" },
 			);
-			throw new Error(`Anthropic API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Anthropic API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
-		const data = await response.json() as {
+		const data = (await response.json()) as {
 			content?: Array<{ type: string; text?: string }>;
 			usage?: { input_tokens?: number; output_tokens?: number };
 		};
-		const content = data.content?.find(b => b.type === "text")?.text || "";
+		const content = data.content?.find((b) => b.type === "text")?.text || "";
 		return {
 			content,
 			provider: "anthropic-api",
@@ -674,14 +748,17 @@ export class ProviderRouter {
 			usage: {
 				promptTokens: data.usage?.input_tokens || 0,
 				completionTokens: data.usage?.output_tokens || 0,
-				totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+				totalTokens:
+					(data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
 			},
 		};
 	}
 
 	private async callGeminiApi(messages: LLMMessage[]): Promise<LLMResponse> {
 		if (!this.geminiApiKeyDirect) {
-			throw new Error("Google AI Studio API key not configured. Keys must start with 'AIza'.");
+			throw new Error(
+				"Google AI Studio API key not configured. Keys must start with 'AIza'.",
+			);
 		}
 
 		// Validate key format
@@ -689,11 +766,17 @@ export class ProviderRouter {
 			const sanitized = this.geminiApiKeyDirect.slice(-4);
 			await this.logEvent(
 				"api_key_validation_failed",
-				{ provider: "gemini-api", keyLastFour: sanitized, reason: "format mismatch: must start with AIza" },
+				{
+					provider: "gemini-api",
+					keyLastFour: sanitized,
+					reason: "format mismatch: must start with AIza",
+				},
 				"error",
 				{ provider: "gemini-api" },
 			);
-			throw new Error("Invalid Google AI Studio API key format. Keys must start with 'AIza'.");
+			throw new Error(
+				"Invalid Google AI Studio API key format. Keys must start with 'AIza'.",
+			);
 		}
 
 		const model = MODEL_NAMES["gemini-api"];
@@ -706,7 +789,7 @@ export class ProviderRouter {
 				"x-goog-api-key": this.geminiApiKeyDirect,
 			},
 			body: JSON.stringify({
-				contents: messages.map(msg => ({
+				contents: messages.map((msg) => ({
 					role: msg.role === "assistant" ? "model" : "user",
 					parts: [{ text: msg.content }],
 				})),
@@ -719,16 +802,27 @@ export class ProviderRouter {
 			const sanitized = this.geminiApiKeyDirect.slice(-4);
 			await this.logEvent(
 				"api_call_failed",
-				{ provider: "gemini-api", status: response.status, keyLastFour: sanitized, error: errorText },
+				{
+					provider: "gemini-api",
+					status: response.status,
+					keyLastFour: sanitized,
+					error: errorText,
+				},
 				"error",
 				{ provider: "gemini-api" },
 			);
-			throw new Error(`Google AI Studio API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Google AI Studio API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
-		const data = await response.json() as {
+		const data = (await response.json()) as {
 			candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-			usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+			usageMetadata?: {
+				promptTokenCount?: number;
+				candidatesTokenCount?: number;
+				totalTokenCount?: number;
+			};
 		};
 		const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 		return {
@@ -743,28 +837,40 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callZai(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+	private async callZai(
+		messages: LLMMessage[],
+		model: string,
+	): Promise<LLMResponse> {
 		if (!this.zaiApiKey) {
 			throw new Error("Z.ai API key not configured");
 		}
 
-		const response = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.zaiApiKey}`,
+		const response = await fetch(
+			"https://api.siliconflow.cn/v1/chat/completions",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${this.zaiApiKey}`,
+				},
+				body: JSON.stringify({ model, messages }),
+				signal: AbortSignal.timeout(30000),
 			},
-			body: JSON.stringify({ model, messages }),
-			signal: AbortSignal.timeout(30000),
-		});
+		);
 
 		if (!response.ok) {
-			throw new Error(`Z.ai API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Z.ai API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
-		const data = await response.json() as {
+		const data = (await response.json()) as {
 			choices?: Array<{ message?: { content?: string } }>;
-			usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+			usage?: {
+				prompt_tokens?: number;
+				completion_tokens?: number;
+				total_tokens?: number;
+			};
 		};
 		return {
 			content: data.choices?.[0]?.message?.content || "",
@@ -812,19 +918,22 @@ export class ProviderRouter {
 	}
 
 	private async callGemini(messages: LLMMessage[]): Promise<LLMResponse> {
-		const response = await fetch(`${this.API_URLS.gemini}?key=${this.geminiApiKey}`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
+		const response = await fetch(
+			`${this.API_URLS.gemini}?key=${this.geminiApiKey}`,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					contents: messages.map((msg) => ({
+						role: msg.role === "assistant" ? "model" : msg.role,
+						parts: [{ text: msg.content }],
+					})),
+				}),
+				signal: AbortSignal.timeout(30000), // 30 second timeout
 			},
-			body: JSON.stringify({
-				contents: messages.map((msg) => ({
-					role: msg.role === "assistant" ? "model" : msg.role,
-					parts: [{ text: msg.content }],
-				})),
-			}),
-			signal: AbortSignal.timeout(30000), // 30 second timeout
-		});
+		);
 
 		if (!response.ok) {
 			throw new Error(
@@ -852,13 +961,15 @@ export class ProviderRouter {
 	 */
 	private async callTavily(messages: LLMMessage[]): Promise<LLMResponse> {
 		if (!this.tavilyApiKey) {
-			throw new Error("Tavily API key not configured. Get one at https://app.tavily.com/");
+			throw new Error(
+				"Tavily API key not configured. Get one at https://app.tavily.com/",
+			);
 		}
 
 		// Extract query from user message
-		const userMessage = messages.find(m => m.role === "user");
+		const userMessage = messages.find((m) => m.role === "user");
 		const query = userMessage?.content || messages[0]?.content || "";
-		
+
 		if (!query) {
 			throw new Error("Tavily search requires a query");
 		}
@@ -880,15 +991,17 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Tavily API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Tavily API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
-		
+
 		// Format results for LLM consumption
 		const results = data.results || [];
 		const answer = data.answer || "";
-		
+
 		// Format as structured content
 		let content = "";
 		if (answer) {
@@ -926,7 +1039,9 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`DeepSeek V4 API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`DeepSeek V4 API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -942,11 +1057,14 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callMoonshot(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+	private async callMoonshot(
+		messages: LLMMessage[],
+		model: string,
+	): Promise<LLMResponse> {
 		if (!this.moonshotApiKey) {
 			throw new Error("Moonshot API key not configured");
 		}
-		
+
 		const response = await fetch(this.API_URLS["moonshot-k2.5"], {
 			method: "POST",
 			headers: {
@@ -961,7 +1079,9 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Moonshot (Kimi) API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Moonshot (Kimi) API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -981,7 +1101,7 @@ export class ProviderRouter {
 		if (!this.xiaomiApiKey) {
 			throw new Error("Xiaomi API key not configured");
 		}
-		
+
 		const response = await fetch(this.API_URLS["xiaomi-mimo"], {
 			method: "POST",
 			headers: {
@@ -996,7 +1116,9 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Xiaomi MiMo API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Xiaomi MiMo API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -1012,11 +1134,14 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callQwen(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+	private async callQwen(
+		messages: LLMMessage[],
+		model: string,
+	): Promise<LLMResponse> {
 		if (!this.alibabaApiKey) {
 			throw new Error("Alibaba API key not configured");
 		}
-		
+
 		const response = await fetch(this.API_URLS["qwen3.6-plus"], {
 			method: "POST",
 			headers: {
@@ -1031,12 +1156,15 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Qwen (Alibaba) API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Qwen (Alibaba) API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
 		return {
-			content: data.output?.choices?.[0]?.message?.content || data.output?.text || "",
+			content:
+				data.output?.choices?.[0]?.message?.content || data.output?.text || "",
 			provider: "qwen3.6-plus",
 			model,
 			usage: {
@@ -1047,11 +1175,14 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callMiniMax(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+	private async callMiniMax(
+		messages: LLMMessage[],
+		model: string,
+	): Promise<LLMResponse> {
 		if (!this.minimaxApiKey) {
 			throw new Error("MiniMax API key not configured");
 		}
-		
+
 		const response = await fetch(this.API_URLS["minimax-m2.7"], {
 			method: "POST",
 			headers: {
@@ -1066,7 +1197,9 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`MiniMax API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`MiniMax API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -1082,11 +1215,14 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callDeepInfra(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+	private async callDeepInfra(
+		messages: LLMMessage[],
+		model: string,
+	): Promise<LLMResponse> {
 		if (!this.deepinfraApiKey) {
 			throw new Error("DeepInfra API key not configured");
 		}
-		
+
 		const response = await fetch(this.API_URLS["glm-deepinfra"], {
 			method: "POST",
 			headers: {
@@ -1101,7 +1237,9 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`DeepInfra API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`DeepInfra API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -1117,11 +1255,14 @@ export class ProviderRouter {
 		};
 	}
 
-	private async callFireworks(messages: LLMMessage[], model: string): Promise<LLMResponse> {
+	private async callFireworks(
+		messages: LLMMessage[],
+		model: string,
+	): Promise<LLMResponse> {
 		if (!this.fireworksApiKey) {
 			throw new Error("Fireworks API key not configured");
 		}
-		
+
 		const response = await fetch(this.API_URLS["glm-fireworks"], {
 			method: "POST",
 			headers: {
@@ -1136,7 +1277,9 @@ export class ProviderRouter {
 		});
 
 		if (!response.ok) {
-			throw new Error(`Fireworks AI API Error: ${response.status} ${response.statusText}`);
+			throw new Error(
+				`Fireworks AI API Error: ${response.status} ${response.statusText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -1154,7 +1297,9 @@ export class ProviderRouter {
 
 	private async callGroq(messages: LLMMessage[]): Promise<LLMResponse> {
 		if (!this.groqApiKey) {
-			throw new Error("Groq API key not configured. Get one at https://console.groq.com/keys");
+			throw new Error(
+				"Groq API key not configured. Get one at https://console.groq.com/keys",
+			);
 		}
 
 		const response = await fetch(this.API_URLS.groq, {
@@ -1172,7 +1317,9 @@ export class ProviderRouter {
 
 		if (!response.ok) {
 			const errorText = await response.text().catch(() => "");
-			throw new Error(`Groq API Error: ${response.status} ${response.statusText} ${errorText}`);
+			throw new Error(
+				`Groq API Error: ${response.status} ${response.statusText} ${errorText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -1204,7 +1351,9 @@ export class ProviderRouter {
 
 		if (!response.ok) {
 			const errorText = await response.text().catch(() => "");
-			throw new Error(`Kiro AI API Error: ${response.status} ${response.statusText} ${errorText}`);
+			throw new Error(
+				`Kiro AI API Error: ${response.status} ${response.statusText} ${errorText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -1222,7 +1371,9 @@ export class ProviderRouter {
 
 	private async callMistral(messages: LLMMessage[]): Promise<LLMResponse> {
 		if (!this.mistralApiKey) {
-			throw new Error("Mistral API key not configured. Get one at https://console.mistral.ai/");
+			throw new Error(
+				"Mistral API key not configured. Get one at https://console.mistral.ai/",
+			);
 		}
 
 		const response = await fetch(this.API_URLS.mistral, {
@@ -1240,7 +1391,9 @@ export class ProviderRouter {
 
 		if (!response.ok) {
 			const errorText = await response.text().catch(() => "");
-			throw new Error(`Mistral API Error: ${response.status} ${response.statusText} ${errorText}`);
+			throw new Error(
+				`Mistral API Error: ${response.status} ${response.statusText} ${errorText}`,
+			);
 		}
 
 		const data = await response.json();
@@ -1258,7 +1411,9 @@ export class ProviderRouter {
 
 	private async callOpenAI(messages: LLMMessage[]): Promise<LLMResponse> {
 		if (!this.openaiApiKey) {
-			throw new Error("OpenAI API key not configured. Get one at https://platform.openai.com/");
+			throw new Error(
+				"OpenAI API key not configured. Get one at https://platform.openai.com/",
+			);
 		}
 
 		const response = await fetch(this.API_URLS.openai, {
@@ -1276,7 +1431,9 @@ export class ProviderRouter {
 
 		if (!response.ok) {
 			const errorText = await response.text().catch(() => "");
-			throw new Error(`OpenAI API Error: ${response.status} ${response.statusText} ${errorText}`);
+			throw new Error(
+				`OpenAI API Error: ${response.status} ${response.statusText} ${errorText}`,
+			);
 		}
 
 		const data = await response.json();

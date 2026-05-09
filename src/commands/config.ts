@@ -284,7 +284,11 @@ async function runWizard(): Promise<void> {
 		{ key: "DEEPSEEK_API_KEY", label: "DeepSeek API Key", secure: true },
 		{ key: "ANTHROPIC_API_KEY", label: "Anthropic API Key", secure: true },
 		{ key: "OPENAI_API_KEY", label: "OpenAI API Key", secure: true },
-		{ key: "GOOGLE_AI_STUDIO_API_KEY", label: "Google AI Studio API Key", secure: true },
+		{
+			key: "GOOGLE_AI_STUDIO_API_KEY",
+			label: "Google AI Studio API Key",
+			secure: true,
+		},
 	];
 
 	const credentials = { ...existing };
@@ -359,10 +363,7 @@ export const configCommand = new Command("config")
 			const [key, ...valueParts] = options.set.split("=");
 			const value = valueParts.join("=");
 
-			if (
-				!key ||
-				!Object.prototype.hasOwnProperty.call(CREDENTIALS_TEMPLATE, key)
-			) {
+			if (!key || !Object.hasOwn(CREDENTIALS_TEMPLATE, key)) {
 				console.error(`❌ Unknown key: ${key}`);
 				console.log(
 					`Valid keys: ${Object.keys(CREDENTIALS_TEMPLATE).join(", ")}`,

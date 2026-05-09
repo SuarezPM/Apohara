@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { exec as execSync } from "node:child_process";
-import { promisify } from "node:util";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { promisify } from "node:util";
 import { ProviderRouter } from "../../src/providers/router";
 
 const execAsync = promisify(execSync);
@@ -21,7 +21,10 @@ async function cleanupTempDir(tmp: string): Promise<void> {
 
 async function hasApiKey(): Promise<boolean> {
 	try {
-		const envContent = await fs.readFile(path.join(process.cwd(), ".env"), "utf-8");
+		const envContent = await fs.readFile(
+			path.join(process.cwd(), ".env"),
+			"utf-8",
+		);
 		return (
 			envContent.includes("OPENCODE_API_KEY=") &&
 			!envContent.includes("OPENCODE_API_KEY=your-key-here") &&
@@ -32,19 +35,22 @@ async function hasApiKey(): Promise<boolean> {
 	}
 }
 
-async function startFastifyServer(): Promise<{ pid: number; kill: () => Promise<void> }> {
+async function startFastifyServer(): Promise<{
+	pid: number;
+	kill: () => Promise<void>;
+}> {
 	const fastifyDir = path.join(process.cwd(), "examples/fastify-api");
 	const { spawn } = await import("node:child_process");
-	
+
 	const child = spawn("bun", ["run", "src/index.ts"], {
 		cwd: fastifyDir,
 		stdio: "pipe",
 		detached: true,
 	});
-	
+
 	// Wait for server to start
 	await new Promise((resolve) => setTimeout(resolve, 1000));
-	
+
 	return {
 		pid: child.pid!,
 		kill: async () => {
@@ -91,10 +97,10 @@ describe("Install and Run E2E Test", () => {
 
 	it("1. Install from tarball - uses npm pack tarball, installs globally", async () => {
 		const tarballPath = path.join(process.cwd(), "apohara-0.1.0.tgz");
-		
+
 		// Verify tarball exists
 		expect(await fileExists(tarballPath)).toBe(true);
-		
+
 		// Check that package.json exists in the tarball
 		const { stdout } = await execAsync(`tar -tzf ${tarballPath} | head -20`);
 		expect(stdout).toContain("package/package.json");
@@ -102,18 +108,23 @@ describe("Install and Run E2E Test", () => {
 
 	it("2. Config credentials test - runs config command with API key", async () => {
 		if (!hasKey) {
-			console.log("⚠️  Skipping config credentials test - no API key found in .env");
+			console.log(
+				"⚠️  Skipping config credentials test - no API key found in .env",
+			);
 			return;
 		}
 
 		// Read the API key from .env
-		const envContent = await fs.readFile(path.join(process.cwd(), ".env"), "utf-8");
+		const envContent = await fs.readFile(
+			path.join(process.cwd(), ".env"),
+			"utf-8",
+		);
 		const keyMatch = envContent.match(/OPENCODE_API_KEY=(.+)/m);
 		expect(keyMatch).toBeTruthy();
-		
+
 		const apiKey = keyMatch![1].trim();
 		expect(apiKey.length).toBeGreaterThan(0);
-		
+
 		// Try running the config command (should not throw)
 		// This is a smoke test - we just verify the command can run
 		try {
@@ -134,26 +145,26 @@ describe("Install and Run E2E Test", () => {
 		}
 
 		const fastifyDir = path.join(process.cwd(), "examples/fastify-api");
-		
+
 		// Verify the Fastify example exists and has required files
 		expect(await fileExists(path.join(fastifyDir, "package.json"))).toBe(true);
 		expect(await fileExists(path.join(fastifyDir, "src/index.ts"))).toBe(true);
-		
+
 		// Verify the project is built (dist exists)
 		expect(await fileExists(path.join(fastifyDir, "dist"))).toBe(true);
 	});
 
 	it("4. Health check test - verifies /health endpoint returns 200", async () => {
 		const fastifyDir = path.join(process.cwd(), "examples/fastify-api");
-		
+
 		// Start the Fastify server
 		const { pid, kill } = await startFastifyServer();
-		
+
 		try {
 			// Wait for server to be ready
 			let attempts = 0;
 			let serverReady = false;
-			
+
 			while (attempts < 10 && !serverReady) {
 				serverReady = await checkHealthEndpoint(3000);
 				if (!serverReady) {
@@ -161,13 +172,13 @@ describe("Install and Run E2E Test", () => {
 					attempts++;
 				}
 			}
-			
+
 			expect(serverReady).toBe(true);
-			
+
 			// Verify /health endpoint returns 200
 			const response = await fetch("http://localhost:3000/health");
 			expect(response.status).toBe(200);
-			
+
 			const body = await response.json();
 			expect(body.status).toBe("ok");
 		} finally {
@@ -182,26 +193,30 @@ describe("Install and Run E2E Test", () => {
 
 		// Setup: Create a main git repository
 		await fs.mkdir(mainRepo, { recursive: true });
-		
+
 		await execAsync("git init", { cwd: mainRepo });
 		await execAsync("git config user.email 'test@test.com'", { cwd: mainRepo });
 		await execAsync("git config user.name 'Test'", { cwd: mainRepo });
-		
+
 		// Create initial commit
 		await fs.writeFile(path.join(mainRepo, "README.md"), "# Main Repo");
 		await execAsync("git add README.md", { cwd: mainRepo });
 		await execAsync("git commit -m 'Initial commit'", { cwd: mainRepo });
 
 		// Create worktree A using direct git commands (faster and more reliable)
-		await execAsync(`git worktree add -b branch-a ${worktreeDirA}`, { cwd: mainRepo });
-		
+		await execAsync(`git worktree add -b branch-a ${worktreeDirA}`, {
+			cwd: mainRepo,
+		});
+
 		// Create worktree B
-		await execAsync(`git worktree add -b branch-b ${worktreeDirB}`, { cwd: mainRepo });
+		await execAsync(`git worktree add -b branch-b ${worktreeDirB}`, {
+			cwd: mainRepo,
+		});
 
 		// Write a file to worktree A
 		const fileInA = path.join(worktreeDirA, "unique-file-a.txt");
 		await fs.writeFile(fileInA, "This file exists only in worktree A");
-		
+
 		// Verify file exists in worktree A
 		expect(await fileExists(fileInA)).toBe(true);
 
@@ -212,17 +227,25 @@ describe("Install and Run E2E Test", () => {
 		// Write a different file to worktree B
 		const fileInB2 = path.join(worktreeDirB, "unique-file-b.txt");
 		await fs.writeFile(fileInB2, "This file exists only in worktree B");
-		
+
 		// Verify it's only in worktree B
 		expect(await fileExists(fileInB2)).toBe(true);
-		expect(await fileExists(path.join(worktreeDirA, "unique-file-b.txt"))).toBe(false);
+		expect(await fileExists(path.join(worktreeDirA, "unique-file-b.txt"))).toBe(
+			false,
+		);
 
 		// Cleanup: Remove worktrees using git worktree remove
-		await execAsync(`git worktree remove --force ${worktreeDirA}`, { cwd: mainRepo });
-		await execAsync(`git worktree remove --force ${worktreeDirB}`, { cwd: mainRepo });
-		
+		await execAsync(`git worktree remove --force ${worktreeDirA}`, {
+			cwd: mainRepo,
+		});
+		await execAsync(`git worktree remove --force ${worktreeDirB}`, {
+			cwd: mainRepo,
+		});
+
 		// Clean up the main repo branch references
-		await execAsync("git branch -D branch-a branch-b", { cwd: mainRepo }).catch(() => {});
+		await execAsync("git branch -D branch-a branch-b", { cwd: mainRepo }).catch(
+			() => {},
+		);
 	});
 
 	it("6. Provider fallback chain test - verifies --simulate-fallback triggers fallback to next provider", async () => {

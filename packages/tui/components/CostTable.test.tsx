@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
-import React from "react";
 import { renderToString } from "ink";
-import { CostTable } from "./CostTable.tsx";
+import type React from "react";
+import { describe, expect, it } from "vitest";
 import { DashboardProvider } from "../hooks/useDashboard.tsx";
-import type { Run, EventLog } from "../types.ts";
+import type { EventLog, Run } from "../types.ts";
+import { CostTable } from "./CostTable.tsx";
 
 const mockEvents: EventLog[] = [
 	{
@@ -39,7 +39,9 @@ const mockRun: Run = {
 };
 
 function Wrapper({ children }: { children: React.ReactNode }) {
-	return <DashboardProvider initialRuns={[mockRun]}>{children}</DashboardProvider>;
+	return (
+		<DashboardProvider initialRuns={[mockRun]}>{children}</DashboardProvider>
+	);
 }
 
 describe("CostTable", () => {

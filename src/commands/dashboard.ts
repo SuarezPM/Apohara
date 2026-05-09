@@ -1,7 +1,7 @@
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { spawn } from "../lib/spawn";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
 const RUN_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
 
@@ -34,7 +34,10 @@ function getTuiPath(): string {
 
 export const dashboardCommand = new Command("dashboard")
 	.description("Launch the interactive TUI dashboard")
-	.option("-r, --run <id>", "Load a specific run by ID (alphanumeric, hyphen, underscore only)")
+	.option(
+		"-r, --run <id>",
+		"Load a specific run by ID (alphanumeric, hyphen, underscore only)",
+	)
 	.action(async (options: { run?: string }) => {
 		if (options.run && !validateRunId(options.run)) {
 			console.error(

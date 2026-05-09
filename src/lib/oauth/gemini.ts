@@ -3,12 +3,18 @@
  * Supports credential reuse from ~/.gemini/oauth_creds.json and fresh Google OAuth flow
  */
 
-import { existsSync, readFileSync, chmodSync } from "node:fs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import * as path from "node:path";
+import { chmodSync, existsSync, readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as os from "node:os";
+import * as path from "node:path";
+import {
+	calculateExpiresAt,
+	generateCodeChallenge,
+	generateCodeVerifier,
+	isTokenExpired,
+	type OAuthToken,
+} from "../oauth-pkce.js";
 import { OAuthTokenStore } from "../oauth-token-store.js";
-import { type OAuthToken, isTokenExpired, calculateExpiresAt, generateCodeVerifier, generateCodeChallenge } from "../oauth-pkce.js";
 
 // Google OAuth endpoints for Gemini API
 const GOOGLE_OAUTH_CONFIG = {
@@ -46,7 +52,7 @@ export async function loadGeminiCliCredentials(): Promise<OAuthToken | null> {
 		// Gemini CLI stores tokens in a different format - check common patterns
 		// Pattern 1: { access_token, refresh_token, expiry }
 		// Pattern 2: { token: { access_token, ... }, ... }
-		
+
 		let token: OAuthToken | null = null;
 
 		// Try Pattern 1: Direct token object
@@ -83,22 +89,26 @@ export async function loadGeminiCliCredentials(): Promise<OAuthToken | null> {
 
 		if (token) {
 			console.log("[OAuth:gemini] Loaded existing Gemini CLI credentials");
-			console.log(`[OAuth:gemini] Token expires at: ${new Date(token.expires_at).toISOString()}`);
-			
+			console.log(
+				`[OAuth:gemini] Token expires at: ${new Date(token.expires_at).toISOString()}`,
+			);
+
 			// Check if expired
 			if (isTokenExpired(token)) {
 				console.log("[OAuth:gemini] Existing token is expired");
 				return null;
 			}
-			
+
 			return token;
 		}
 
 		console.log("[OAuth:gemini] Unable to parse Gemini CLI credentials format");
 		return null;
-
 	} catch (error) {
-		console.warn("[OAuth:gemini] Failed to load Gemini CLI credentials:", error);
+		console.warn(
+			"[OAuth:gemini] Failed to load Gemini CLI credentials:",
+			error,
+		);
 		return null;
 	}
 }
@@ -175,7 +185,10 @@ export async function clearApoharaToken(): Promise<void> {
 /**
  * Start a local HTTP server to receive OAuth callback
  */
-function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof import("http").createServer>; code: Promise<string | null> }> {
+function startCallbackServer(port: number): Promise<{
+	server: ReturnType<typeof import("http").createServer>;
+	code: Promise<string | null>;
+}> {
 	return new Promise((resolve, reject) => {
 		const http = require("http");
 
@@ -184,37 +197,50 @@ function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof 
 			resolveCode = res;
 		});
 
-		const server = http.createServer((req: ReturnType<typeof import("http").IncomingMessage>, res: ReturnType<typeof import("http").ServerResponse>) => {
-			const url = new URL(req.url || "/", `http://localhost:${port}`);
+		const server = http.createServer(
+			(
+				req: ReturnType<typeof import("http").IncomingMessage>,
+				res: ReturnType<typeof import("http").ServerResponse>,
+			) => {
+				const url = new URL(req.url || "/", `http://localhost:${port}`);
 
-			if (url.pathname === "/callback" || url.pathname === "") {
-				const code = url.searchParams.get("code");
-				const error = url.searchParams.get("error");
+				if (url.pathname === "/callback" || url.pathname === "") {
+					const code = url.searchParams.get("code");
+					const error = url.searchParams.get("error");
 
-				if (error) {
+					if (error) {
+						res.writeHead(400, { "Content-Type": "text/html" });
+						res.end(
+							"<html><body><h1>Authentication Failed</h1><p>Error: " +
+								error +
+								"</p></body></html>",
+						);
+						resolveCode(null);
+						server.close();
+						return;
+					}
+
+					if (code) {
+						res.writeHead(200, { "Content-Type": "text/html" });
+						res.end(
+							"<html><body><h1>Authentication Successful!</h1><p>You may close this window.</p></body></html>",
+						);
+						resolveCode(code);
+						server.close();
+						return;
+					}
+
 					res.writeHead(400, { "Content-Type": "text/html" });
-					res.end("<html><body><h1>Authentication Failed</h1><p>Error: " + error + "</p></body></html>");
-					resolveCode(null);
+					res.end(
+						"<html><body><h1>Error</h1><p>No authorization code received.</p></body></html>",
+					);
 					server.close();
-					return;
+				} else {
+					res.writeHead(404, { "Content-Type": "text/plain" });
+					res.end("Not found");
 				}
-
-				if (code) {
-					res.writeHead(200, { "Content-Type": "text/html" });
-					res.end("<html><body><h1>Authentication Successful!</h1><p>You may close this window.</p></body></html>");
-					resolveCode(code);
-					server.close();
-					return;
-				}
-
-				res.writeHead(400, { "Content-Type": "text/html" });
-				res.end("<html><body><h1>Error</h1><p>No authorization code received.</p></body></html>");
-				server.close();
-			} else {
-				res.writeHead(404, { "Content-Type": "text/plain" });
-				res.end("Not found");
-			}
-		});
+			},
+		);
 
 		server.listen(port, () => {
 			// Server ready
@@ -223,10 +249,13 @@ function startCallbackServer(port: number): Promise<{ server: ReturnType<typeof 
 		server.on("error", reject);
 
 		// Timeout after 5 minutes
-		setTimeout(() => {
-			server.close();
-			reject(new Error("OAuth callback timed out"));
-		}, 5 * 60 * 1000);
+		setTimeout(
+			() => {
+				server.close();
+				reject(new Error("OAuth callback timed out"));
+			},
+			5 * 60 * 1000,
+		);
 
 		resolve({ server, code: codePromise });
 	});
@@ -290,7 +319,10 @@ async function findAvailablePort(start: number, end: number): Promise<number> {
  * @param clientId - OAuth client ID
  * @param clientSecret - OAuth client secret (optional for some flows)
  */
-export async function loginWithGoogleOAuth(clientId: string, clientSecret?: string): Promise<OAuthToken> {
+export async function loginWithGoogleOAuth(
+	clientId: string,
+	clientSecret?: string,
+): Promise<OAuthToken> {
 	console.log("[OAuth:gemini] Starting Google OAuth login flow...");
 
 	// Generate PKCE verifier and challenge
@@ -303,7 +335,9 @@ export async function loginWithGoogleOAuth(clientId: string, clientSecret?: stri
 	const callbackPort = await findAvailablePort(28564, 28599);
 	const redirectUri = `${GOOGLE_OAUTH_CONFIG.redirectUri}:${callbackPort}/callback`;
 
-	console.log(`[OAuth:gemini] Starting callback server on port ${callbackPort}...`);
+	console.log(
+		`[OAuth:gemini] Starting callback server on port ${callbackPort}...`,
+	);
 
 	// Start callback server
 	const { server, code: codePromise } = await startCallbackServer(callbackPort);
@@ -321,7 +355,9 @@ export async function loginWithGoogleOAuth(clientId: string, clientSecret?: stri
 		authUrl.searchParams.set("prompt", "consent"); // Force consent to get refresh token
 
 		console.log("[OAuth:gemini] Opening browser for authentication...");
-		console.log(`[OAuth:gemini] Authorization URL: ${authUrl.toString().replace(clientId, "***")}`);
+		console.log(
+			`[OAuth:gemini] Authorization URL: ${authUrl.toString().replace(clientId, "***")}`,
+		);
 
 		// Open browser
 		await openBrowser(authUrl.toString());
@@ -335,7 +371,9 @@ export async function loginWithGoogleOAuth(clientId: string, clientSecret?: stri
 			throw new Error("No authorization code received");
 		}
 
-		console.log("[OAuth:gemini] Received authorization code, exchanging for tokens...");
+		console.log(
+			"[OAuth:gemini] Received authorization code, exchanging for tokens...",
+		);
 
 		// Exchange code for tokens
 		const tokenResponse = await fetch(GOOGLE_OAUTH_CONFIG.tokenEndpoint, {
@@ -355,10 +393,12 @@ export async function loginWithGoogleOAuth(clientId: string, clientSecret?: stri
 
 		if (!tokenResponse.ok) {
 			const errorText = await tokenResponse.text();
-			throw new Error(`Token exchange failed: ${tokenResponse.status} ${errorText}`);
+			throw new Error(
+				`Token exchange failed: ${tokenResponse.status} ${errorText}`,
+			);
 		}
 
-		const tokenData = await tokenResponse.json() as {
+		const tokenData = (await tokenResponse.json()) as {
 			access_token: string;
 			refresh_token?: string;
 			token_type: string;
@@ -379,7 +419,6 @@ export async function loginWithGoogleOAuth(clientId: string, clientSecret?: stri
 
 		console.log("[OAuth:gemini] OAuth flow completed successfully");
 		return token;
-
 	} finally {
 		server.close();
 	}
@@ -388,7 +427,11 @@ export async function loginWithGoogleOAuth(clientId: string, clientSecret?: stri
 /**
  * Refresh the OAuth token using the refresh token
  */
-export async function refreshGeminiToken(refreshToken: string, clientId: string, clientSecret?: string): Promise<OAuthToken> {
+export async function refreshGeminiToken(
+	refreshToken: string,
+	clientId: string,
+	clientSecret?: string,
+): Promise<OAuthToken> {
 	const tokenResponse = await fetch(GOOGLE_OAUTH_CONFIG.tokenEndpoint, {
 		method: "POST",
 		headers: {
@@ -404,10 +447,12 @@ export async function refreshGeminiToken(refreshToken: string, clientId: string,
 
 	if (!tokenResponse.ok) {
 		const errorText = await tokenResponse.text();
-		throw new Error(`Token refresh failed: ${tokenResponse.status} ${errorText}`);
+		throw new Error(
+			`Token refresh failed: ${tokenResponse.status} ${errorText}`,
+		);
 	}
 
-	const tokenData = await tokenResponse.json() as {
+	const tokenData = (await tokenResponse.json()) as {
 		access_token: string;
 		refresh_token?: string;
 		token_type: string;
@@ -427,10 +472,16 @@ export async function refreshGeminiToken(refreshToken: string, clientId: string,
 /**
  * Get or create an OAuth token store for Gemini
  */
-export function createGeminiTokenStore(clientId: string, clientSecret?: string): OAuthTokenStore {
-	return new OAuthTokenStore({ provider: "gemini" }, async (refreshToken: string) => {
-		return refreshGeminiToken(refreshToken, clientId, clientSecret);
-	});
+export function createGeminiTokenStore(
+	clientId: string,
+	clientSecret?: string,
+): OAuthTokenStore {
+	return new OAuthTokenStore(
+		{ provider: "gemini" },
+		async (refreshToken: string) => {
+			return refreshGeminiToken(refreshToken, clientId, clientSecret);
+		},
+	);
 }
 
 /**

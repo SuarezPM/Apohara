@@ -1,7 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from "bun:test";
-import { TaskDecomposer, type DecompositionResult } from "../src/core/decomposer";
-import { ProviderRouter, type LLMResponse } from "../src/providers/router";
-import type { IndexerClient, SearchResult, BlastRadiusResponse } from "../src/core/indexer-client";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
+import {
+	type DecompositionResult,
+	TaskDecomposer,
+} from "../src/core/decomposer";
+import type {
+	BlastRadiusResponse,
+	IndexerClient,
+	SearchResult,
+} from "../src/core/indexer-client";
+import type { LLMResponse, ProviderRouter } from "../src/providers/router";
 
 // NOTE: We intentionally do NOT mock ProviderRouter here because we need
 // to test the real integration between TaskDecomposer and ProviderRouter
@@ -168,9 +175,24 @@ describe("TaskDecomposer Integration", () => {
 		const mockLLMResponse: LLMResponse = {
 			content: JSON.stringify({
 				tasks: [
-					{ id: "low", description: "Low", estimatedComplexity: "low", dependencies: [] },
-					{ id: "medium", description: "Medium", estimatedComplexity: "medium", dependencies: [] },
-					{ id: "high", description: "High", estimatedComplexity: "high", dependencies: [] },
+					{
+						id: "low",
+						description: "Low",
+						estimatedComplexity: "low",
+						dependencies: [],
+					},
+					{
+						id: "medium",
+						description: "Medium",
+						estimatedComplexity: "medium",
+						dependencies: [],
+					},
+					{
+						id: "high",
+						description: "High",
+						estimatedComplexity: "high",
+						dependencies: [],
+					},
 				],
 			}),
 			usage: { promptTokens: 50, completionTokens: 30, totalTokens: 80 },

@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { EventParser, KNOWN_EVENT_TYPES } from "./event-parser";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { EventLog } from "../../../src/core/types";
+import { EventParser, KNOWN_EVENT_TYPES } from "./event-parser";
 
 function makeEvent(overrides: Partial<EventLog> = {}): EventLog {
 	return {
@@ -45,25 +45,45 @@ describe("EventParser", () => {
 	});
 
 	it("counts missing id as malformed", () => {
-		const line = JSON.stringify({ timestamp: "2024-01-01", type: "task_completed", severity: "info", payload: {} });
+		const line = JSON.stringify({
+			timestamp: "2024-01-01",
+			type: "task_completed",
+			severity: "info",
+			payload: {},
+		});
 		parser.parseLine(line);
 		expect(parser.malformedLines).toBe(1);
 	});
 
 	it("counts missing timestamp as malformed", () => {
-		const line = JSON.stringify({ id: "1", type: "task_completed", severity: "info", payload: {} });
+		const line = JSON.stringify({
+			id: "1",
+			type: "task_completed",
+			severity: "info",
+			payload: {},
+		});
 		parser.parseLine(line);
 		expect(parser.malformedLines).toBe(1);
 	});
 
 	it("counts missing type as malformed", () => {
-		const line = JSON.stringify({ id: "1", timestamp: "2024-01-01", severity: "info", payload: {} });
+		const line = JSON.stringify({
+			id: "1",
+			timestamp: "2024-01-01",
+			severity: "info",
+			payload: {},
+		});
 		parser.parseLine(line);
 		expect(parser.malformedLines).toBe(1);
 	});
 
 	it("counts missing severity as malformed", () => {
-		const line = JSON.stringify({ id: "1", timestamp: "2024-01-01", type: "task_completed", payload: {} });
+		const line = JSON.stringify({
+			id: "1",
+			timestamp: "2024-01-01",
+			type: "task_completed",
+			payload: {},
+		});
 		parser.parseLine(line);
 		expect(parser.malformedLines).toBe(1);
 	});
@@ -112,14 +132,18 @@ describe("EventParser", () => {
 	});
 
 	it("handles very long line", () => {
-		const line = JSON.stringify(makeEvent({ payload: { data: "x".repeat(100_000) } }));
+		const line = JSON.stringify(
+			makeEvent({ payload: { data: "x".repeat(100_000) } }),
+		);
 		const result = parser.parseLine(line);
 		expect(result.event).not.toBeNull();
 	});
 
 	it("does not count valid lines as malformed or unknown", () => {
 		parser.parseLine(JSON.stringify(makeEvent()));
-		parser.parseLine(JSON.stringify(makeEvent({ type: "task_failed", severity: "error" })));
+		parser.parseLine(
+			JSON.stringify(makeEvent({ type: "task_failed", severity: "error" })),
+		);
 		expect(parser.malformedLines).toBe(0);
 		expect(parser.unknownEventTypes).toBe(0);
 	});

@@ -5,15 +5,15 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { mkdir, appendFile } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ProviderId, TaskRole } from "./types";
-import { routeTask, type RouteResult } from "./agent-router";
-import { ProviderRouter } from "../providers/router";
-import { EventLedger } from "./ledger";
-import { Mem0Client, type MemorySearchResult } from "../lib/mem0-client";
 import { InngestClient } from "../lib/inngest-client";
+import { Mem0Client, type MemorySearchResult } from "../lib/mem0-client";
+import { ProviderRouter } from "../providers/router";
+import { type RouteResult, routeTask } from "./agent-router";
 import type { DecomposedTask } from "./decomposer";
+import { EventLedger } from "./ledger";
+import type { ProviderId, TaskRole } from "./types";
 
 /**
  * Configuration for SubagentManager
@@ -42,7 +42,12 @@ const DEFAULT_CONFIG: SubagentManagerConfig = {
 /**
  * Status of a subagent execution
  */
-export type SubagentStatus = "pending" | "running" | "completed" | "failed" | "timeout";
+export type SubagentStatus =
+	| "pending"
+	| "running"
+	| "completed"
+	| "failed"
+	| "timeout";
 
 /**
  * Result of a subagent execution
@@ -190,7 +195,9 @@ export class SubagentManager {
 	/**
 	 * Builds a dependency graph and returns tasks ready to execute.
 	 */
-	private buildDependencyGraph(tasks: DecomposedTask[]): Map<string, Set<string>> {
+	private buildDependencyGraph(
+		tasks: DecomposedTask[],
+	): Map<string, Set<string>> {
 		const graph = new Map<string, Set<string>>();
 		for (const task of tasks) {
 			graph.set(task.id, new Set(task.dependencies));
@@ -240,10 +247,14 @@ export class SubagentManager {
 			try {
 				relevantMemories = await mem0.retrieveForTask(task.description);
 				if (relevantMemories.length > 0) {
-					console.log(`[SubagentManager] Found ${relevantMemories.length} relevant memories for ${task.id}`);
+					console.log(
+						`[SubagentManager] Found ${relevantMemories.length} relevant memories for ${task.id}`,
+					);
 				}
 			} catch (err) {
-				console.log(`[SubagentManager] Mem0 retrieval error: ${(err as Error).message}`);
+				console.log(
+					`[SubagentManager] Mem0 retrieval error: ${(err as Error).message}`,
+				);
 			}
 		}
 
@@ -297,11 +308,13 @@ export class SubagentManager {
 				let response: { content: string };
 				if (inngest?.isConfigured()) {
 					// Use Inngest for event tracking only — retry logic is in the outer loop
-					console.log(`[SubagentManager] Using Inngest durable execution for ${task.id}`);
+					console.log(
+						`[SubagentManager] Using Inngest durable execution for ${task.id}`,
+					);
 					response = await inngest.executeStep(
 						`task-${task.id}`,
 						executeWithRetry,
-						{ maxAttempts: 1, retryInterval: 0 }
+						{ maxAttempts: 1, retryInterval: 0 },
 					);
 				} else {
 					// Use local execution (retry handled by loop)
@@ -332,9 +345,13 @@ export class SubagentManager {
 							`Used ${provider} for ${task.role} role task: ${task.description.substring(0, 100)}...`,
 							task.role,
 						);
-						console.log(`[SubagentManager] Stored decision for ${task.id} in Mem0`);
+						console.log(
+							`[SubagentManager] Stored decision for ${task.id} in Mem0`,
+						);
 					} catch (err) {
-						console.log(`[SubagentManager] Mem0 store error: ${(err as Error).message}`);
+						console.log(
+							`[SubagentManager] Mem0 store error: ${(err as Error).message}`,
+						);
 					}
 				}
 
@@ -384,8 +401,12 @@ export class SubagentManager {
 				// Retry with backoff
 				if (attempt < maxRetries) {
 					const backoffTime =
-						this.config.backoffMs[Math.min(attempt, this.config.backoffMs.length - 1)];
-					console.log(`⚠️ Retrying (${attempt + 1}/${maxRetries}) after ${backoffTime}ms...`);
+						this.config.backoffMs[
+							Math.min(attempt, this.config.backoffMs.length - 1)
+						];
+					console.log(
+						`⚠️ Retrying (${attempt + 1}/${maxRetries}) after ${backoffTime}ms...`,
+					);
 					await this.sleep(backoffTime);
 				}
 			}
@@ -451,14 +472,19 @@ export class SubagentManager {
 		const activePromises: Map<string, Promise<void>> = new Map();
 
 		console.log(`🚀 Starting parallel execution of ${tasks.length} tasks`);
-		console.log(`⚙️  Max concurrent: ${this.config.maxConcurrent}, Timeout: ${this.config.timeoutMs}ms`);
+		console.log(
+			`⚙️  Max concurrent: ${this.config.maxConcurrent}, Timeout: ${this.config.timeoutMs}ms`,
+		);
 
 		while (pending.size > 0 || activePromises.size > 0) {
 			// Get tasks ready to execute (dependencies satisfied)
 			const readyTasks = this.getReadyTasks(trackedTasks, completed);
 
 			// Execute up to max concurrent
-			while (readyTasks.length > 0 && activePromises.size < this.config.maxConcurrent) {
+			while (
+				readyTasks.length > 0 &&
+				activePromises.size < this.config.maxConcurrent
+			) {
 				const task = readyTasks.shift();
 				if (!task) continue;
 
@@ -497,7 +523,9 @@ export class SubagentManager {
 				const running = activePromises.size + 1;
 				const total = tasks.length;
 				const timeoutSec = this.config.timeoutMs / 1000;
-				console.log(`📋 Agent ${running}/${total} running... (${timeoutSec}s timeout)`);
+				console.log(
+					`📋 Agent ${running}/${total} running... (${timeoutSec}s timeout)`,
+				);
 
 				// Mark task as dispatched to prevent double-dispatch on next loop iteration
 				task.startedAt = Date.now();
@@ -543,7 +571,9 @@ export class SubagentManager {
 		// Log final status
 		const successCount = results.filter((r) => r.status === "completed").length;
 		const failCount = results.filter((r) => r.status === "failed").length;
-		console.log(`\n✅ Execution complete: ${successCount}/${tasks.length} succeeded, ${failCount} failed`);
+		console.log(
+			`\n✅ Execution complete: ${successCount}/${tasks.length} succeeded, ${failCount} failed`,
+		);
 
 		return results;
 	}
@@ -552,15 +582,25 @@ export class SubagentManager {
 	 * Prints a summary table of all results.
 	 */
 	private printSummary(results: SubagentResult[]): void {
-		console.log("\n┌─────────────┬────────────┬──────────────┬─────────┬───────────┐");
-		console.log("│ Agent       │ Status     │ Provider     │ Retries │ Duration  │");
-		console.log("├─────────────┼────────────┼──────────────┼─────────┼───────────┤");
+		console.log(
+			"\n┌─────────────┬────────────┬──────────────┬─────────┬───────────┐",
+		);
+		console.log(
+			"│ Agent       │ Status     │ Provider     │ Retries │ Duration  │",
+		);
+		console.log(
+			"├─────────────┼────────────┼──────────────┼─────────┼───────────┤",
+		);
 
 		for (const result of results) {
 			const statusIcon =
-				result.status === "completed" ? "✅" :
-				result.status === "failed" ? "❌" :
-				result.status === "timeout" ? "⏱️" : "⏳";
+				result.status === "completed"
+					? "✅"
+					: result.status === "failed"
+						? "❌"
+						: result.status === "timeout"
+							? "⏱️"
+							: "⏳";
 			const paddedStatus = result.status.padEnd(10);
 			const paddedProvider = result.provider.padEnd(12);
 			const paddedRetries = String(result.retries).padEnd(7);
@@ -570,7 +610,9 @@ export class SubagentManager {
 			);
 		}
 
-		console.log("└─────────────┴────────────┴──────────────┴─────────┴───────────┘");
+		console.log(
+			"└─────────────┴────────────┴──────────────┴─────────┴───────────┘",
+		);
 	}
 
 	/**

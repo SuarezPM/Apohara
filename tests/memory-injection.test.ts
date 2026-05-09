@@ -2,13 +2,13 @@
  * Tests for memory injection utilities
  */
 
-import { test, expect, describe } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import type { Memory } from "../src/core/indexer-client";
 import {
+	fetchAndFormatMemories,
 	formatMemoryBlock,
 	injectMemoriesIntoPrompt,
-	fetchAndFormatMemories,
 } from "../src/core/memory-injection";
-import type { Memory } from "../src/core/indexer-client";
 
 describe("formatMemoryBlock", () => {
 	test("returns empty string for empty memories", () => {
@@ -29,7 +29,7 @@ describe("formatMemoryBlock", () => {
 
 		const result = formatMemoryBlock(memories);
 		expect(result).toBe(
-			'<apohara_memory>\n  <memory type="preference">User prefers snake_case</memory>\n</apohara_memory>'
+			'<apohara_memory>\n  <memory type="preference">User prefers snake_case</memory>\n</apohara_memory>',
 		);
 	});
 
@@ -52,7 +52,9 @@ describe("formatMemoryBlock", () => {
 		];
 
 		const result = formatMemoryBlock(memories);
-		expect(result).toContain('<memory type="preference">Prefer snake_case</memory>');
+		expect(result).toContain(
+			'<memory type="preference">Prefer snake_case</memory>',
+		);
 		expect(result).toContain('<memory type="architecture">Use redb</memory>');
 		expect(result).toContain("<apohara_memory>");
 		expect(result).toContain("</apohara_memory>");
@@ -76,8 +78,13 @@ describe("formatMemoryBlock", () => {
 	});
 
 	test("handles all memory types", () => {
-		const types = ["correction", "preference", "architecture", "past_error"] as const;
-		
+		const types = [
+			"correction",
+			"preference",
+			"architecture",
+			"past_error",
+		] as const;
+
 		for (const type of types) {
 			const memories: Memory[] = [
 				{
@@ -121,7 +128,8 @@ describe("injectMemoriesIntoPrompt", () => {
 	});
 
 	test("injects memories after first line in multi-line prompt", () => {
-		const basePrompt = "You are a helpful assistant.\n\nFollow these guidelines.";
+		const basePrompt =
+			"You are a helpful assistant.\n\nFollow these guidelines.";
 		const memories: Memory[] = [
 			{
 				id: "test-1",
@@ -171,7 +179,10 @@ describe("fetchAndFormatMemories", () => {
 			},
 		];
 
-		const mockSearch = async (_query: string, _topK: number): Promise<Memory[]> => {
+		const mockSearch = async (
+			_query: string,
+			_topK: number,
+		): Promise<Memory[]> => {
 			return mockMemories;
 		};
 
@@ -200,7 +211,10 @@ describe("fetchAndFormatMemories", () => {
 		let receivedQuery: string | undefined;
 		let receivedTopK: number | undefined;
 
-		const mockSearch = async (query: string, topK: number): Promise<Memory[]> => {
+		const mockSearch = async (
+			query: string,
+			topK: number,
+		): Promise<Memory[]> => {
 			receivedQuery = query;
 			receivedTopK = topK;
 			return [];

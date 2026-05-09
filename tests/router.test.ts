@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from "bun:test";
-import { ProviderRouter } from "../src/providers/router";
-import { EventLedger } from "../src/core/ledger";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import { EventLedger } from "../src/core/ledger";
+import { ProviderRouter } from "../src/providers/router";
 
 describe("ProviderRouter Integration", () => {
 	let router: ProviderRouter;

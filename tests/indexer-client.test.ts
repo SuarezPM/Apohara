@@ -1,6 +1,6 @@
 /**
  * Integration tests for IndexerClient
- * 
+ *
  * Tests:
  * 1. Client auto-spawns daemon on first connection
  * 2. search('authentication') returns results with file paths
@@ -9,11 +9,11 @@
  * 5. Reconnection after daemon restart works
  */
 
-import { test, expect, beforeAll, afterAll, describe } from "bun:test";
-import { IndexerClient } from "../src/core/indexer-client";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import * as child_process from "child_process";
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as child_process from "child_process";
+import { IndexerClient } from "../src/core/indexer-client";
 
 // Use relative socket path matching the daemon's .apohara/indexer.sock
 // Run test from Clarity-Code directory
@@ -22,8 +22,8 @@ const BINARY_PATH = path.join(process.cwd(), "target/debug/apohara-indexer");
 
 let client: IndexerClient;
 let connected: boolean;
-let spawnEvents: unknown[] = [];
-let stateChanges: string[] = [];
+const spawnEvents: unknown[] = [];
+const stateChanges: string[] = [];
 
 describe("IndexerClient Integration Tests", () => {
 	beforeAll(async () => {
@@ -33,7 +33,7 @@ describe("IndexerClient Integration Tests", () => {
 		} catch (e) {
 			// Ignore
 		}
-		
+
 		try {
 			await fs.unlink(SOCKET_PATH);
 		} catch (e) {
@@ -78,11 +78,11 @@ describe("IndexerClient Integration Tests", () => {
 	test("1. Client auto-spawns daemon on first connection", async () => {
 		expect(connected).toBe(true);
 		expect(client.isConnected()).toBe(true);
-		
+
 		// Should have received spawn event
 		expect(spawnEvents.length).toBeGreaterThan(0);
 		expect(spawnEvents[0]).toHaveProperty("binaryPath");
-		
+
 		// State should have transitioned through connecting -> connected
 		expect(stateChanges).toContain("connecting");
 		expect(stateChanges).toContain("connected");
@@ -95,10 +95,10 @@ describe("IndexerClient Integration Tests", () => {
 		}
 
 		const results = await client.search("authentication", 10);
-		
+
 		expect(results).toBeDefined();
 		expect(Array.isArray(results)).toBe(true);
-		
+
 		// Empty index returns empty results - this is correct behavior
 		// The test verifies the RPC call works, not the content
 	});
@@ -110,7 +110,7 @@ describe("IndexerClient Integration Tests", () => {
 
 		// Index a simple existing file
 		const testFile = "src/index.ts";
-		
+
 		try {
 			const indexResult = await client.indexFile(testFile);
 			expect(indexResult).toBeDefined();
@@ -128,13 +128,13 @@ describe("IndexerClient Integration Tests", () => {
 
 		// Try to get blast radius for a TypeScript file
 		const result = await client.getBlastRadius("src/core/credentials.ts");
-		
+
 		expect(result).toBeDefined();
 		expect(result).toHaveProperty("files");
-		
+
 		// Should return an array of files (may be empty if no dependencies)
 		expect(Array.isArray(result.files)).toBe(true);
-		
+
 		// If there are files, they should be strings
 		if (result.files.length > 0) {
 			expect(typeof result.files[0]).toBe("string");
@@ -165,7 +165,7 @@ describe("IndexerClient Integration Tests", () => {
 		} catch {
 			// Connection might fail if daemon died - that's OK for this test
 		}
-		
+
 		// At minimum, we've tested the reconnection logic path
 		expect(true).toBe(true);
 	});
@@ -173,8 +173,13 @@ describe("IndexerClient Integration Tests", () => {
 	test("Connection state is trackable", async () => {
 		// Test that connection state methods work
 		expect(client.getState()).toBeDefined();
-		expect(["disconnected", "connecting", "connected", "reconnecting"]).toContain(client.getState());
-		
+		expect([
+			"disconnected",
+			"connecting",
+			"connected",
+			"reconnecting",
+		]).toContain(client.getState());
+
 		// getLastError should work
 		const lastError = client.getLastError();
 		// May be null if no errors occurred
@@ -215,7 +220,7 @@ describe("IndexerClient Integration Tests", () => {
 			// Store a preference memory
 			const memoryId = await client.storeMemory(
 				"User prefers snake_case for variable naming",
-				"preference"
+				"preference",
 			);
 
 			expect(memoryId).toBeDefined();
@@ -225,7 +230,7 @@ describe("IndexerClient Integration Tests", () => {
 			// Store another memory of different type
 			const archId = await client.storeMemory(
 				"Use repository pattern for data access",
-				"architecture"
+				"architecture",
 			);
 			expect(archId).toBeDefined();
 			expect(typeof archId).toBe("string");
@@ -283,15 +288,23 @@ describe("IndexerClient Integration Tests", () => {
 
 		try {
 			// Test all valid memory types
-			const types = ["correction", "preference", "architecture", "past_error"] as const;
-			
+			const types = [
+				"correction",
+				"preference",
+				"architecture",
+				"past_error",
+			] as const;
+
 			for (const type of types) {
 				const id = await client.storeMemory(`Test ${type} memory`, type);
 				expect(id).toBeDefined();
 				expect(typeof id).toBe("string");
 			}
 		} catch (e) {
-			console.log("Memory type validation test skipped (model not available):", e);
+			console.log(
+				"Memory type validation test skipped (model not available):",
+				e,
+			);
 		}
 	});
 });

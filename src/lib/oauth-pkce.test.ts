@@ -4,12 +4,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
-	generateCodeVerifier,
-	generateCodeChallenge,
-	base64urlEncode,
 	base64urlDecode,
-	isTokenExpired,
+	base64urlEncode,
 	calculateExpiresAt,
+	generateCodeChallenge,
+	generateCodeVerifier,
+	isTokenExpired,
 	sanitizeTokenForLogging,
 } from "./oauth-pkce";
 

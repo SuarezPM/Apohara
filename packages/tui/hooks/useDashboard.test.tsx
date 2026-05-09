@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { DashboardProvider, useDashboard, useActiveRun } from "./useDashboard.tsx";
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { Run } from "../types.ts";
+import {
+	DashboardProvider,
+	useActiveRun,
+	useDashboard,
+} from "./useDashboard.tsx";
 
 const mockRun: Run = {
 	id: "run-1",

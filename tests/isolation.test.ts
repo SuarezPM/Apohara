@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { IsolationEngine } from "../src/core/isolation";
-import { rm, mkdir, stat } from "node:fs/promises";
-import { spawn } from "bun";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { mkdir, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { spawn } from "bun";
+import { IsolationEngine } from "../src/core/isolation";
 
 describe("IsolationEngine Integration", () => {
 	const TEMP_REPO = join(process.cwd(), "tests/tmp-repo");

@@ -1,17 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { exec as execSync } from "node:child_process";
-import { promisify } from "node:util";
 import * as fs from "node:fs/promises";
+import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import * as path from "node:path";
-import { ProviderRouter } from "../../src/providers/router";
+import { promisify } from "node:util";
 import { routeTask } from "../../src/core/agent-router";
-import { rm, mkdir, readdir, readFile } from "node:fs/promises";
-import { RunManager } from "../../src/tui/lib/run-manager";
-import { extractTasks } from "../../src/tui/hooks/useTaskList";
-import { extractCosts } from "../../src/tui/hooks/useCostTable";
-import { extractAgents } from "../../src/tui/components/AgentStatus";
 import { SummaryGenerator } from "../../src/core/summary";
 import type { EventLog } from "../../src/core/types";
+import { ProviderRouter } from "../../src/providers/router";
+import { extractAgents } from "../../src/tui/components/AgentStatus";
+import { extractCosts } from "../../src/tui/hooks/useCostTable";
+import { extractTasks } from "../../src/tui/hooks/useTaskList";
+import { RunManager } from "../../src/tui/lib/run-manager";
 
 const execAsync = promisify(execSync);
 
@@ -29,7 +29,10 @@ async function cleanupTempDir(tmp: string): Promise<void> {
 
 async function hasApiKey(): Promise<boolean> {
 	try {
-		const envContent = await fs.readFile(path.join(process.cwd(), ".env"), "utf-8");
+		const envContent = await fs.readFile(
+			path.join(process.cwd(), ".env"),
+			"utf-8",
+		);
 		return (
 			envContent.includes("OPENCODE_API_KEY=") &&
 			!envContent.includes("OPENCODE_API_KEY=your-key-here") &&
@@ -53,7 +56,9 @@ async function getLatestEventFile(): Promise<string | null> {
 	}
 }
 
-async function readEventLines(filePath: string): Promise<Array<Record<string, unknown>>> {
+async function readEventLines(
+	filePath: string,
+): Promise<Array<Record<string, unknown>>> {
 	const content = await readFile(filePath, "utf-8");
 	return content
 		.trim()
@@ -167,7 +172,9 @@ describe("E2E: apohara auto --simulate-failure", () => {
 		const runsDir = path.join(testDir, ".apohara", "runs");
 		const runs = await readdir(runsDir).catch(() => []);
 		for (const run of runs.slice(-3)) {
-			await rm(path.join(runsDir, run), { recursive: true, force: true }).catch(() => {});
+			await rm(path.join(runsDir, run), { recursive: true, force: true }).catch(
+				() => {},
+			);
 		}
 	});
 
@@ -254,7 +261,9 @@ describe("E2E: apohara auto --simulate-failure", () => {
 		}
 
 		const lines = await readEventLines(latestFile);
-		const selectedEvents = lines.filter((ev) => ev.type === "provider_selected");
+		const selectedEvents = lines.filter(
+			(ev) => ev.type === "provider_selected",
+		);
 		expect(selectedEvents.length).toBeGreaterThanOrEqual(1);
 
 		// Verify metadata includes provider info
@@ -277,7 +286,9 @@ describe("E2E: agent-router provider selection", () => {
 
 	afterEach(async () => {
 		for (const f of ledgerFilesToClean) {
-			await rm(path.join(process.cwd(), ".events", f), { force: true }).catch(() => {});
+			await rm(path.join(process.cwd(), ".events", f), { force: true }).catch(
+				() => {},
+			);
 		}
 	});
 
@@ -285,10 +296,15 @@ describe("E2E: agent-router provider selection", () => {
 		// Snapshot files before routeTask
 		const eventsDir = path.join(process.cwd(), ".events");
 		const beforeFiles = new Set(
-			(await readdir(eventsDir).catch(() => [])).filter((f) => f.endsWith(".jsonl")),
+			(await readdir(eventsDir).catch(() => [])).filter((f) =>
+				f.endsWith(".jsonl"),
+			),
 		);
 
-		const result = await routeTask("execution", { id: "T01", description: "Test task" });
+		const result = await routeTask("execution", {
+			id: "T01",
+			description: "Test task",
+		});
 		expect(result.provider).toBeDefined();
 		expect(result.model).toBeDefined();
 
@@ -504,7 +520,10 @@ function buildSyntheticEvents(): EventLog[] {
 	];
 }
 
-async function createSyntheticRun(eventsDir: string, runId: string): Promise<string> {
+async function createSyntheticRun(
+	eventsDir: string,
+	runId: string,
+): Promise<string> {
 	const filePath = path.join(eventsDir, `run-${runId}.jsonl`);
 	await mkdir(eventsDir, { recursive: true });
 	const events = buildSyntheticEvents();
@@ -604,7 +623,8 @@ describe("E2E: Hook and component data pipeline", () => {
 		const tasks = extractTasks(events);
 		const completed = tasks.filter((t) => t.status === "completed").length;
 		const total = tasks.length;
-		const percentage = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+		const percentage =
+			total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
 		expect(percentage).toBe(100);
 	});
 });

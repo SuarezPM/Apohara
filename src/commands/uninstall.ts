@@ -1,13 +1,9 @@
-import * as fs from "node:fs/promises";
 import * as fsSync from "node:fs";
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Command } from "commander";
-import {
-	getConfigDir,
-	getStateDir,
-	getCacheDir,
-} from "../lib/paths.js";
+import { getCacheDir, getConfigDir, getStateDir } from "../lib/paths.js";
 
 /**
  * Prompts for confirmation.
@@ -107,7 +103,8 @@ async function removeFromPath(): Promise<boolean> {
 			let content = await fs.readFile(rcPath, "utf-8");
 
 			// Check if this file contains apohara PATH export
-			const hasApoharaExport = content.includes('export PATH=".*apohara.*"') ||
+			const hasApoharaExport =
+				content.includes('export PATH=".*apohara.*"') ||
 				content.includes("apohara/bin") ||
 				content.includes("apohara/bin");
 
@@ -183,19 +180,27 @@ async function showWhatWillBeRemoved(): Promise<void> {
 	// Config directories
 	const configDir = getConfigDir();
 	const configExists = await dirExists(configDir);
-	console.log(`  • Config directory: ${configDir}${configExists ? " (exists)" : ""}`);
+	console.log(
+		`  • Config directory: ${configDir}${configExists ? " (exists)" : ""}`,
+	);
 
 	const stateDir = getStateDir();
 	const stateExists = await dirExists(stateDir);
-	console.log(`  • State directory: ${stateDir}${stateExists ? " (exists)" : ""}`);
+	console.log(
+		`  • State directory: ${stateDir}${stateExists ? " (exists)" : ""}`,
+	);
 
 	const cacheDir = getCacheDir();
 	const cacheExists = await dirExists(cacheDir);
-	console.log(`  • Cache directory: ${cacheDir}${cacheExists ? " (exists)" : ""}`);
+	console.log(
+		`  • Cache directory: ${cacheDir}${cacheExists ? " (exists)" : ""}`,
+	);
 
 	// npm package
 	const npmInstalled = await isNpmInstalled();
-	console.log(`  • npm global package: ${npmInstalled ? "installed" : "not installed"}`);
+	console.log(
+		`  • npm global package: ${npmInstalled ? "installed" : "not installed"}`,
+	);
 
 	// Binary location
 	const { execSync } = await import("node:child_process");
@@ -212,7 +217,10 @@ async function showWhatWillBeRemoved(): Promise<void> {
 /**
  * Main uninstall action.
  */
-async function uninstall(options: { dryRun?: boolean; yes?: boolean }): Promise<void> {
+async function uninstall(options: {
+	dryRun?: boolean;
+	yes?: boolean;
+}): Promise<void> {
 	console.log("\n🧹 Apohara Uninstall");
 	console.log("===================\n");
 
@@ -221,7 +229,10 @@ async function uninstall(options: { dryRun?: boolean; yes?: boolean }): Promise<
 
 	// Confirm uninstall
 	if (!options.yes) {
-		const proceed = await confirm("Are you sure you want to uninstall Apohara?", false);
+		const proceed = await confirm(
+			"Are you sure you want to uninstall Apohara?",
+			false,
+		);
 		if (!proceed) {
 			console.log("\n❌ Uninstall cancelled.");
 			return;
@@ -277,9 +288,13 @@ async function uninstall(options: { dryRun?: boolean; yes?: boolean }): Promise<
 	console.log("");
 	if (success) {
 		console.log("✅ Uninstall complete!");
-		console.log("\n📝 Note: You may need to restart your terminal for PATH changes to take effect.");
+		console.log(
+			"\n📝 Note: You may need to restart your terminal for PATH changes to take effect.",
+		);
 	} else {
-		console.log("⚠️  Uninstall completed with errors. Please review the output above.");
+		console.log(
+			"⚠️  Uninstall completed with errors. Please review the output above.",
+		);
 	}
 }
 

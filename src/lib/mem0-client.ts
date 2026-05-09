@@ -1,7 +1,7 @@
 /**
  * Mem0 Client - Persistent memory layer for AI agents
  * Provides semantic memory storage and retrieval across sessions
- * 
+ *
  * Docs: https://github.com/mem0ai/mem0
  */
 
@@ -46,12 +46,12 @@ export class Mem0Client {
 	 */
 	async add(messages: MemoryEntry | MemoryEntry[]): Promise<{ id: string }[]> {
 		const messagesArr = Array.isArray(messages) ? messages : [messages];
-		
+
 		const response = await fetch(`${this.baseUrl}/memories`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Token ${this.apiKey}`,
+				Authorization: `Token ${this.apiKey}`,
 			},
 			body: JSON.stringify({
 				messages: messagesArr,
@@ -76,7 +76,7 @@ export class Mem0Client {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Token ${this.apiKey}`,
+				Authorization: `Token ${this.apiKey}`,
 			},
 			body: JSON.stringify({
 				query,
@@ -103,9 +103,9 @@ export class Mem0Client {
 			{
 				method: "GET",
 				headers: {
-					"Authorization": `Token ${this.apiKey}`,
+					Authorization: `Token ${this.apiKey}`,
 				},
-			}
+			},
 		);
 
 		if (!response.ok) {
@@ -124,7 +124,7 @@ export class Mem0Client {
 		const response = await fetch(`${this.baseUrl}/memories/${memoryId}`, {
 			method: "DELETE",
 			headers: {
-				"Authorization": `Token ${this.apiKey}`,
+				Authorization: `Token ${this.apiKey}`,
 			},
 		});
 
@@ -149,7 +149,7 @@ export class Mem0Client {
 	async storeTaskDecision(
 		taskId: string,
 		decision: string,
-		taskType: string
+		taskType: string,
 	): Promise<void> {
 		await this.add({
 			role: "assistant",
@@ -165,10 +165,7 @@ export class Mem0Client {
 	/**
 	 * Store coding pattern learned from session
 	 */
-	async storeCodingPattern(
-		pattern: string,
-		context: string
-	): Promise<void> {
+	async storeCodingPattern(pattern: string, context: string): Promise<void> {
 		await this.add({
 			role: "assistant",
 			content: `Coding pattern: ${pattern} - used in: ${context}`,
@@ -182,7 +179,9 @@ export class Mem0Client {
 	/**
 	 * Retrieve relevant memories for a task
 	 */
-	async retrieveForTask(taskDescription: string): Promise<MemorySearchResult[]> {
+	async retrieveForTask(
+		taskDescription: string,
+	): Promise<MemorySearchResult[]> {
 		// Search for memories relevant to current task
 		return this.search(taskDescription, 10);
 	}

@@ -3,7 +3,7 @@
  * Supports stdio-based MCP servers like GitNexus and cocoindex-code
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 
 export interface MCPTool {
@@ -37,10 +37,13 @@ export interface MCPConfig {
 export class MCPClient extends EventEmitter {
 	private process: ChildProcess | null = null;
 	private requestId = 0;
-	private pendingRequests = new Map<string, {
-		resolve: (value: unknown) => void;
-		reject: (reason: unknown) => void;
-	}>();
+	private pendingRequests = new Map<
+		string,
+		{
+			resolve: (value: unknown) => void;
+			reject: (reason: unknown) => void;
+		}
+	>();
 	private tools: Map<string, MCPTool> = new Map();
 	private initialized = false;
 
@@ -78,10 +81,12 @@ export class MCPClient extends EventEmitter {
 					name: "apohara",
 					version: "1.0.0",
 				},
-			}).then(() => {
-				this.initialized = true;
-				resolve();
-			}).catch(reject);
+			})
+				.then(() => {
+					this.initialized = true;
+					resolve();
+				})
+				.catch(reject);
 		});
 	}
 
@@ -101,7 +106,10 @@ export class MCPClient extends EventEmitter {
 	/**
 	 * Call a specific tool on the MCP server
 	 */
-	async callTool(name: string, args: Record<string, unknown>): Promise<MCPResponse> {
+	async callTool(
+		name: string,
+		args: Record<string, unknown>,
+	): Promise<MCPResponse> {
 		return this.sendRequest("tools/call", {
 			name,
 			arguments: args,
@@ -112,7 +120,10 @@ export class MCPClient extends EventEmitter {
 	 * Send a JSON-RPC request to the MCP server
 	 */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private sendRequest(method: string, params: Record<string, unknown>): Promise<any> {
+	private sendRequest(
+		method: string,
+		params: Record<string, unknown>,
+	): Promise<any> {
 		return new Promise((resolve, reject) => {
 			if (!this.process?.stdin) {
 				reject(new Error("MCP process not connected"));
@@ -182,17 +193,21 @@ export class MCPRegistry {
 		const client = new MCPClient(config);
 		await client.connect();
 		const tools = await client.listTools();
-		
+
 		this.clients.set(name, client);
 		this.toolCache.set(name, tools);
-		
+
 		console.log(`[MCP] Registered ${name} with ${tools.length} tools`);
 	}
 
 	/**
 	 * Call a tool on a specific MCP server
 	 */
-	async callTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<MCPResponse> {
+	async callTool(
+		serverName: string,
+		toolName: string,
+		args: Record<string, unknown>,
+	): Promise<MCPResponse> {
 		const client = this.clients.get(serverName);
 		if (!client) {
 			throw new Error(`MCP server ${serverName} not registered`);
@@ -205,7 +220,7 @@ export class MCPRegistry {
 	 */
 	findTool(toolName: string): { server: string; tool: MCPTool } | undefined {
 		for (const [server, tools] of this.toolCache) {
-			const tool = tools.find(t => t.name === toolName);
+			const tool = tools.find((t) => t.name === toolName);
 			if (tool) {
 				return { server, tool };
 			}

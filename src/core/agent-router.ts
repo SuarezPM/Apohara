@@ -4,25 +4,42 @@
  * Now supports 15+ models including DeepSeek V4, Kimi K2.6, Qwen 3.6, etc.
  */
 
-import type { ProviderId, TaskRole, EventLog, EventSeverity, ModelCapability } from "./types";
-import { ROLE_TO_PROVIDER, ROLE_FALLBACK_ORDER, getModelById, getBestModelsForRole, MODELS } from "./types";
-import { EventLedger } from "./ledger";
 import { config, getProviderKey } from "../core/config";
 import { ProviderRouter } from "../providers/router";
-import { getCapabilityScore, rankProvidersForTask, roleToTaskType, selectBestProvider } from "./capability-manifest";
+import {
+	getCapabilityScore,
+	rankProvidersForTask,
+	roleToTaskType,
+	selectBestProvider,
+} from "./capability-manifest";
+import { EventLedger } from "./ledger";
+import type {
+	EventLog,
+	EventSeverity,
+	ModelCapability,
+	ProviderId,
+	TaskRole,
+} from "./types";
+import {
+	getBestModelsForRole,
+	getModelById,
+	MODELS,
+	ROLE_FALLBACK_ORDER,
+	ROLE_TO_PROVIDER,
+} from "./types";
 
 // Re-export types for external use
-export type { ProviderId, TaskRole, ModelCapability };
+export type { ModelCapability, ProviderId, TaskRole };
 
 // Token validation map - validates API keys exist before dispatch
 const TOKEN_VALIDATORS: Record<ProviderId, () => boolean> = {
 	"opencode-go": () => !!getProviderKey("opencode-go"),
 	"anthropic-api": () => !!getProviderKey("anthropic-api"),
 	"gemini-api": () => !!getProviderKey("gemini-api"),
-	"deepseek": () => !!getProviderKey("deepseek"),
+	deepseek: () => !!getProviderKey("deepseek"),
 	"deepseek-v4": () => !!getProviderKey("deepseek"),
-	"tavily": () => !!getProviderKey("tavily"),
-	"gemini": () => !!getProviderKey("gemini"),
+	tavily: () => !!getProviderKey("tavily"),
+	gemini: () => !!getProviderKey("gemini"),
 	"moonshot-k2.5": () => !!getProviderKey("moonshot"),
 	"moonshot-k2.6": () => !!getProviderKey("moonshot"),
 	"xiaomi-mimo": () => !!getProviderKey("xiaomi"),
@@ -33,10 +50,10 @@ const TOKEN_VALIDATORS: Record<ProviderId, () => boolean> = {
 	"glm-deepinfra": () => !!getProviderKey("deepinfra"),
 	"glm-fireworks": () => !!getProviderKey("fireworks"),
 	"glm-zai": () => !!getProviderKey("zai"),
-	"groq": () => !!getProviderKey("groq"),
+	groq: () => !!getProviderKey("groq"),
 	"kiro-ai": () => true, // No auth required
-	"mistral": () => !!getProviderKey("mistral"),
-	"openai": () => !!getProviderKey("openai"),
+	mistral: () => !!getProviderKey("mistral"),
+	openai: () => !!getProviderKey("openai"),
 };
 
 /**
@@ -68,7 +85,7 @@ export function validateToken(provider: ProviderId): boolean {
  */
 export function getAvailableProviders(): ProviderId[] {
 	const available: ProviderId[] = [];
-	for (const provider of MODELS.map(m => m.id)) {
+	for (const provider of MODELS.map((m) => m.id)) {
 		if (validateToken(provider)) {
 			available.push(provider);
 		}
@@ -79,7 +96,9 @@ export function getAvailableProviders(): ProviderId[] {
 /**
  * Gets provider info for display.
  */
-export function getProviderInfo(provider: ProviderId): { name: string; provider: string; strengths: string[] } | undefined {
+export function getProviderInfo(
+	provider: ProviderId,
+): { name: string; provider: string; strengths: string[] } | undefined {
 	const model = getModelById(provider);
 	if (!model) return undefined;
 	return {
@@ -174,7 +193,10 @@ export async function routeTask(
 		);
 		// Find fallback with valid token
 		for (const fallbackProvider of fallbackOrder) {
-			if (fallbackProvider !== primaryProvider && validateToken(fallbackProvider)) {
+			if (
+				fallbackProvider !== primaryProvider &&
+				validateToken(fallbackProvider)
+			) {
 				await logProviderEvent(
 					ledger,
 					"provider_fallback",
@@ -196,11 +218,15 @@ export async function routeTask(
 			}
 		}
 		// No valid fallback, return primary anyway (fail-fast is better)
-		console.error(`⚠ No valid token found for role ${role}, using primary anyway`);
+		console.error(
+			`⚠ No valid token found for role ${role}, using primary anyway`,
+		);
 	}
 
 	// Log provider selection with model info and capability score
-	const modelInfo = modelCapability ? `${modelCapability.name} (${modelCapability.provider})` : primaryProvider;
+	const modelInfo = modelCapability
+		? `${modelCapability.name} (${modelCapability.provider})`
+		: primaryProvider;
 	await logProviderEvent(
 		ledger,
 		"provider_selected",
@@ -234,9 +260,16 @@ export async function routeTask(
  */
 export async function routeTaskWithFallback(
 	role: TaskRole,
-	task: { id?: string; messages: Array<{ role: "system" | "user" | "assistant"; content: string }> },
+	task: {
+		id?: string;
+		messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+	},
 	router?: ProviderRouter,
-): Promise<{ provider: ProviderId; model: ModelCapability | undefined; response: any }> {
+): Promise<{
+	provider: ProviderId;
+	model: ModelCapability | undefined;
+	response: any;
+}> {
 	const result = await routeTask(role, task);
 	const ledger = new EventLedger();
 
@@ -283,7 +316,9 @@ export async function routeTaskWithFallback(
 
 			// Validate token before trying fallback
 			if (!validateToken(fallbackProvider)) {
-				console.warn(`⚠ Skipping fallback to ${fallbackProvider}: no valid token`);
+				console.warn(
+					`⚠ Skipping fallback to ${fallbackProvider}: no valid token`,
+				);
 				continue;
 			}
 
@@ -311,15 +346,16 @@ export async function routeTaskWithFallback(
 					},
 				);
 
-				return { 
-					provider: fallbackProvider, 
+				return {
+					provider: fallbackProvider,
 					model: getModelById(fallbackProvider),
-					response 
+					response,
 				};
 			} catch (fallbackError) {
-				const errorMsg = fallbackError instanceof Error
-					? fallbackError.message
-					: String(fallbackError);
+				const errorMsg =
+					fallbackError instanceof Error
+						? fallbackError.message
+						: String(fallbackError);
 				console.warn(`⚠ Fallback to ${fallbackProvider} failed: ${errorMsg}`);
 			}
 		}
@@ -374,9 +410,9 @@ function isRetryableError(error: unknown): boolean {
 }
 
 // Default export for easy importing
-export default { 
-	routeTask, 
-	routeTaskWithFallback, 
+export default {
+	routeTask,
+	routeTaskWithFallback,
 	validateToken,
 	getAvailableProviders,
 	getProviderInfo,

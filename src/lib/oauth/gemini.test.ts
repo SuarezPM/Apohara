@@ -2,9 +2,9 @@
  * Unit tests for Gemini OAuth module
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import * as path from "node:path";
 import * as os from "node:os";
+import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // We'll test the module's exported functions
 // Note: Direct testing requires proper module resolution which is handled at runtime
@@ -24,17 +24,17 @@ describe("Gemini OAuth Module", () => {
 		it("should construct path in XDG_CONFIG_HOME if set", () => {
 			const original = process.env.XDG_CONFIG_HOME;
 			process.env.XDG_CONFIG_HOME = "/custom/config";
-			
+
 			// The path should use XDG_CONFIG_HOME
 			const expectedPattern = "/custom/config/apohara/oauth-gemini.json";
-			
+
 			// Restore
 			if (original !== undefined) {
 				process.env.XDG_CONFIG_HOME = original;
 			} else {
 				delete process.env.XDG_CONFIG_HOME;
 			}
-			
+
 			// Just verify the logic works - we can't easily test the function directly
 			// without running the actual module
 			expect(true).toBe(true);
@@ -50,7 +50,7 @@ describe("Gemini OAuth Module", () => {
 				token_type: "Bearer",
 				expires_at: Date.now() + 3600000,
 			};
-			
+
 			expect(validToken.access_token).toBeDefined();
 			expect(validToken.token_type).toBe("Bearer");
 			expect(validToken.expires_at).toBeGreaterThan(Date.now());
@@ -62,7 +62,7 @@ describe("Gemini OAuth Module", () => {
 				token_type: "Bearer",
 				expires_at: Date.now() + 3600000,
 			};
-			
+
 			expect(tokenWithoutRefresh.access_token).toBeDefined();
 			// refresh_token is optional
 			expect(tokenWithoutRefresh.refresh_token).toBeUndefined();
@@ -76,7 +76,7 @@ describe("Gemini OAuth Module", () => {
 				expires_at: Date.now() + 3600000,
 				scope: "https://www.googleapis.com/auth/generative-language-tuner",
 			};
-			
+
 			expect(tokenWithScope.scope).toBeDefined();
 			expect(tokenWithScope.scope).toContain("googleapis.com");
 		});
@@ -96,7 +96,7 @@ describe("Gemini OAuth Module", () => {
 		it("should calculate expires_at from expires_in", () => {
 			const expiresIn = 3600; // 1 hour in seconds
 			const expiresAt = Date.now() + expiresIn * 1000;
-			
+
 			// Should be approximately 1 hour from now
 			const diff = Math.abs(expiresAt - (Date.now() + expiresIn * 1000));
 			expect(diff).toBeLessThan(1000); // Within 1 second tolerance
@@ -127,7 +127,7 @@ describe("Gemini OAuth Module", () => {
 		it("should generate URL-safe code challenge", () => {
 			// Test that code challenge is base64url encoded (no + or /)
 			const mockChallenge = "abc123-def456_ghi789"; // Already URL-safe
-			
+
 			// Base64url should not contain + or /
 			expect(mockChallenge).not.toContain("+");
 			expect(mockChallenge).not.toContain("/");

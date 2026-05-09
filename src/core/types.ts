@@ -4,27 +4,27 @@ export type TaskRole = "research" | "planning" | "execution" | "verification";
 // All supported LLM providers and models
 // Based on user's model list: GLM-5.1, GLM-5, Kimi K2.5, K2.6, MiMo-V2 series, Qwen3.5/3.6 Plus, MiniMax M2.5/M2.7, DeepSeek V4
 export type ProviderId =
-	| "opencode-go"           // OpenCode Go - Anthropic Messages API at api.opencode.ai
-	| "anthropic-api"        // Anthropic direct API - sk-ant-api03-* keys
-	| "gemini-api"           // Google AI Studio - x-goog-api-key header
-	| "deepseek-v4"          // DeepSeek V4 Pro/Flash - Reasoning & coding
-	| "deepseek"             // DeepSeek Coder (fallback)
-	| "tavily"               // Tavily - Web search for AI agents
-	| "gemini"               // Gemini 2.0 - Planning (generateContent format)
-	| "moonshot-k2.5"        // Kimi K2.5 (Moonshot)
-	| "moonshot-k2.6"        // Kimi K2.6 (Moonshot) - Latest & most powerful
-	| "xiaomi-mimo"          // Xiaomi MiMo V2 series
-	| "qwen3.5-plus"         // Qwen 3.5 Plus (Alibaba)
-	| "qwen3.6-plus"         // Qwen 3.6 Plus (Alibaba) - Latest
-	| "minimax-m2.5"         // MiniMax M2.5
-	| "minimax-m2.7"         // MiniMax M2.7 - Latest from MiniMax
-	| "glm-deepinfra"        // GLM via DeepInfra
-	| "glm-fireworks"        // GLM via Fireworks AI
-	| "glm-zai"              // GLM via Z.ai
-	| "groq"                 // Groq - Ultra-fast inference (Llama, Qwen, etc.)
-	| "kiro-ai"              // Kiro AI - Free tier, no auth required
-	| "mistral"              // Mistral AI - Free tier (mistral-small-latest)
-	| "openai";              // OpenAI - gpt-4o-mini
+	| "opencode-go" // OpenCode Go - Anthropic Messages API at api.opencode.ai
+	| "anthropic-api" // Anthropic direct API - sk-ant-api03-* keys
+	| "gemini-api" // Google AI Studio - x-goog-api-key header
+	| "deepseek-v4" // DeepSeek V4 Pro/Flash - Reasoning & coding
+	| "deepseek" // DeepSeek Coder (fallback)
+	| "tavily" // Tavily - Web search for AI agents
+	| "gemini" // Gemini 2.0 - Planning (generateContent format)
+	| "moonshot-k2.5" // Kimi K2.5 (Moonshot)
+	| "moonshot-k2.6" // Kimi K2.6 (Moonshot) - Latest & most powerful
+	| "xiaomi-mimo" // Xiaomi MiMo V2 series
+	| "qwen3.5-plus" // Qwen 3.5 Plus (Alibaba)
+	| "qwen3.6-plus" // Qwen 3.6 Plus (Alibaba) - Latest
+	| "minimax-m2.5" // MiniMax M2.5
+	| "minimax-m2.7" // MiniMax M2.7 - Latest from MiniMax
+	| "glm-deepinfra" // GLM via DeepInfra
+	| "glm-fireworks" // GLM via Fireworks AI
+	| "glm-zai" // GLM via Z.ai
+	| "groq" // Groq - Ultra-fast inference (Llama, Qwen, etc.)
+	| "kiro-ai" // Kiro AI - Free tier, no auth required
+	| "mistral" // Mistral AI - Free tier (mistral-small-latest)
+	| "openai"; // OpenAI - gpt-4o-mini
 
 // Model capabilities for intelligent routing
 export interface ModelCapability {
@@ -150,7 +150,12 @@ export const MODELS: ModelCapability[] = [
 		name: "Groq (Llama 4 Maverick / Qwen 3)",
 		provider: "Groq",
 		bestFor: ["planning", "execution"],
-		strengths: ["ultra-low latency", "high throughput", "cost-effective", "openai-compatible"],
+		strengths: [
+			"ultra-low latency",
+			"high throughput",
+			"cost-effective",
+			"openai-compatible",
+		],
 		contextWindow: 131072,
 		supportsVision: false,
 	},
@@ -160,7 +165,12 @@ export const MODELS: ModelCapability[] = [
 		name: "Kiro AI (Claude Sonnet / DeepSeek / Qwen)",
 		provider: "Kiro AI",
 		bestFor: ["planning", "execution", "verification"],
-		strengths: ["free tier", "no auth required", "multiple models", "openai-compatible"],
+		strengths: [
+			"free tier",
+			"no auth required",
+			"multiple models",
+			"openai-compatible",
+		],
 		contextWindow: 200000,
 		supportsVision: false,
 	},
@@ -190,7 +200,13 @@ export const MODELS: ModelCapability[] = [
 		name: "Tavily Search API",
 		provider: "Tavily",
 		bestFor: ["research"],
-		strengths: ["real-time web search", "web extraction", "research", "up-to-date info", "AI-optimized"],
+		strengths: [
+			"real-time web search",
+			"web extraction",
+			"research",
+			"up-to-date info",
+			"AI-optimized",
+		],
 		contextWindow: 10000, // Optimizado para resultados de búsqueda
 		supportsVision: false,
 	},
@@ -250,25 +266,66 @@ export function getModelById(id: ProviderId): ModelCapability | undefined {
 
 // Get best models for a specific role (sorted by capability)
 export function getBestModelsForRole(role: TaskRole): ModelCapability[] {
-	return MODELS.filter((m) => m.bestFor.includes(role))
-		.sort((a, b) => b.contextWindow - a.contextWindow);
+	return MODELS.filter((m) => m.bestFor.includes(role)).sort(
+		(a, b) => b.contextWindow - a.contextWindow,
+	);
 }
 
 // Role-to-provider mapping with intelligent selection
 // Uses Groq as primary (available via GROQ_API_KEY) with fallbacks
 export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
-	research: "tavily",        // Tavily for real-time web search/research
-	planning: "groq",          // Groq for planning (fast, reliable, available)
-	execution: "groq",         // Groq for execution (fast inference)
-	verification: "groq",      // Groq for verification
+	research: "tavily", // Tavily for real-time web search/research
+	planning: "groq", // Groq for planning (fast, reliable, available)
+	execution: "groq", // Groq for execution (fast inference)
+	verification: "groq", // Groq for verification
 };
 
 // Fallback provider order for each role (primary + fallbacks)
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
-	research: ["tavily", "gemini", "gemini-api", "anthropic-api", "moonshot-k2.6", "groq", "qwen3.6-plus"],
-	planning: ["anthropic-api", "gemini-api", "groq", "moonshot-k2.6", "qwen3.6-plus", "moonshot-k2.5", "qwen3.5-plus", "kiro-ai", "deepseek", "mistral"],
-	execution: ["anthropic-api", "opencode-go", "groq", "deepseek-v4", "moonshot-k2.6", "minimax-m2.7", "qwen3.6-plus", "kiro-ai", "deepseek", "mistral", "openai"],
-	verification: ["anthropic-api", "gemini-api", "groq", "deepseek-v4", "moonshot-k2.6", "kiro-ai", "deepseek", "openai"],
+	research: [
+		"tavily",
+		"gemini",
+		"gemini-api",
+		"anthropic-api",
+		"moonshot-k2.6",
+		"groq",
+		"qwen3.6-plus",
+	],
+	planning: [
+		"anthropic-api",
+		"gemini-api",
+		"groq",
+		"moonshot-k2.6",
+		"qwen3.6-plus",
+		"moonshot-k2.5",
+		"qwen3.5-plus",
+		"kiro-ai",
+		"deepseek",
+		"mistral",
+	],
+	execution: [
+		"anthropic-api",
+		"opencode-go",
+		"groq",
+		"deepseek-v4",
+		"moonshot-k2.6",
+		"minimax-m2.7",
+		"qwen3.6-plus",
+		"kiro-ai",
+		"deepseek",
+		"mistral",
+		"openai",
+	],
+	verification: [
+		"anthropic-api",
+		"gemini-api",
+		"groq",
+		"deepseek-v4",
+		"moonshot-k2.6",
+		"kiro-ai",
+		"deepseek",
+		"openai",
+	],
 };
 
 export interface Task {
@@ -292,9 +349,9 @@ export interface EventLog {
 	metadata?: {
 		provider?: ProviderId;
 		model?: string;
-		modelName?: string;        // Full model name (e.g., "DeepSeek V4 Pro")
-		modelProvider?: string;    // Company (e.g., "DeepSeek")
-		contextWindow?: number;     // Max context tokens
+		modelName?: string; // Full model name (e.g., "DeepSeek V4 Pro")
+		modelProvider?: string; // Company (e.g., "DeepSeek")
+		contextWindow?: number; // Max context tokens
 		tokens?: { prompt: number; completion: number; total: number };
 		costUsd?: number;
 		durationMs?: number;

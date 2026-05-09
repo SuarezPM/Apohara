@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
 import { Box, Text } from "ink";
+import React, { useMemo } from "react";
+import type { ProviderId } from "../../../src/core/types.ts";
 import { useActiveRun } from "../hooks/useDashboard.tsx";
 import { useResponsiveMode } from "../hooks/useResponsiveMode.tsx";
-import type { ProviderId } from "../../../src/core/types.ts";
 
 export interface AgentListProps {
 	/** Override to force a specific responsive mode */
@@ -45,7 +45,8 @@ export function AgentList({ mode: modeProp }: AgentListProps) {
 
 			if (event.taskId) {
 				currentTask =
-					event.payload.description && typeof event.payload.description === "string"
+					event.payload.description &&
+					typeof event.payload.description === "string"
 						? event.payload.description
 						: event.taskId;
 			}
@@ -94,9 +95,7 @@ export function AgentList({ mode: modeProp }: AgentListProps) {
 							</Text>
 						)}
 						{agent.elapsedMs !== undefined && (
-							<Text dimColor>
-								{" "}({formatElapsed(agent.elapsedMs)})
-							</Text>
+							<Text dimColor> ({formatElapsed(agent.elapsedMs)})</Text>
 						)}
 					</Box>
 				))

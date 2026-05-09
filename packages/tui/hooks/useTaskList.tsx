@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useActiveRun } from "./useDashboard.tsx";
 import type { EventLog } from "../types.ts";
+import { useActiveRun } from "./useDashboard.tsx";
 
 export type TaskStatus = "pending" | "in_progress" | "completed" | "failed";
 
