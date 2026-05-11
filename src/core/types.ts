@@ -346,6 +346,9 @@ export interface EventLog {
 	severity: EventSeverity;
 	taskId?: string;
 	payload: Record<string, unknown>;
+	// Hash chain fields. Set by EventLedger.log(); absent on legacy (pre-Phase-4) entries.
+	prev_hash?: string;
+	hash?: string;
 	metadata?: {
 		provider?: ProviderId;
 		model?: string;

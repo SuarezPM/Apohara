@@ -71,6 +71,7 @@ export const autoCommand = new Command("auto")
 			const ledger = new EventLedger();
 			const router = new ProviderRouter({
 				simulateFailure: options.simulateFailure ?? false,
+				eventLedger: ledger,
 			});
 			const decomposer = new TaskDecomposer(router);
 			const subagentManager = new SubagentManager({

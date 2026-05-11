@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { config, getProviderKey } from "../core/config";
+import { EventLedger } from "../core/ledger";
 import type { EventLog, EventSeverity, ProviderId } from "../core/types";
 
 export interface LLMMessage {
@@ -65,6 +66,10 @@ export interface RouterConfig {
 	cooldownMinutes?: number;
 	maxFailuresBeforeCooldown?: number;
 	simulateFailure?: boolean;
+	// Phase 4: pass an EventLedger so llm_request events join the chained run ledger.
+	eventLedger?: EventLedger;
+	// Phase 4.4: when true, every provider call sets temperature:0 for byte-identical replay.
+	replayMode?: boolean;
 }
 
 // Re-export ProviderId from types for external use
@@ -186,6 +191,10 @@ export class ProviderRouter {
 	// Event ledger for fallback events
 	private ledgerPath: string;
 	private ledgerInitialized = false;
+	// Optional shared chained ledger for llm_request events (Phase 4)
+	private eventLedger?: EventLedger;
+	// Phase 4.4: forces temperature:0 on every provider call for replay determinism
+	public readonly replayMode: boolean;
 
 	// Simulate failure flag for demo/testing
 	private simulateFailure = false;
@@ -222,6 +231,8 @@ export class ProviderRouter {
 		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5;
 		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3;
 		this.simulateFailure = cfg?.simulateFailure ?? false;
+		this.eventLedger = cfg?.eventLedger;
+		this.replayMode = cfg?.replayMode ?? false;
 
 		// Initialize health tracking for each provider
 		const allProviders: ProviderId[] = [
@@ -541,12 +552,47 @@ export class ProviderRouter {
 	}
 
 	/**
+	 * Phase 4.4: in replay mode, force temperature:0 on every OpenAI-compatible request body.
+	 * Returns the body unchanged otherwise.
+	 *
+	 * Coverage: applied to opencode, anthropic-api, deepseek, openai. The remaining
+	 * OpenAI-compatible providers (zai, moonshot, qwen, minimax, deepinfra, fireworks,
+	 * groq, kiro-ai, mistral, deepseek-v4) and Gemini (uses generationConfig.temperature)
+	 * still build their bodies without this wrapper — extending coverage is mechanical
+	 * but mostly one-liner edits per call site. Replay against an uncovered provider
+	 * silently runs at default temperature.
+	 */
+	private withReplayDefaults<T extends Record<string, unknown>>(
+		body: T,
+	): T & { temperature?: 0 } {
+		if (!this.replayMode) return body;
+		return { ...body, temperature: 0 };
+	}
+
+	/**
+	 * Phase 4 prereq: log the LLM request payload to the chained ledger so replay can
+	 * reconstruct calls. No-op if no eventLedger was provided.
+	 */
+	private async logLLMRequest(
+		provider: ProviderId,
+		messages: LLMMessage[],
+	): Promise<void> {
+		if (!this.eventLedger) return;
+		await this.eventLedger.log("llm_request", {
+			provider,
+			model: MODEL_NAMES[provider] ?? null,
+			messages,
+		});
+	}
+
+	/**
 	 * Calls a specific provider with the given messages.
 	 */
 	private async callProvider(
 		provider: ProviderId,
 		messages: LLMMessage[],
 	): Promise<LLMResponse> {
+		await this.logLLMRequest(provider, messages);
 		switch (provider) {
 			case "opencode-go":
 				return this.callOpenCode(messages);
@@ -631,7 +677,7 @@ export class ProviderRouter {
 				"x-api-key": this.opencodeApiKey,
 				"anthropic-version": "2023-06-01",
 			},
-			body: JSON.stringify(body),
+			body: JSON.stringify(this.withReplayDefaults(body)),
 			signal: AbortSignal.timeout(30000),
 		});
 
@@ -713,7 +759,7 @@ export class ProviderRouter {
 				"x-api-key": this.anthropicApiKey,
 				"anthropic-version": "2023-06-01",
 			},
-			body: JSON.stringify(body),
+			body: JSON.stringify(this.withReplayDefaults(body)),
 			signal: AbortSignal.timeout(60000),
 		});
 
@@ -891,10 +937,12 @@ export class ProviderRouter {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${this.deepseekApiKey}`,
 			},
-			body: JSON.stringify({
-				model: "deepseek-coder",
-				messages,
-			}),
+			body: JSON.stringify(
+				this.withReplayDefaults({
+					model: "deepseek-coder",
+					messages,
+				}),
+			),
 			signal: AbortSignal.timeout(30000), // 30 second timeout
 		});
 
@@ -1422,10 +1470,12 @@ export class ProviderRouter {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${this.openaiApiKey}`,
 			},
-			body: JSON.stringify({
-				model: MODEL_NAMES.openai,
-				messages,
-			}),
+			body: JSON.stringify(
+				this.withReplayDefaults({
+					model: MODEL_NAMES.openai,
+					messages,
+				}),
+			),
 			signal: AbortSignal.timeout(30000),
 		});
 

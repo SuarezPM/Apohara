@@ -1,0 +1,1 @@
+{"id":"65866431-b570-4043-a36c-4e8881222de5","timestamp":"2026-05-11T22:30:47.300Z","type":"github_not_found","severity":"warning","payload":{"message":"GitHub API resource not found (404)","endpoint":"/repos/owner/missing","cause":"Repository or resource does not exist"},"metadata":{}}
