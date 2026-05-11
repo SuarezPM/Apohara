@@ -79,24 +79,22 @@ impl EmbeddingModel {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Route through crate::indexer::shared_model() so these unit tests participate in
+    // the inter-process flock and the per-process singleton. Calling EmbeddingModel::new()
+    // directly here used to load a second ~400 MB BERT in the --lib test binary alongside
+    // the integration binaries, causing OOM under parallel cargo test execution.
 
     #[test]
     fn test_embedding_dimension() {
-        let model = EmbeddingModel::new().expect("Failed to load model");
-        
-        // Simple embedding
+        let model = crate::indexer::shared_model().expect("Failed to load model");
         let vec = model.embed("Hello world!").expect("Failed to embed short string");
         assert_eq!(vec.len(), 768);
     }
 
     #[test]
     fn test_empty_string() {
-        let model = EmbeddingModel::new().expect("Failed to load model");
-        
-        // Empty string - may error or return 768-dim vector
+        let model = crate::indexer::shared_model().expect("Failed to load model");
         let result = model.embed("");
-        // Either succeeds with 768-dim or fails - both acceptable
         if let Ok(vec) = result {
             assert_eq!(vec.len(), 768);
         }
@@ -104,10 +102,7 @@ mod tests {
 
     #[test]
     fn test_long_string() {
-        let model = EmbeddingModel::new().expect("Failed to load model");
-        
-        // Long string (within reasonable processing time)
-        // The model truncates at 8192 tokens; very long strings take significant time
+        let model = crate::indexer::shared_model().expect("Failed to load model");
         let long_string = "hello ".repeat(400);
         let vec_long = model.embed(&long_string).expect("Failed to embed long string");
         assert_eq!(vec_long.len(), 768);

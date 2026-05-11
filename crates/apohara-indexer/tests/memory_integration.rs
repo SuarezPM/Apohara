@@ -3,16 +3,19 @@
 //! Tests the full flow: store_memory -> search_memory
 
 use apohara_indexer::{Indexer, MemoryType};
+use serial_test::serial;
 use std::str::FromStr;
+use tempfile::TempDir;
 
 /// Test full memory lifecycle: store and retrieve
 #[test]
+#[serial]
 fn test_memory_integration_basic() {
-    // Skip if model not available (e.g., CI environment without model cache)
-    let indexer = match Indexer::new() {
+    let _tmp = TempDir::new().unwrap();
+    let indexer = match Indexer::with_db_path(&_tmp.path().join("test.redb")) {
         Ok(i) => i,
         Err(e) => {
-            eprintln!("Skipping integration test: could not load model: {}", e);
+            eprintln!("Skipping: {}", e);
             return;
         }
     };
@@ -38,11 +41,13 @@ fn test_memory_integration_basic() {
 
 /// Test that different memory types can coexist
 #[test]
+#[serial]
 fn test_memory_integration_multiple_types() {
-    let indexer = match Indexer::new() {
+    let _tmp = TempDir::new().unwrap();
+    let indexer = match Indexer::with_db_path(&_tmp.path().join("test.redb")) {
         Ok(i) => i,
-        Err(_) => {
-            eprintln!("Skipping integration test: could not load model");
+        Err(e) => {
+            eprintln!("Skipping: {}", e);
             return;
         }
     };
@@ -60,7 +65,7 @@ fn test_memory_integration_multiple_types() {
         .store_memory("past_error", "Don't forget to handle database connection errors")
         .expect("Failed to store past_error");
 
-    let corr_id = indexer
+    let _corr_id = indexer
         .store_memory("correction", "Use async/await instead of callbacks")
         .expect("Failed to store correction");
 
@@ -84,15 +89,20 @@ fn test_memory_integration_multiple_types() {
         results.iter().any(|(m, _)| m.id == error_id),
         "Should find past_error memory"
     );
+
+    // Suppress unused variable warning
+    let _ = pref_id;
 }
 
 /// Test embedding consistency - same content should produce similar embeddings
 #[test]
+#[serial]
 fn test_memory_embedding_consistency() {
-    let indexer = match Indexer::new() {
+    let _tmp = TempDir::new().unwrap();
+    let indexer = match Indexer::with_db_path(&_tmp.path().join("test.redb")) {
         Ok(i) => i,
-        Err(_) => {
-            eprintln!("Skipping integration test: could not load model");
+        Err(e) => {
+            eprintln!("Skipping: {}", e);
             return;
         }
     };
@@ -121,11 +131,13 @@ fn test_memory_embedding_consistency() {
 
 /// Test search relevance ordering
 #[test]
+#[serial]
 fn test_memory_search_relevance() {
-    let indexer = match Indexer::new() {
+    let _tmp = TempDir::new().unwrap();
+    let indexer = match Indexer::with_db_path(&_tmp.path().join("test.redb")) {
         Ok(i) => i,
-        Err(_) => {
-            eprintln!("Skipping integration test: could not load model");
+        Err(e) => {
+            eprintln!("Skipping: {}", e);
             return;
         }
     };
@@ -155,11 +167,13 @@ fn test_memory_search_relevance() {
 
 /// Test top_k limiting
 #[test]
+#[serial]
 fn test_memory_search_top_k() {
-    let indexer = match Indexer::new() {
+    let _tmp = TempDir::new().unwrap();
+    let indexer = match Indexer::with_db_path(&_tmp.path().join("test.redb")) {
         Ok(i) => i,
-        Err(_) => {
-            eprintln!("Skipping integration test: could not load model");
+        Err(e) => {
+            eprintln!("Skipping: {}", e);
             return;
         }
     };
@@ -213,42 +227,35 @@ fn test_memory_type_display() {
 
 /// Test empty database search
 #[test]
+#[serial]
 fn test_memory_empty_database_search() {
-    // Use a temporary directory to get a fresh database
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    let db_path = temp_dir.path().join("test.redb");
-    
-    // Create indexer with custom path would require changes, so we just verify
-    // that search on an indexer with no memories returns empty
-    let indexer = match Indexer::new() {
+    let _tmp = TempDir::new().unwrap();
+    let indexer = match Indexer::with_db_path(&_tmp.path().join("test.redb")) {
         Ok(i) => i,
-        Err(_) => {
-            eprintln!("Skipping integration test: could not load model");
+        Err(e) => {
+            eprintln!("Skipping: {}", e);
             return;
         }
     };
 
-    // Search for something that definitely doesn't exist
+    // Search for something that definitely doesn't exist in our fresh DB
     let results = indexer
         .search_memories("xyz non existent query 12345", 5)
         .expect("Failed to search");
 
-    // Should return empty or very low similarity results
-    // The behavior depends on whether there are any memories at all
-    // If database is truly empty, it should return empty
-    for (_, similarity) in &results {
-        // Any results should have very low similarity
-        assert!(*similarity < 0.9, "Non-existent query should not have high similarity matches");
-    }
+    // Fresh database has no memories — should be empty
+    assert!(results.is_empty(), "Fresh database should return empty results");
 }
 
 /// Test memory content preservation
 #[test]
+#[serial]
 fn test_memory_content_preservation() {
-    let indexer = match Indexer::new() {
+    let _tmp = TempDir::new().unwrap();
+    let indexer = match Indexer::with_db_path(&_tmp.path().join("test.redb")) {
         Ok(i) => i,
-        Err(_) => {
-            eprintln!("Skipping integration test: could not load model");
+        Err(e) => {
+            eprintln!("Skipping: {}", e);
             return;
         }
     };
