@@ -32,3 +32,5 @@ tmp/
 .gitnexus
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+# Local git worktrees managed by Claude tooling
+.claude/worktrees/

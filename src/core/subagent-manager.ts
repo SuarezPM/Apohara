@@ -8,11 +8,11 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { InngestClient } from "../lib/inngest-client";
-import { Mem0Client, type MemorySearchResult } from "../lib/mem0-client";
-import { ProviderRouter } from "../providers/router";
 import { type RouteResult, routeTask } from "./agent-router";
 import type { DecomposedTask } from "./decomposer";
+import { IndexerClient, type Memory } from "./indexer-client";
 import { EventLedger } from "./ledger";
+import { ProviderRouter } from "../providers/router";
 import type { ProviderId, TaskRole } from "./types";
 
 /**
@@ -233,19 +233,19 @@ export class SubagentManager {
 		const { timeoutMs, maxRetries } = this.config;
 		let lastError: string | undefined;
 
-		// Optional Mem0 client for persistent memory
-		let mem0: Mem0Client | undefined;
+		// Optional indexer client for persistent memory (redb + Nomic embeddings)
+		let indexer: IndexerClient | undefined;
 		try {
-			mem0 = new Mem0Client();
+			indexer = new IndexerClient();
 		} catch {
-			// Mem0 not available
+			// Indexer not available
 		}
 
 		// Retrieve relevant memories before execution
-		let relevantMemories: MemorySearchResult[] = [];
-		if (mem0?.isConfigured()) {
+		let relevantMemories: Memory[] = [];
+		if (indexer) {
 			try {
-				relevantMemories = await mem0.retrieveForTask(task.description);
+				relevantMemories = await indexer.searchMemory(task.description, 10);
 				if (relevantMemories.length > 0) {
 					console.log(
 						`[SubagentManager] Found ${relevantMemories.length} relevant memories for ${task.id}`,
@@ -253,7 +253,7 @@ export class SubagentManager {
 				}
 			} catch (err) {
 				console.log(
-					`[SubagentManager] Mem0 retrieval error: ${(err as Error).message}`,
+					`[SubagentManager] Indexer retrieval error: ${(err as Error).message}`,
 				);
 			}
 		}
@@ -337,20 +337,19 @@ export class SubagentManager {
 					status: "completed",
 				});
 
-				// Store decision in Mem0 for future sessions
-				if (mem0?.isConfigured()) {
+				// Store decision in indexer memory for future sessions
+				if (indexer) {
 					try {
-						await mem0.storeTaskDecision(
-							task.id,
-							`Used ${provider} for ${task.role} role task: ${task.description.substring(0, 100)}...`,
-							task.role,
+						await indexer.storeMemory(
+							`Task ${task.id} (${task.role}): Used ${provider} for task: ${task.description.substring(0, 100)}...`,
+							"architecture",
 						);
 						console.log(
-							`[SubagentManager] Stored decision for ${task.id} in Mem0`,
+							`[SubagentManager] Stored decision for ${task.id} in indexer`,
 						);
 					} catch (err) {
 						console.log(
-							`[SubagentManager] Mem0 store error: ${(err as Error).message}`,
+							`[SubagentManager] Indexer store error: ${(err as Error).message}`,
 						);
 					}
 				}
