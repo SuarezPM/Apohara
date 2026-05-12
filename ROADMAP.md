@@ -130,7 +130,7 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 | 5.2 | Audit the 60 known-broken tests. Classify: `KEEP` (rewrite against fresh spec), `KILL` (delete as legacy debt). | Each test has an explicit verdict in `.claude/specs/tests/PHASE_5_AUDIT.md` |
 | 5.3 | Restore CI green. Root-cause the 15s fast-fail. | GitHub Actions latest run = success |
 | 5.4 | Reconcile docs. Single AGENTS.md or fold into CLAUDE.md. GitNexus reindex (Clarity-Code → Apohara name drift). | `gitnexus_query "EventLedger"` returns fresh symbols |
-| 5.5 | Kill list: `rm -rf isolation-engine/`, recreate `crates/apohara-sandbox/` from scratch (empty for M014), `rm -rf examples/fastify-api/` | `cargo check --workspace` green |
+| 5.5 | ~~Kill list~~ — INVESTIGATED 2026-05-11 and downgraded to no-op. `isolation-engine/` is wired into `src/core/isolation.ts` (worktree backend) + 3 tests. `examples/fastify-api/` is the E2E test fixture for `tests/e2e/fastify-jwt.test.ts` + install-and-run test. Both stay. `crates/apohara-sandbox/` stub gets recreated by M014.1 anyway. | n/a — empty milestone |
 | 5.6 | Update CLAUDE.md to reflect Roadmap 2.0 (visual pivot, Tauri stack, Phase/M progression) | `/mcp` + `/memory` show updated context |
 
 **Verification:** zero local OOM during `bun test` or `cargo test --lib`. CI passes. `git status` clean except intentional new files.
@@ -268,16 +268,18 @@ Not a blocking milestone. Stolen incrementally.
 
 ---
 
-## 7. Kill List (confirmed 2026-05-11)
+## 7. Kill List (revised 2026-05-11 after investigation)
 
-| Item | Action | When |
+| Item | Verdict | When |
 |---|---|---|
-| `isolation-engine/` (89 LOC stub) | `rm -rf` | Phase 5.5 |
+| ~~`isolation-engine/`~~ | **KEEP** — wired into `src/core/isolation.ts` (worktree backend) + 3 tests. Will be folded into apohara-sandbox during M014 when it makes sense. | n/a |
 | `crates/apohara-sandbox/` (1-line stub) | recreate from scratch | M014.1 |
-| `examples/fastify-api/` (OAuth experiment leftover) | `rm -rf`, snippet to docs if valuable | Phase 5.5 |
+| ~~`examples/fastify-api/`~~ | **KEEP** — E2E test fixture for `tests/e2e/fastify-jwt.test.ts` + `tests/e2e/install-and-run.test.ts`. It's the canonical "Apohara installs and runs a Bun project" verifier. | n/a |
 | `packages/tui/` (Ink+React prototype) | archive after M017 parity | M017.9 |
 | 60 known-broken tests | audit → keep & rewrite or kill | Phase 5.2 |
 | **Ratatui pivot** (was M016) | **cancelled in favor of Tauri+React (M017)** | Already, 2026-05-11 |
+
+**Investigation note 2026-05-11**: The original kill list (drafted in the user-confirmed scope earlier today) included `isolation-engine/` and `examples/fastify-api/` as dead code. A pre-deletion grep found 4 + 3 active references respectively. Both stay. Phase 5.5 is a no-op as a result. The lesson: never trust "looks like a stub" without grepping for consumers.
 
 ---
 
