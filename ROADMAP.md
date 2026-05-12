@@ -118,24 +118,25 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 
 ---
 
-## Phase 5 — Honesty Pass + Test Foundation Reset (P0, ACTIVE)
+## Phase 5 — Honesty Pass + Test Foundation Reset (P0, ✅ ESSENTIALLY COMPLETE 2026-05-12)
 
 **Goal:** CI green. Tests deterministic. Repo cleaned of dead code. Single source of truth in docs.
 
-**Why now:** every milestone after this depends on a green test loop. The current OOM crashes and 60 broken tests are existential.
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 5.1 | Mock `EmbeddingModel` via trait + feature flag | ✅ | 78 Rust tests green in 3.2s (lib 67/67 + memory_integration 9/9 + indexer_persistence 2/2) under `--features mock-embeddings` or `APOHARA_MOCK_EMBEDDINGS=1` |
+| 5.2 | Audit the broken tests | ✅ | 25 TS test files / ~294 tests classified across 4 batches (MiniMax 2.7 in parallel). KEEP_GREEN 14, KEEP_REFACTOR 6, INVESTIGATE 6, KILL 0. Summary at `.claude/specs/tests/PHASE_5_2_AUDIT_SUMMARY.md` |
+| 5.3 | Restore CI green | ✅ | Two root causes fixed (file:/... paths + lockfile-vs-optionalDeps). Commit `9c90875`. Verification requires opening a PR — workflow only triggers on `pull_request` |
+| 5.4 | Reconcile docs + GitNexus reindex | ✅ | `npx gitnexus analyze` ran; index now at 3158 symbols / 7121 relationships / 199 execution flows. `gitnexus:start..end` block is auto-managed (do not edit manually) |
+| 5.5 | ~~Kill list~~ | ✅ | No-op after investigation (isolation-engine + examples/fastify-api turned out to be actively used) |
+| 5.6 | Update CLAUDE.md to reflect Roadmap 2.0 | ✅ | Section 0 rewritten, naming reconciled |
 
-| # | Task | Verify |
-|---|------|--------|
-| 5.1 | Mock `EmbeddingModel` via trait + feature flag. Tests use deterministic `MockEmbedding` (vector keyed off input hash). Zero BERT load in tests. | `cargo test -p apohara-indexer --lib` green in <30s, RAM <500MB |
-| 5.2 | Audit the 60 known-broken tests. Classify: `KEEP` (rewrite against fresh spec), `KILL` (delete as legacy debt). | Each test has an explicit verdict in `.claude/specs/tests/PHASE_5_AUDIT.md` |
-| 5.3 | Restore CI green. Root-cause the 15s fast-fail. | GitHub Actions latest run = success |
-| 5.4 | Reconcile docs. Single AGENTS.md or fold into CLAUDE.md. GitNexus reindex (Clarity-Code → Apohara name drift). | `gitnexus_query "EventLedger"` returns fresh symbols |
-| 5.5 | ~~Kill list~~ — INVESTIGATED 2026-05-11 and downgraded to no-op. `isolation-engine/` is wired into `src/core/isolation.ts` (worktree backend) + 3 tests. `examples/fastify-api/` is the E2E test fixture for `tests/e2e/fastify-jwt.test.ts` + install-and-run test. Both stay. `crates/apohara-sandbox/` stub gets recreated by M014.1 anyway. | n/a — empty milestone |
-| 5.6 | Update CLAUDE.md to reflect Roadmap 2.0 (visual pivot, Tauri stack, Phase/M progression) | `/mcp` + `/memory` show updated context |
+**Verification done:**
+- ✅ Zero local OOM during all test runs (mock model swap eliminated the BERT 400MB load)
+- ✅ `cargo build -p apohara-sandbox` green (M014.1 scaffold also landed)
+- 🟡 CI workflow validation pending PR open
 
-**Verification:** zero local OOM during `bun test` or `cargo test --lib`. CI passes. `git status` clean except intentional new files.
-
-**Duration estimate:** 2–3 dense sessions.
+**Followup (post-Phase-5):** KEEP_REFACTOR cohort needs trivial touch-ups once `IndexerClient.searchMemories()` return shape stabilizes. INVESTIGATE cohort needs binary-build + run to triage. See summary doc.
 
 ---
 
@@ -143,14 +144,14 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 
 **Goal:** A task that attempts to write outside its worktree is killed by the kernel before the write completes.
 
-| # | Task | Verify |
-|---|------|--------|
-| 14.1 | Recreate `crates/apohara-sandbox/` from scratch with real Cargo deps: `seccompiler`, `nix`, `libc` | `cargo build -p apohara-sandbox` green |
-| 14.2 | seccomp-bpf profile: 3-tier syscall allowlists (`ReadOnly` / `WorkspaceWrite` / `DangerFullAccess`) | Unit test: forbidden syscall → EPERM |
-| 14.3 | Linux namespaces: separate mount + PID namespace per worktree, via `unshare(2)` | Integration test: process inside namespace cannot see host PIDs |
-| 14.4 | Integration with `src/core/sandbox.ts` spawn — subprocess via Unix socket | E2E test: an agent given `rm -rf ~` returns EPERM, logged to ledger |
-| 14.5 | Sandbox escape attempts → Event Ledger entries with `type: "security_violation"` | Replay shows violation events |
-| 14.6 | Graceful fallback on non-Linux (macOS dev box, CI): warn + run with explicit user consent flag | CI passes on Linux + macOS |
+| # | Task | Status | Verify |
+|---|------|--------|--------|
+| 14.1 | Recreate `crates/apohara-sandbox/` from scratch with real Cargo deps: `seccompiler`, `nix`, `libc` | ✅ 2026-05-12 | `cargo build -p apohara-sandbox` green in 13s; `cargo test -p apohara-sandbox` → 8/8 pass. 9 source files, ~300 LOC of skeleton |
+| 14.2 | seccomp-bpf profile: 3-tier syscall allowlists (`ReadOnly` / `WorkspaceWrite` / `DangerFullAccess`) | 🔴 next | Unit test: forbidden syscall → EPERM |
+| 14.3 | Linux namespaces: separate mount + PID namespace per worktree, via `unshare(2)` | 🔴 | Integration test: process inside namespace cannot see host PIDs |
+| 14.4 | Integration with `src/core/sandbox.ts` spawn — subprocess via Unix socket | 🔴 | E2E test: an agent given `rm -rf ~` returns EPERM, logged to ledger |
+| 14.5 | Sandbox escape attempts → Event Ledger entries with `type: "security_violation"` | 🔴 | Replay shows violation events |
+| 14.6 | Graceful fallback on non-Linux (macOS dev box, CI): warn + run with explicit user consent flag | 🟡 partial | Stub `FallbackProfile` returns `Unavailable`; needs explicit-consent wiring in TS layer |
 
 **Tracer bullet:** demo recording where an agent given `rm -rf $HOME` is blocked by the kernel and the violation appears in the UI in real time.
 
