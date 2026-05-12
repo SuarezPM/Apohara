@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { LedgerAdapter } from "./orchestration/module";
 import type { EventLog, EventSeverity, ProviderId, TaskRole } from "./types";
 
 export const LEDGER_VERSION = 1;
@@ -43,7 +44,7 @@ function hashEvent(prevHash: string, event: UnsealedEvent): string {
 		.digest("hex");
 }
 
-export class EventLedger {
+export class EventLedger implements LedgerAdapter {
 	private filePath: string;
 	private runId: string;
 	private initPromise: Promise<void> | null = null;

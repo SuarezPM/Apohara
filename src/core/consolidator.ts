@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "../lib/spawn";
 import { EventLedger } from "./ledger";
+import type { ConsolidatorAdapter } from "./orchestration/module";
 import type { OrchestratorState } from "./types";
 
 export interface ConsolidationResult {
@@ -26,7 +27,7 @@ export interface ConsolidatorConfig {
  * - Generates a summary markdown
  * - Returns differentiated exit codes
  */
-export class Consolidator {
+export class Consolidator implements ConsolidatorAdapter {
 	private ledger: EventLedger;
 	private config: ConsolidatorConfig;
 	private worktreesDir: string;

@@ -5,6 +5,7 @@ import { ContextForgeClient } from "./contextforge-client";
 import type { DecomposedTask } from "./decomposer";
 import { IsolationEngine, type IsolationResult } from "./isolation";
 import { EventLedger } from "./ledger";
+import type { SchedulerAdapter } from "./orchestration/module";
 import { StateMachine } from "./state";
 import {
 	TASK_ABORTED_STUCK_EVENT,
@@ -115,7 +116,7 @@ export interface TaskExecutionResult {
 	worktreeId: string;
 }
 
-export class ParallelScheduler {
+export class ParallelScheduler implements SchedulerAdapter {
 	private isolationEngine: IsolationEngine;
 	private stateMachine: StateMachine;
 	private ledger: EventLedger;

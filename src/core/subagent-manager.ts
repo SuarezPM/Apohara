@@ -13,6 +13,7 @@ import { type RouteResult, routeTask } from "./agent-router";
 import type { DecomposedTask } from "./decomposer";
 import { IndexerClient, type Memory } from "./indexer-client";
 import { EventLedger } from "./ledger";
+import type { SubagentAdapter } from "./orchestration/module";
 import type { ProviderId, TaskRole } from "./types";
 import { WorktreeManager } from "./worktree-manager";
 
@@ -96,7 +97,7 @@ interface TrackedTask {
 /**
  * SubagentManager manages parallel execution of role-labeled subagents.
  */
-export class SubagentManager {
+export class SubagentManager implements SubagentAdapter {
 	private config: SubagentManagerConfig;
 	private runId: string;
 	private ledger: EventLedger;

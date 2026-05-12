@@ -16,6 +16,7 @@ import { routeTaskWithFallback } from "./agent-router";
 import type { FileSignaturesResponse, IndexerClient } from "./indexer-client";
 import { JCRSafetyGate } from "./jcr-safety-gate";
 import { EventLedger } from "./ledger";
+import type { VerifierAdapter } from "./orchestration/module";
 import type { ProviderId, TaskRole } from "./types";
 
 export interface VerificationPolicy {
@@ -64,7 +65,7 @@ export interface MeshResult {
 
 export type RouterFn = typeof routeTaskWithFallback;
 
-export class VerificationMesh {
+export class VerificationMesh implements VerifierAdapter {
 	private ledger: EventLedger;
 	private sessionCostBase: number = 0;
 	private sessionVerificationCost: number = 0;

@@ -26,6 +26,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
+import type { WorktreeAdapter } from "./orchestration/module";
 
 /**
  * Filesystem-visible record for a worktree directory.
@@ -106,7 +107,7 @@ function randomSlug(): string {
 	return `${adj}-${noun}-${id}`;
 }
 
-export class WorktreeManager {
+export class WorktreeManager implements WorktreeAdapter {
 	// In-process pool kept for backwards compatibility with the original
 	// subagent-manager inner class. Tracks logical "lanes" rather than real
 	// worktree paths.

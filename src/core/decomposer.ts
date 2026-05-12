@@ -3,6 +3,7 @@ import { routeTaskWithFallback } from "./agent-router";
 import type { IndexerClient, SearchResult } from "./indexer-client";
 import { EventLedger } from "./ledger";
 import { fetchAndFormatMemories } from "./memory-injection";
+import type { DecomposerAdapter } from "./orchestration/module";
 import type { TaskRole } from "./types";
 
 // Dynamic import for MCP client to avoid build issues when not available
@@ -48,7 +49,7 @@ export interface DecompositionResult {
 	originalPrompt: string;
 }
 
-export class TaskDecomposer {
+export class TaskDecomposer implements DecomposerAdapter {
 	private router: ProviderRouter;
 	private indexerClient: IndexerClient | null;
 	private ledger: EventLedger;
