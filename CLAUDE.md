@@ -7,10 +7,16 @@
 
 ## 0. Project Overview
 
-**Apohara**, indexed by GitNexus.
+**Apohara — the visual vibecoding orchestrator.** Multi-provider swarm + verification mesh + AMD MI300X local-first path via Apohara Context Forge (separate repo). North star: Repo of the Day → 5K stars → adquisición ($20–80M Vercept zone). See `ROADMAP.md` v2.0 for the milestone plan.
 
-Indexed entities at last analysis: 2972 symbols, 6099 relationships, 257 execution flows.
-Stack: Bun-first runtime. TypeScript. React via HTML imports.
+Indexed by GitNexus. Last analysis: 2972 symbols, 6099 relationships, 257 execution flows. May be stale after Roadmap 2.0 pivot — refresh with `npx gitnexus analyze` when GitNexus tools warn.
+
+**Stack (locked 2026-05-11):**
+- Frontend: **Tauri v2 + Bun.serve + React 19 + SSE** (replaces cancelled Ratatui plan). Single binary <15 MB.
+- Orchestration core: TypeScript on Bun runtime. `src/core/` = decomposer / scheduler / verification-mesh / ledger Phase 4 / consolidator.
+- Rust sidecars: `apohara-indexer` (tree-sitter + redb + Nomic BERT, ✅), `apohara-sandbox` (seccomp-bpf + namespaces, 🔴 M014).
+- Optional GPU backend: **Apohara Context Forge** as HTTP sidecar (`SuarezPM/Apohara_Context_Forge`, parallel repo, INV-15 paper DOI 10.5281/zenodo.20114594).
+
 Code intelligence: GitNexus MCP. Context runtime: lean-ctx MCP.
 
 ---
@@ -352,8 +358,10 @@ This file is living configuration.
 
 ## 10. Open Items
 
-**Naming inconsistency flagged.**
-Section 0 names the project Apohara.
-GitNexus block names it Apohara.
-Likely a stale GitNexus reference. Run `npx gitnexus analyze` to refresh.
-Do not edit between markers manually. GitNexus owns that block.
+**Naming reconciled (2026-05-11).** Project is Apohara everywhere. Old "Clarity-Code" references in the GitNexus index are residual from earlier sessions — reindex with `npx gitnexus analyze` to refresh.
+
+**Roadmap 2.0 active.** See `ROADMAP.md` for milestone plan: Phase 5 (test foundation reset) → M014 (sandbox real) → M017 (Tauri+React desktop) → M015 (ContextForge integration) → Phase 6 (v0.1 ship) → M013 (Thompson Sampling) → Phase 7 (v0.2 self-improvement).
+
+**Phase pivot history:**
+- v1 ROADMAP (May 2026) planned Ratatui Rust terminal renderer for the TUI. **Cancelled 2026-05-11.** Replaced by Tauri v2 + React (M017) — visual GUI, not terminal, per the user's product direction.
+- v1 ROADMAP planned multiple Rust crates (`apohara-shell`, `apohara-compressor`, `apohara-providers`). Only `apohara-indexer` is real; `apohara-sandbox` to be built in M014; others moved to post-v0.2 backlog.
