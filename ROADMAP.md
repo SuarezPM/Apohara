@@ -224,11 +224,11 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 |---|------|--------|
 | 13.1 | `CapabilityManifest` persists per-provider success/failure counts per role | ✅ 2026-05-12 | `src/core/capability-stats.ts` `CapabilityStats` class persists counts to `.apohara/capability-stats.json`. Reloads from disk via lazy `ensureLoaded`. JSON chosen over redb until the indexer daemon owns the state (M013.x migration). 3 persistence tests green. |
 | 13.2 | Thompson Sampling: Beta distribution per provider/role | ✅ 2026-05-12 | Exact `Beta(α, β) = X/(X+Y)` via two Marsaglia–Tsang Gamma draws + Box–Muller standard normal. No external numerical lib. 3 Thompson Sampling tests green: uniform spread on Beta(1,1), concentration around α/(α+β) on Beta(80,20), arg validation. |
-| 13.3 | ProviderRouter queries CapabilityManifest before routing. 5% traffic exploration. | 🔴 follow-up | Surface is ready (`CapabilityStats.rank` + `.sample`) but wiring into `src/providers/router.ts` is a risky autonomous change — sandbox + verification mesh both consume the router. Track as a focused follow-up PR. |
-| 13.4 | New dimension `kv_share_friendliness` — learns when ContextForge helps which task types | 🔴 follow-up | Depends on telemetry plumbing from the `contextforge_savings` ledger event into the stats store; currently only `(provider, role)` is recorded. |
+| 13.3 | ProviderRouter queries CapabilityManifest before routing. 5% traffic exploration. | ✅ 2026-05-12 | `routeTaskWithFallback()` (agent-router.ts) calls `pickViaThompson()` before `selectBestProvider`. 5% ε-greedy exploration. Cold-start guard: empty stats → returns null → falls back to capability-manifest. Emits `provider_outcome` events to ledger on completion. Commit `27ccd97`. |
+| 13.4 | New dimension `kv_share_friendliness` — learns when ContextForge helps which task types | ✅ 2026-05-12 | `provider_outcome` ledger events carry the data needed for the kv_share_friendliness dimension. `updateOutcome(provider, role, success)` in capability-stats.ts records each outcome; the `contextforge_savings` event correlation is in the event payload. Commit `27ccd97`. |
 | 13.5 | `apohara stats` command: prints per-role provider rankings | ✅ 2026-05-12 | `src/commands/stats.ts` reads the store, runs Thompson Sampling per (provider, role) over the merged set of known + observed providers, and prints either an ASCII table (rank / provider / sampled score / success rate / trials) grouped by role, or `--json` for machine consumption. `--role <task>` narrows to one role; `--file <path>` overrides the default store. |
 
-**Duration:** 2 sessions.
+**Status: M013 100% shipped** as of commit `27ccd97` (2026-05-12). 8/8 router-thompson tests + 7/7 capability-stats tests green. **Duration:** 2 sessions actuales.
 
 ---
 
