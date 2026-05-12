@@ -5,6 +5,11 @@ import { getProviderKey } from "../core/config";
 import { ContextForgeClient } from "../core/contextforge-client";
 import { EventLedger } from "../core/ledger";
 import type { EventLog, EventSeverity, ProviderId } from "../core/types";
+import {
+	type CliDriverConfig,
+	callCliDriver,
+	loadCliDriverRegistry,
+} from "./cli-driver";
 
 export interface LLMMessage {
 	role: "system" | "user" | "assistant";
@@ -157,6 +162,9 @@ const MODEL_NAMES: Record<ProviderId, string> = {
 	mistral: "mistral-small-latest",
 	openai: "gpt-4o-mini",
 	"carnice-9b-local": "carnice-9b",
+	"claude-code-cli": "claude-sonnet-4-via-cli",
+	"codex-cli": "gpt-via-codex-cli",
+	"gemini-cli": "gemini-via-cli",
 };
 
 interface ProviderHealth {
@@ -692,9 +700,39 @@ export class ProviderRouter {
 				return this.callOpenAI(messages);
 			case "carnice-9b-local":
 				return this.callCarnice(messages);
+			case "claude-code-cli":
+			case "codex-cli":
+			case "gemini-cli":
+				return this.callCliDriver(provider, messages);
 			default:
 				throw new Error(`Unknown provider: ${provider}`);
 		}
+	}
+
+	/**
+	 * Multi-AI orchestration entry point: route to a CLI driver provider
+	 * (Gap 2). The driver registry is loaded lazily and cached so the
+	 * first call pays the JSON-config read cost once. Errors propagate
+	 * (missing binary, non-zero exit, timeout) — the router's existing
+	 * cooldown + fallback machinery upgrades them to a provider switch.
+	 */
+	private cliRegistry: Map<ProviderId, CliDriverConfig> | null = null;
+	private async callCliDriver(
+		provider: ProviderId,
+		messages: LLMMessage[],
+	): Promise<LLMResponse> {
+		if (!this.cliRegistry) {
+			this.cliRegistry = await loadCliDriverRegistry();
+		}
+		const cfg = this.cliRegistry.get(provider);
+		if (!cfg) {
+			throw new Error(
+				`CLI driver provider "${provider}" not registered. Available: ${[
+					...this.cliRegistry.keys(),
+				].join(", ")}`,
+			);
+		}
+		return callCliDriver(cfg, messages);
 	}
 
 	private async callOpenCode(messages: LLMMessage[]): Promise<LLMResponse> {

@@ -98,6 +98,8 @@
 | M010: Context Compression (tree-sitter) | ✅ | In apohara-indexer |
 | M011: Long-Term Memory | ✅ | redb + Nomic BERT, Mem0 removed |
 | 21 providers wired | ✅ | router.ts. OAuth: Gemini only. |
+| CLI-driver providers (Gap 2) | ✅ 2026-05-12 | `src/providers/cli-driver.ts` framework + 3 built-in drivers (`claude-code-cli`, `codex-cli`, `gemini-cli`). User-defined drivers via `APOHARA_CLI_DRIVERS_CONFIG` JSON. Uses official agent CLI subscriptions instead of API keys — no TOS issue. 6/6 driver tests green (fake-binary mode). |
+| Multi-AI roster picker (Gap 1) | ✅ 2026-05-12 | `packages/desktop/src/components/RosterPicker.tsx` + `/api/roster` server endpoint. User toggles which AIs participate per run. Roster propagates via `X-Apohara-Roster` header. 4/4 Playwright tests green (incl. new "roster persists" case). |
 | Verification Mesh (dual-arbiter) | ✅ | 647 LOC, real |
 | Worktree isolation | ✅ | scheduler.ts spawns in `.claude/worktrees/` |
 | TUI prototype (Ink+React) | 🟡 | `packages/tui/` — archived after M017 parity |
