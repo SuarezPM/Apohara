@@ -8,6 +8,7 @@ import { autoCommand } from "./commands/auto.js";
 import { configCommand } from "./commands/config.js";
 import { dashboardCommand } from "./commands/dashboard.js";
 import { replayCommand } from "./commands/replay.js";
+import { statsCommand } from "./commands/stats.js";
 import { uninstallCommand } from "./commands/uninstall.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +25,7 @@ program.addCommand(authCommand);
 program.addCommand(autoCommand);
 program.addCommand(dashboardCommand);
 program.addCommand(replayCommand);
+program.addCommand(statsCommand);
 program.addCommand(uninstallCommand);
 
 program.parse(process.argv);

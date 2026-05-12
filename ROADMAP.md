@@ -220,11 +220,11 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 
 | # | Task | Verify |
 |---|------|--------|
-| 13.1 | `CapabilityManifest` persists per-provider success/failure counts per role in redb | Survives daemon restart |
-| 13.2 | Thompson Sampling: Beta distribution per provider/role | Unit test: distribution converges after N trials |
-| 13.3 | ProviderRouter queries CapabilityManifest before routing. 5% traffic exploration. | After 20 runs, `router.getBestProvider("codegen")` differs from hardcoded |
-| 13.4 | New dimension `kv_share_friendliness` — learns when ContextForge helps which task types | Manifest reflects per-task-type GPU mode hit rate |
-| 13.5 | `apohara stats` command: prints per-role provider rankings | Human-readable table |
+| 13.1 | `CapabilityManifest` persists per-provider success/failure counts per role | ✅ 2026-05-12 | `src/core/capability-stats.ts` `CapabilityStats` class persists counts to `.apohara/capability-stats.json`. Reloads from disk via lazy `ensureLoaded`. JSON chosen over redb until the indexer daemon owns the state (M013.x migration). 3 persistence tests green. |
+| 13.2 | Thompson Sampling: Beta distribution per provider/role | ✅ 2026-05-12 | Exact `Beta(α, β) = X/(X+Y)` via two Marsaglia–Tsang Gamma draws + Box–Muller standard normal. No external numerical lib. 3 Thompson Sampling tests green: uniform spread on Beta(1,1), concentration around α/(α+β) on Beta(80,20), arg validation. |
+| 13.3 | ProviderRouter queries CapabilityManifest before routing. 5% traffic exploration. | 🔴 follow-up | Surface is ready (`CapabilityStats.rank` + `.sample`) but wiring into `src/providers/router.ts` is a risky autonomous change — sandbox + verification mesh both consume the router. Track as a focused follow-up PR. |
+| 13.4 | New dimension `kv_share_friendliness` — learns when ContextForge helps which task types | 🔴 follow-up | Depends on telemetry plumbing from the `contextforge_savings` ledger event into the stats store; currently only `(provider, role)` is recorded. |
+| 13.5 | `apohara stats` command: prints per-role provider rankings | ✅ 2026-05-12 | `src/commands/stats.ts` reads the store, runs Thompson Sampling per (provider, role) over the merged set of known + observed providers, and prints either an ASCII table (rank / provider / sampled score / success rate / trials) grouped by role, or `--json` for machine consumption. `--role <task>` narrows to one role; `--file <path>` overrides the default store. |
 
 **Duration:** 2 sessions.
 
