@@ -16,8 +16,8 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { TaskType } from "./capability-manifest";
-import type { ProviderId } from "./types";
+import { roleToTaskType, type TaskType } from "./capability-manifest";
+import type { ProviderId, TaskRole } from "./types";
 
 const STATS_FILENAME = ".apohara/capability-stats.json";
 const STATS_VERSION = 1;
@@ -137,6 +137,20 @@ export class CapabilityStats {
 		await this.flush();
 	}
 
+	/**
+	 * Same as [`update`] but accepts the high-level [`TaskRole`] used by
+	 * the router (research/planning/execution/verification) and maps it
+	 * to the lower-level [`TaskType`] before recording. This is the entry
+	 * point the routing path uses so call sites stay in role vocabulary.
+	 */
+	public async updateOutcome(
+		provider: ProviderId,
+		role: TaskRole,
+		success: boolean,
+	): Promise<void> {
+		await this.update(provider, roleToTaskType(role), success);
+	}
+
 	/** Read the raw counts for a single (provider, role). */
 	public async get(
 		provider: ProviderId,
@@ -197,6 +211,34 @@ export class CapabilityStats {
 			})
 			.sort((a, b) => b.score - a.score || b.rate - a.rate);
 	}
+}
+
+/**
+ * Process-wide default store. The router calls this on every routing
+ * decision; a per-call `new CapabilityStats()` would re-read the JSON
+ * file each time, so we cache one instance per file path.
+ *
+ * When `filePath` is not supplied, falls back to
+ * `APOHARA_CAPABILITY_STATS_PATH` for test isolation, then to the
+ * CapabilityStats constructor default (`<cwd>/.apohara/capability-stats.json`).
+ */
+let _defaultStats: CapabilityStats | undefined;
+let _defaultStatsPath: string | undefined;
+export function getDefaultStats(filePath?: string): CapabilityStats {
+	const resolved = filePath ?? process.env.APOHARA_CAPABILITY_STATS_PATH;
+	if (_defaultStats && _defaultStatsPath === resolved) return _defaultStats;
+	_defaultStats = new CapabilityStats(resolved);
+	_defaultStatsPath = resolved;
+	return _defaultStats;
+}
+
+/**
+ * Reset the default store. Test-only: lets tests point the singleton at
+ * a fresh tmp file between runs without leaking state across cases.
+ */
+export function _resetDefaultStats(): void {
+	_defaultStats = undefined;
+	_defaultStatsPath = undefined;
 }
 
 /**

@@ -12,6 +12,7 @@ import {
 	roleToTaskType,
 	selectBestProvider,
 } from "./capability-manifest";
+import { type CapabilityStats, getDefaultStats } from "./capability-stats";
 import { EventLedger } from "./ledger";
 import type {
 	EventLog,
@@ -73,6 +74,75 @@ export interface RouteResult {
 	model: ModelCapability | undefined;
 	requiresFallback: boolean;
 	fallbackProviders: ProviderId[];
+	/**
+	 * True when the router picked uniformly at random (5% exploration
+	 * branch) instead of the Thompson-Sampling-greedy provider. Surfaced
+	 * so the `provider_outcome` ledger event can flag exploration traffic
+	 * and `apohara stats` can subtract it from convergence metrics.
+	 */
+	explored?: boolean;
+}
+
+/**
+ * Fraction of routing decisions that ignore Thompson Sampling and pick
+ * uniformly at random from the valid-token candidates. Guarantees we
+ * never lock in on a stale ranking when a provider's quality improves.
+ *
+ * Set via `APOHARA_ROUTER_EXPLORATION_RATE` (0..1). Default 0.05.
+ */
+function explorationRate(): number {
+	const v = Number(process.env.APOHARA_ROUTER_EXPLORATION_RATE);
+	return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.05;
+}
+
+/**
+ * Module-level RNG used by the Thompson selector + epsilon-greedy
+ * exploration branch. Defaults to `Math.random`; tests inject a seeded
+ * generator via [`_setRouterRng`] for deterministic assertions.
+ */
+let _routerRng: () => number = Math.random;
+export function _setRouterRng(rng: (() => number) | undefined): void {
+	_routerRng = rng ?? Math.random;
+}
+
+/**
+ * Resolve the primary provider via Thompson Sampling, with a small
+ * epsilon-greedy exploration branch. Returns null when no valid-token
+ * candidates exist (caller falls through to the legacy capability
+ * manifest path).
+ */
+async function pickViaThompson(
+	stats: CapabilityStats,
+	candidates: ProviderId[],
+	taskType: ReturnType<typeof roleToTaskType>,
+): Promise<{ provider: ProviderId; explored: boolean } | null> {
+	if (candidates.length === 0) return null;
+	if (candidates.length === 1) {
+		return { provider: candidates[0], explored: false };
+	}
+	// Cold start: defer to the capability manifest until at least one
+	// candidate has an observation for this task type. Without this
+	// guard, the uniform Beta(α₀, β₀) prior collapses to random routing
+	// across every token-valid provider (including ones the manifest
+	// never intended for this role).
+	const observed = await Promise.all(
+		candidates.map((p) => stats.get(p, taskType)),
+	);
+	const hasAny = observed.some(
+		(c) => c !== undefined && c.successes + c.failures > 0,
+	);
+	if (!hasAny) return null;
+
+	const epsilon = explorationRate();
+	if (_routerRng() < epsilon) {
+		const idx = Math.min(
+			candidates.length - 1,
+			Math.floor(_routerRng() * candidates.length),
+		);
+		return { provider: candidates[idx], explored: true };
+	}
+	const ranked = await stats.rank(candidates, taskType, _routerRng);
+	return { provider: ranked[0].provider, explored: false };
 }
 
 /**
@@ -170,9 +240,30 @@ export async function routeTask(
 
 	// Consult capability manifest: prioritize higher-scoring providers with valid tokens
 	const availableProviders = getAvailableProviders();
-	const bestByCapability = selectBestProvider(availableProviders, taskType);
-	if (bestByCapability && validateToken(bestByCapability)) {
-		primaryProvider = bestByCapability;
+
+	// M013.3 — Thompson Sampling. With 95% probability the pick is the
+	// arm with the highest sampled Beta(α₀+succ, β₀+fail) score; with 5%
+	// it is uniformly random. When no token-valid candidate exists, fall
+	// back to the legacy capability-manifest path so this never blocks
+	// startup or first-run scenarios where stats are empty.
+	const thompsonPick = await pickViaThompson(
+		getDefaultStats(),
+		availableProviders,
+		taskType,
+	);
+	let explored = false;
+	let chosen: ProviderId | null = null;
+	if (thompsonPick && validateToken(thompsonPick.provider)) {
+		chosen = thompsonPick.provider;
+		explored = thompsonPick.explored;
+	} else {
+		const bestByCapability = selectBestProvider(availableProviders, taskType);
+		if (bestByCapability && validateToken(bestByCapability)) {
+			chosen = bestByCapability;
+		}
+	}
+	if (chosen) {
+		primaryProvider = chosen;
 		modelCapability = getModelById(primaryProvider);
 		// Reorder fallback to start after the selected primary
 		const remaining = fallbackOrder.filter((p) => p !== primaryProvider);
@@ -188,6 +279,7 @@ export async function routeTask(
 			role,
 			taskType,
 			capabilityScore: getCapabilityScore(primaryProvider, taskType),
+			explored,
 		},
 		"info",
 		taskId,
@@ -223,6 +315,7 @@ export async function routeTask(
 					model: getModelById(fallbackProvider),
 					requiresFallback: true,
 					fallbackProviders: fallbackOrder,
+					explored,
 				};
 			}
 		}
@@ -255,6 +348,7 @@ export async function routeTask(
 		model: modelCapability,
 		requiresFallback: false,
 		fallbackProviders: fallbackOrder,
+		explored,
 	};
 }
 
@@ -281,6 +375,7 @@ export async function routeTaskWithFallback(
 }> {
 	const result = await routeTask(role, task);
 	const ledger = new EventLedger();
+	const stats = getDefaultStats();
 
 	// Use provided router or create new one
 	const providerRouter = router || new ProviderRouter();
@@ -291,16 +386,29 @@ export async function routeTaskWithFallback(
 			messages: task.messages,
 			provider: result.provider,
 		});
+		await stats.updateOutcome(result.provider, role, true);
+		await ledger.logProviderOutcome(result.provider, role, true, {
+			taskId: task.id,
+			explored: result.explored,
+		});
 		return { provider: result.provider, model: result.model, response };
 	} catch (error) {
 		// Check if error is retryable (429, timeout)
 		const isRetryable = isRetryableError(error);
+		const primaryErrorMessage =
+			error instanceof Error ? error.message : String(error);
+		await stats.updateOutcome(result.provider, role, false);
+		await ledger.logProviderOutcome(result.provider, role, false, {
+			taskId: task.id,
+			errorReason: primaryErrorMessage,
+			explored: result.explored,
+		});
 		if (!isRetryable) {
 			throw error;
 		}
 
 		// Log fallback event
-		const errorMessage = error instanceof Error ? error.message : String(error);
+		const errorMessage = primaryErrorMessage;
 		await ledger.log(
 			"provider_fallback",
 			{
@@ -355,6 +463,11 @@ export async function routeTaskWithFallback(
 					},
 				);
 
+				await stats.updateOutcome(fallbackProvider, role, true);
+				await ledger.logProviderOutcome(fallbackProvider, role, true, {
+					taskId: task.id,
+				});
+
 				return {
 					provider: fallbackProvider,
 					model: getModelById(fallbackProvider),
@@ -366,6 +479,11 @@ export async function routeTaskWithFallback(
 						? fallbackError.message
 						: String(fallbackError);
 				console.warn(`⚠ Fallback to ${fallbackProvider} failed: ${errorMsg}`);
+				await stats.updateOutcome(fallbackProvider, role, false);
+				await ledger.logProviderOutcome(fallbackProvider, role, false, {
+					taskId: task.id,
+					errorReason: errorMsg,
+				});
 			}
 		}
 
