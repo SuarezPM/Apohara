@@ -427,6 +427,14 @@ export interface Task {
 
 export type EventSeverity = "info" | "warning" | "error";
 
+// M018.D — Pattern D: auth-aware fallback error classification.
+// Each class drives a different cooldown + retry strategy in ProviderRouter.
+export type ProviderErrorClass =
+	| "AUTH_FAILURE" // 401/403 — credentials stale; long cooldown + flag for refresh
+	| "RATE_LIMIT" // 429 — backoff per Retry-After header
+	| "NETWORK" // ECONNREFUSED / timeout / fetch failures — short cooldown, fast retry
+	| "MODEL_ERROR"; // 5xx / malformed JSON — short cooldown, ledger warning
+
 export interface EventLog {
 	id: string;
 	timestamp: string; // ISO string
@@ -450,6 +458,7 @@ export interface EventLog {
 		fromProvider?: ProviderId;
 		toProvider?: ProviderId;
 		errorReason?: string;
+		errorClass?: ProviderErrorClass; // M018.D — Pattern D: which class triggered fallback
 		fallbackProviders?: ProviderId[]; // List of fallback providers attempted
 		capabilityScore?: number; // Score from getCapabilityScore(provider, taskType)
 	};
