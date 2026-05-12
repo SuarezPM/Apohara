@@ -201,7 +201,7 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Clarity-Code** (3592 symbols, 7943 relationships, 218 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Clarity-Code** (3675 symbols, 8106 relationships, 223 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

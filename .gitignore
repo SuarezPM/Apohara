@@ -30,6 +30,10 @@ coverage/
 
 # ── Tauri auto-generated schemas + capability bindings ──
 packages/desktop/src-tauri/gen/
+
+# ── Playwright artifacts ──
+packages/desktop/test-results/
+packages/desktop/playwright-report/
 .cache/
 tmp/
 .gitnexus

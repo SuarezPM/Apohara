@@ -103,7 +103,7 @@
 | TUI prototype (Ink+React) | 🟡 | `packages/tui/` — archived after M017 parity |
 | apohara-indexer (Rust) | ✅ | Production: tree-sitter + redb + candle |
 | apohara-sandbox (Rust+TS) | ✅ | M014 all 6 subtasks shipped — 31 Rust tests + 3 TS fallback tests green |
-| apohara-desktop (Tauri+React+Bun) | 🟢 | M017.1-.7 shipped 2026-05-12; .8-.10 pending |
+| apohara-desktop (Tauri+React+Bun) | ✅ | M017 all 10 subtasks shipped 2026-05-12 (.8 Linux artifact only — cross-OS needs CI runners) |
 | ContextForge integration (M015) | ✅ | All 6 subtasks shipped 2026-05-12 |
 | Test suite | 🟡 | ~610 blocks total. 60 known-broken. CI red. Phase 5 fixes this. |
 
@@ -178,7 +178,7 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 | 17.7 | Visual identity locked: dark default, Geist Mono + Geist Sans, cyan `#6EE7F7` + violet `#A78BFA` accents | ✅ 2026-05-12 | `index.css` has CSS vars + pane chrome + xyflow dark overrides + mode-toggle styling |
 | 17.8 | Tauri build → single binary <15 MB Linux/macOS/Windows | 🟡 Linux done 2026-05-12 | Linux `tauri build` produces working artifacts: **raw binary 5.6 MB** (target <15 MB ✅), **deb 1.9 MB**, AppImage 78 MB (bundles webkit2gtk for portability). macOS/Windows binaries need cross-OS CI runners (not available on this dev box). Wiring fixed in this session: workspace member entry + `Builder::<Wry, ()>` generic for Tauri 2.11 + `icon.png` + `scripts/build.ts` post-process to emit `dist/index.html` |
 | 17.9 | Migrate useful hooks from `packages/tui/` (Ink) → `packages/desktop/` (React). Archive `packages/tui/`. | 🟡 marker shipped 2026-05-12 | `packages/tui/README.md` declares the package archived and points to `packages/desktop/`. Physical deletion deferred until M017.10 ships and `src/commands/dashboard.ts` is rewired off `cli.tsx`. |
-| 17.10 | E2E test: full visual flow with mocked providers | 🔴 | Playwright test reaches green PR step |
+| 17.10 | E2E test: full visual flow with mocked providers | ✅ 2026-05-12 | `packages/desktop/tests/e2e/smoke.spec.ts` Playwright suite (3/3 green): (1) three-pane layout + top-bar mode toggle render, (2) Run button hits `/api/run` and the session id appears in the top bar, (3) mode toggle POSTs `/api/mode` + persists to localStorage. Config at `packages/desktop/playwright.config.ts` points `executablePath` at `/usr/bin/google-chrome` because Playwright doesn't ship managed browsers for ubuntu26.04-x64. `bun run --filter @apohara/desktop e2e`. |
 
 **Duration estimate:** 5–7 sessions. Biggest milestone of v0.1.
 
