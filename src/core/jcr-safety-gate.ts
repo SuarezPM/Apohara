@@ -89,9 +89,7 @@ export class JCRSafetyGate {
 
 	constructor(threshold: number = DEFAULT_JCR_THRESHOLD) {
 		if (!(threshold >= 0 && threshold <= 1)) {
-			throw new Error(
-				`jcr threshold must be in [0, 1]; got ${threshold}`,
-			);
+			throw new Error(`jcr threshold must be in [0, 1]; got ${threshold}`);
 		}
 		this.threshold = threshold;
 	}
@@ -184,8 +182,7 @@ export class JCRSafetyGate {
 			};
 		}
 		const denseCount = this.log.filter((d) => d.useDense).length;
-		const avgRisk =
-			this.log.reduce((acc, d) => acc + d.riskScore, 0) / total;
+		const avgRisk = this.log.reduce((acc, d) => acc + d.riskScore, 0) / total;
 		const criticDecisions = this.log.filter((d) => d.agentRole === "critic");
 		const criticDense = criticDecisions.filter((d) => d.useDense).length;
 		const criticRate =

@@ -184,7 +184,8 @@ export class Isolator {
 						violations: result.violations ?? [],
 						durationMs: result.duration_ms ?? durationMs,
 						error:
-							result.exit_code === 99 || result.violations?.includes("unavailable")
+							result.exit_code === 99 ||
+							result.violations?.includes("unavailable")
 								? "sandbox_unavailable"
 								: undefined,
 					};

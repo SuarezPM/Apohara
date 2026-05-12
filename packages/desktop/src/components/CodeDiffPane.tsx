@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
+import { useEffect, useMemo, useState } from "react";
 import type { EventLog } from "../lib/types.js";
 
 interface CodeDiffPaneProps {

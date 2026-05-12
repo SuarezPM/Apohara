@@ -16,8 +16,8 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ProviderId } from "./types";
 import type { TaskType } from "./capability-manifest";
+import type { ProviderId } from "./types";
 
 const STATS_FILENAME = ".apohara/capability-stats.json";
 const STATS_VERSION = 1;
@@ -104,11 +104,7 @@ export class CapabilityStats {
 				updatedAt: new Date().toISOString(),
 				entries: [...this.map.values()],
 			};
-			await writeFile(
-				this.filePath,
-				JSON.stringify(payload, null, 2),
-				"utf-8",
-			);
+			await writeFile(this.filePath, JSON.stringify(payload, null, 2), "utf-8");
 		});
 		return this.writeQueue;
 	}
@@ -238,7 +234,7 @@ function sampleGamma(shape: number, rng: () => number): number {
 		// Guard against rng() returning 0 (very rare with Math.random
 		// but not impossible). log(0) → -Infinity → NaN downstream.
 		const safeU = u === 0 ? Number.MIN_VALUE : u;
-		return sampleGamma(shape + 1, rng) * Math.pow(safeU, 1 / shape);
+		return sampleGamma(shape + 1, rng) * safeU ** (1 / shape);
 	}
 	const d = shape - 1 / 3;
 	const c = 1 / Math.sqrt(9 * d);

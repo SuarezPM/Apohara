@@ -76,9 +76,9 @@ describe("replay command — buildPlan / dry-run JSON (Phase 4.4 + 4.5)", () => 
 
 	it("resolveRunPath: bare runId resolves to .events/run-<id>.jsonl", () => {
 		const resolved = resolveRunPath("2026-05-11T22-30-47-262Z");
-		expect(resolved.endsWith("/.events/run-2026-05-11T22-30-47-262Z.jsonl")).toBe(
-			true,
-		);
+		expect(
+			resolved.endsWith("/.events/run-2026-05-11T22-30-47-262Z.jsonl"),
+		).toBe(true);
 	});
 
 	it("resolveRunPath: path-like input passes through", () => {

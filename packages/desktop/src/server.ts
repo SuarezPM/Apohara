@@ -14,9 +14,9 @@
 import { existsSync, watch as fsWatch } from "node:fs";
 import { mkdir, open, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import index from "../index.html";
-import { ProviderRouter } from "../../../src/providers/router";
 import type { LLMMessage } from "../../../src/providers/router";
+import { ProviderRouter } from "../../../src/providers/router";
+import index from "../index.html";
 
 const PORT = Number(process.env.APOHARA_DESKTOP_PORT ?? 7331);
 const REPO_ROOT = process.env.APOHARA_REPO_ROOT ?? process.cwd();
@@ -80,10 +80,7 @@ function readMode(req: Request, body: { mode?: unknown }): RoutingMode {
 	return routingMode;
 }
 
-function readRoster(
-	req: Request,
-	body: { roster?: unknown },
-): Set<string> {
+function readRoster(req: Request, body: { roster?: unknown }): Set<string> {
 	const header = req.headers.get("x-apohara-roster");
 	if (header && header.trim().length > 0) {
 		return new Set(

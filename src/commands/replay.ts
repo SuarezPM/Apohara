@@ -77,64 +77,75 @@ export function planToDeterministicJSON(plan: ReplayPlan): string {
 }
 
 export const replayCommand = new Command("replay")
-	.description("Replay an event ledger with deterministic LLM calls (temperature:0)")
+	.description(
+		"Replay an event ledger with deterministic LLM calls (temperature:0)",
+	)
 	.argument("<run-id>", "Run ID or path to .events/run-<id>.jsonl")
 	.option("--dry-run", "Print the call plan as JSON without executing", false)
 	.option("--skip-verify", "Skip hash chain verification (dangerous)", false)
-	.action(async (runId: string, options: { dryRun: boolean; skipVerify: boolean }) => {
-		const filePath = resolveRunPath(runId);
+	.action(
+		async (
+			runId: string,
+			options: { dryRun: boolean; skipVerify: boolean },
+		) => {
+			const filePath = resolveRunPath(runId);
 
-		if (!options.skipVerify) {
-			const result = await EventLedger.verify(filePath);
-			if (!result.ok) {
+			if (!options.skipVerify) {
+				const result = await EventLedger.verify(filePath);
+				if (!result.ok) {
+					console.error(
+						`Ledger verification failed at line ${result.brokenAt}: ${result.reason}`,
+					);
+					process.exit(1);
+				}
+				if (result.legacy) {
+					console.error(
+						`Cannot replay legacy ledger (no hash chain). Re-run with hashed ledger or use --skip-verify.`,
+					);
+					process.exit(1);
+				}
+			}
+
+			const plan = await buildPlan(filePath);
+
+			if (options.dryRun) {
+				console.log(planToDeterministicJSON(plan));
+				return;
+			}
+
+			if (plan.llmRequests.length === 0) {
 				console.error(
-					`Ledger verification failed at line ${result.brokenAt}: ${result.reason}`,
+					"No llm_request events found in ledger. Nothing to replay.",
 				);
 				process.exit(1);
 			}
-			if (result.legacy) {
-				console.error(
-					`Cannot replay legacy ledger (no hash chain). Re-run with hashed ledger or use --skip-verify.`,
-				);
-				process.exit(1);
+
+			const router = new ProviderRouter({ replayMode: true });
+			console.log(
+				`Replaying ${plan.llmRequests.length} request(s) from ${plan.runId} (temperature:0)`,
+			);
+			let succeeded = 0;
+			for (let i = 0; i < plan.llmRequests.length; i++) {
+				const req = plan.llmRequests[i];
+				try {
+					// Bypass the router's fallback selection — replay must use the recorded provider.
+					const response = await router.completion({
+						messages: req.messages,
+						provider: req.provider,
+					});
+					console.log(
+						`  [${i + 1}/${plan.llmRequests.length}] ${req.provider} ${response.model} ok (${response.usage.totalTokens} tok)`,
+					);
+					succeeded++;
+				} catch (e) {
+					console.error(
+						`  [${i + 1}/${plan.llmRequests.length}] ${req.provider} failed: ${(e as Error).message}`,
+					);
+				}
 			}
-		}
-
-		const plan = await buildPlan(filePath);
-
-		if (options.dryRun) {
-			console.log(planToDeterministicJSON(plan));
-			return;
-		}
-
-		if (plan.llmRequests.length === 0) {
-			console.error("No llm_request events found in ledger. Nothing to replay.");
-			process.exit(1);
-		}
-
-		const router = new ProviderRouter({ replayMode: true });
-		console.log(
-			`Replaying ${plan.llmRequests.length} request(s) from ${plan.runId} (temperature:0)`,
-		);
-		let succeeded = 0;
-		for (let i = 0; i < plan.llmRequests.length; i++) {
-			const req = plan.llmRequests[i];
-			try {
-				// Bypass the router's fallback selection — replay must use the recorded provider.
-				const response = await router.completion({
-					messages: req.messages,
-					provider: req.provider,
-				});
-				console.log(
-					`  [${i + 1}/${plan.llmRequests.length}] ${req.provider} ${response.model} ok (${response.usage.totalTokens} tok)`,
-				);
-				succeeded++;
-			} catch (e) {
-				console.error(
-					`  [${i + 1}/${plan.llmRequests.length}] ${req.provider} failed: ${(e as Error).message}`,
-				);
-			}
-		}
-		console.log(`Replay done: ${succeeded}/${plan.llmRequests.length} succeeded`);
-		if (succeeded < plan.llmRequests.length) process.exit(2);
-	});
+			console.log(
+				`Replay done: ${succeeded}/${plan.llmRequests.length} succeeded`,
+			);
+			if (succeeded < plan.llmRequests.length) process.exit(2);
+		},
+	);

@@ -61,10 +61,12 @@ test.describe("Apohara visual orchestrator", () => {
 	}) => {
 		await page.goto("/");
 
-		const rosterButton = page.getByRole("button", {
-			name: /AIs|Apohara/,
-			exact: false,
-		}).first();
+		const rosterButton = page
+			.getByRole("button", {
+				name: /AIs|Apohara/,
+				exact: false,
+			})
+			.first();
 		await rosterButton.click();
 
 		await expect(page.getByText("AI roster for this run")).toBeVisible();
@@ -102,7 +104,8 @@ test.describe("Apohara visual orchestrator", () => {
 		// Capture the /api/mode POST so we can verify the server
 		// received it.
 		const modePost = page.waitForResponse(
-			(resp) => resp.url().endsWith("/api/mode") && resp.request().method() === "POST",
+			(resp) =>
+				resp.url().endsWith("/api/mode") && resp.request().method() === "POST",
 		);
 		await cloud.click();
 		const resp = await modePost;

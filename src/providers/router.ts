@@ -3,7 +3,7 @@ import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getProviderKey } from "../core/config";
 import { ContextForgeClient } from "../core/contextforge-client";
-import { EventLedger } from "../core/ledger";
+import type { EventLedger } from "../core/ledger";
 import type { EventLog, EventSeverity, ProviderId } from "../core/types";
 import {
 	type CliDriverConfig,

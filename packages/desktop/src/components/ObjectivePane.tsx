@@ -25,10 +25,10 @@ export function ObjectivePane({
 			const r = await fetch("/api/enhance", {
 				method: "POST",
 				headers: {
-				"Content-Type": "application/json",
-				"X-Apohara-Mode": mode,
-				"X-Apohara-Roster": rosterCsv,
-			},
+					"Content-Type": "application/json",
+					"X-Apohara-Mode": mode,
+					"X-Apohara-Roster": rosterCsv,
+				},
 				body: JSON.stringify({ prompt, mode }),
 			});
 			const data = (await r.json()) as { enhanced: string; error?: string };
@@ -48,10 +48,10 @@ export function ObjectivePane({
 			const r = await fetch("/api/run", {
 				method: "POST",
 				headers: {
-				"Content-Type": "application/json",
-				"X-Apohara-Mode": mode,
-				"X-Apohara-Roster": rosterCsv,
-			},
+					"Content-Type": "application/json",
+					"X-Apohara-Mode": mode,
+					"X-Apohara-Roster": rosterCsv,
+				},
 				body: JSON.stringify({ prompt: enhanced ?? prompt, mode }),
 			});
 			const data = (await r.json()) as { sessionId: string; error?: string };

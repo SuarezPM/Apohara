@@ -6,14 +6,7 @@
  * and the unavailable-event dedup window. Schema fidelity asserted
  * against `apohara_context_forge/models.py:33-95`.
  */
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	mock,
-	test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { ContextForgeClient } from "../src/core/contextforge-client";
 
 /** Minimal stub of EventLedger.log so we can assert event emissions. */
@@ -109,10 +102,7 @@ describe("ContextForgeClient.register — POST /tools/register_context", () => {
 
 		expect(capturedUrl).toBe("http://localhost:8001/tools/register_context");
 		// Strict body — only agent_id + context, NO extras (server has extra="forbid")
-		expect(Object.keys(capturedBody).sort()).toEqual([
-			"agent_id",
-			"context",
-		]);
+		expect(Object.keys(capturedBody).sort()).toEqual(["agent_id", "context"]);
 		expect(capturedBody.agent_id).toBe("task-7");
 		expect(capturedBody.context).toBe("raw");
 		expect(result?.agent_id).toBe("task-7");

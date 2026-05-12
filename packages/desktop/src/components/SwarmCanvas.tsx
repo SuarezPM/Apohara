@@ -1,11 +1,11 @@
-import { useMemo } from "react";
 import {
 	Background,
 	Controls,
-	ReactFlow,
 	type Edge,
 	type Node,
+	ReactFlow,
 } from "@xyflow/react";
+import { useMemo } from "react";
 import "@xyflow/react/dist/style.css";
 import type { EventLog } from "../lib/types.js";
 
@@ -74,7 +74,8 @@ function buildGraph(events: EventLog[]): {
 	const tasks = new Map<string, DecomposerTask>();
 	const state = new Map<string, TaskState>();
 	const providers = new Map<string, string>();
-	const meshVerdicts: { id: string; targetTaskId: string; verdict: string }[] = [];
+	const meshVerdicts: { id: string; targetTaskId: string; verdict: string }[] =
+		[];
 
 	for (const ev of events) {
 		if (ev.type === "decomposer_complete" && Array.isArray(ev.payload?.tasks)) {
@@ -121,9 +122,10 @@ function buildGraph(events: EventLog[]): {
 		seen.add(id);
 		const t = tasks.get(id);
 		const parents = t?.dependsOn?.filter((p) => tasks.has(p)) ?? [];
-		const d = parents.length === 0
-			? 0
-			: 1 + Math.max(...parents.map((p) => computeDepth(p, seen)));
+		const d =
+			parents.length === 0
+				? 0
+				: 1 + Math.max(...parents.map((p) => computeDepth(p, seen)));
 		depth.set(id, d);
 		return d;
 	}
@@ -170,7 +172,10 @@ function buildGraph(events: EventLog[]): {
 		nodes.push({
 			id: sentinelId,
 			data: { label: `⚖ ${m.verdict}`, state: "completed" },
-			position: { x: targetNode.position.x + 40, y: targetNode.position.y + 60 },
+			position: {
+				x: targetNode.position.x + 40,
+				y: targetNode.position.y + 60,
+			},
 			className: "mesh",
 			selectable: false,
 		});

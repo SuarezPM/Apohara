@@ -48,11 +48,7 @@ export interface OptimizeResult {
 	rationale: string;
 }
 
-type UnavailableReason =
-	| "timeout"
-	| "network"
-	| "parse"
-	| `http_${number}`;
+type UnavailableReason = "timeout" | "network" | "parse" | `http_${number}`;
 
 /**
  * HTTP client for the ContextForge sidecar. Constructed lazily from
