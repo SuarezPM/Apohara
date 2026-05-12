@@ -56,6 +56,39 @@ test.describe("Apohara visual orchestrator", () => {
 		});
 	});
 
+	test("roster picker persists selection + POST /api/roster (Gap 1)", async ({
+		page,
+	}) => {
+		await page.goto("/");
+
+		const rosterButton = page.getByRole("button", {
+			name: /AIs|Apohara/,
+			exact: false,
+		}).first();
+		await rosterButton.click();
+
+		await expect(page.getByText("AI roster for this run")).toBeVisible();
+
+		// Capture the POST /api/roster fired when we clear the roster.
+		const rosterPost = page.waitForResponse(
+			(resp) =>
+				resp.url().endsWith("/api/roster") &&
+				resp.request().method() === "POST",
+		);
+		await page.getByRole("button", { name: "Clear" }).click();
+		const resp = await rosterPost;
+		expect(resp.status()).toBe(200);
+		const body = await resp.json();
+		expect(Array.isArray(body.providers)).toBe(true);
+		expect(body.providers.length).toBe(0);
+
+		// localStorage mirrors the cleared state.
+		const stored = await page.evaluate(() =>
+			window.localStorage.getItem("apohara.providerRoster"),
+		);
+		expect(stored).toBe("[]");
+	});
+
 	test("mode toggle persists to localStorage + POST /api/mode", async ({
 		page,
 	}) => {

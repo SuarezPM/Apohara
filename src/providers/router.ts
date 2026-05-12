@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { config, getProviderKey } from "../core/config";
+import { getProviderKey } from "../core/config";
 import { ContextForgeClient } from "../core/contextforge-client";
 import { EventLedger } from "../core/ledger";
 import type { EventLog, EventSeverity, ProviderId } from "../core/types";
@@ -189,7 +189,10 @@ export class ProviderRouter {
 	private fireworksApiKey: string;
 	private zaiApiKey: string;
 	private groqApiKey: string;
-	private kiroAiApiKey: string;
+	// kiro-ai is auth-free in practice — the API key is accepted but the
+	// service treats requests as `anonymous`. We keep the cfg option for
+	// forward compat but no longer store the key, which silenced a
+	// noUnusedLocals warning.
 	private mistralApiKey: string;
 	private openaiApiKey: string;
 
@@ -237,8 +240,6 @@ export class ProviderRouter {
 			cfg?.fireworksApiKey || getProviderKey("fireworks") || "";
 		this.zaiApiKey = cfg?.zaiApiKey || getProviderKey("zai") || "";
 		this.groqApiKey = cfg?.groqApiKey || getProviderKey("groq") || "";
-		this.kiroAiApiKey =
-			cfg?.kiroAiApiKey || getProviderKey("kiro-ai") || "anonymous";
 		this.mistralApiKey = cfg?.mistralApiKey || getProviderKey("mistral") || "";
 		this.openaiApiKey = cfg?.openaiApiKey || getProviderKey("openai") || "";
 

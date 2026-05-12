@@ -39,12 +39,38 @@ type RoutingMode = "gpu" | "cloud";
 let routingMode: RoutingMode =
 	(process.env.APOHARA_ROUTING_MODE as RoutingMode) ?? "gpu";
 
-function pickEnhanceProvider(modeOverride?: RoutingMode): string {
+// Provider roster preference — the multi-AI orchestrator pitch. The UI
+// (`RosterPicker`) keeps a Set<ProviderId>; the server holds the
+// canonical state and accepts per-request overrides via either
+// `X-Apohara-Roster: id1,id2,id3` header or `roster: [...]` in the body.
+let providerRoster: Set<string> = new Set();
+
+function pickEnhanceProvider(
+	modeOverride: RoutingMode | undefined,
+	roster: Set<string>,
+): string {
 	const explicit = process.env.APOHARA_ENHANCE_PROVIDER;
 	if (explicit) return explicit;
 	const mode = modeOverride ?? routingMode;
-	if (mode === "gpu") return "carnice-9b-local";
-	return process.env.APOHARA_CLOUD_PROVIDER ?? "opencode-go";
+	const tryOrder =
+		mode === "gpu"
+			? ["carnice-9b-local", "claude-code-cli", "opencode-go", "openai"]
+			: [
+					"claude-code-cli",
+					"codex-cli",
+					"gemini-cli",
+					"opencode-go",
+					"openai",
+					"anthropic-api",
+				];
+	for (const p of tryOrder) {
+		if (roster.size === 0 || roster.has(p)) return p;
+	}
+	// No preferred provider made it through the roster. Pick anything
+	// the user did enable so we at least try a valid provider rather
+	// than failing the route entirely.
+	const first = [...roster][0];
+	return first ?? "opencode-go";
 }
 
 function readMode(req: Request, body: { mode?: unknown }): RoutingMode {
@@ -52,6 +78,27 @@ function readMode(req: Request, body: { mode?: unknown }): RoutingMode {
 	if (header === "gpu" || header === "cloud") return header;
 	if (body.mode === "gpu" || body.mode === "cloud") return body.mode;
 	return routingMode;
+}
+
+function readRoster(
+	req: Request,
+	body: { roster?: unknown },
+): Set<string> {
+	const header = req.headers.get("x-apohara-roster");
+	if (header && header.trim().length > 0) {
+		return new Set(
+			header
+				.split(",")
+				.map((s) => s.trim())
+				.filter(Boolean),
+		);
+	}
+	if (Array.isArray(body.roster)) {
+		return new Set(
+			body.roster.filter((x): x is string => typeof x === "string"),
+		);
+	}
+	return providerRoster;
 }
 
 /**
@@ -103,13 +150,16 @@ const server = Bun.serve({
 			POST: async (req) => {
 				let prompt = "";
 				let bodyMode: RoutingMode | undefined;
+				let roster: Set<string> = providerRoster;
 				try {
 					const body = (await req.json()) as {
 						prompt?: string;
 						mode?: unknown;
+						roster?: unknown;
 					};
 					prompt = (body.prompt ?? "").trim();
 					bodyMode = readMode(req, body);
+					roster = readRoster(req, body);
 				} catch {
 					return new Response("invalid JSON body", { status: 400 });
 				}
@@ -128,7 +178,7 @@ const server = Bun.serve({
 					{ role: "user", content: prompt },
 				];
 
-				const provider = pickEnhanceProvider(bodyMode);
+				const provider = pickEnhanceProvider(bodyMode, roster);
 
 				try {
 					const result = await getRouter().completion({
@@ -143,6 +193,7 @@ const server = Bun.serve({
 						model: result.model,
 						usage: result.usage,
 						mode: bodyMode ?? routingMode,
+						roster: [...roster],
 					});
 				} catch (err) {
 					return Response.json(
@@ -179,6 +230,31 @@ const server = Bun.serve({
 			GET: () => Response.json({ mode: routingMode }),
 		},
 
+		// POST /api/roster — update the canonical multi-AI roster (the
+		// "pick which AIs participate in this run" set). Body shape:
+		// `{ providers: ["claude-code-cli", "openai", ...] }`. GET
+		// returns the current roster.
+		"/api/roster": {
+			POST: async (req) => {
+				let body: { providers?: unknown } = {};
+				try {
+					body = (await req.json()) as { providers?: unknown };
+				} catch {
+					return new Response("invalid JSON body", { status: 400 });
+				}
+				if (!Array.isArray(body.providers)) {
+					return new Response("providers must be an array of strings", {
+						status: 400,
+					});
+				}
+				providerRoster = new Set(
+					body.providers.filter((x): x is string => typeof x === "string"),
+				);
+				return Response.json({ providers: [...providerRoster] });
+			},
+			GET: () => Response.json({ providers: [...providerRoster] }),
+		},
+
 		// GET /api/health — lightweight liveness probe for the tmux bridge,
 		// reverse proxies, and the visual-verdict QA loop.
 		"/api/health": () =>
@@ -198,13 +274,16 @@ const server = Bun.serve({
 			POST: async (req) => {
 				let prompt = "";
 				let mode: RoutingMode = routingMode;
+				let roster: Set<string> = providerRoster;
 				try {
 					const body = (await req.json()) as {
 						prompt?: string;
 						mode?: unknown;
+						roster?: unknown;
 					};
 					prompt = (body.prompt ?? "").trim();
 					mode = readMode(req, body);
+					roster = readRoster(req, body);
 				} catch {
 					return new Response("invalid JSON body", { status: 400 });
 				}
@@ -219,10 +298,20 @@ const server = Bun.serve({
 					timestamp: new Date().toISOString(),
 					type: "session_started",
 					severity: "info",
-					payload: { prompt, source: "desktop", mode },
+					payload: {
+						prompt,
+						source: "desktop",
+						mode,
+						roster: [...roster],
+					},
 				};
 				await writeFile(ledgerPath, `${JSON.stringify(event)}\n`, "utf-8");
-				return Response.json({ sessionId, ledger: ledgerPath, mode });
+				return Response.json({
+					sessionId,
+					ledger: ledgerPath,
+					mode,
+					roster: [...roster],
+				});
 			},
 		},
 

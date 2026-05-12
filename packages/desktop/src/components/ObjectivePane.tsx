@@ -4,9 +4,15 @@ interface ObjectivePaneProps {
 	active: boolean;
 	onRun: (sessionId: string) => void;
 	mode: "gpu" | "cloud";
+	rosterCsv: string;
 }
 
-export function ObjectivePane({ active, onRun, mode }: ObjectivePaneProps) {
+export function ObjectivePane({
+	active,
+	onRun,
+	mode,
+	rosterCsv,
+}: ObjectivePaneProps) {
 	const [prompt, setPrompt] = useState("");
 	const [enhanced, setEnhanced] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -18,7 +24,11 @@ export function ObjectivePane({ active, onRun, mode }: ObjectivePaneProps) {
 		try {
 			const r = await fetch("/api/enhance", {
 				method: "POST",
-				headers: { "Content-Type": "application/json", "X-Apohara-Mode": mode },
+				headers: {
+				"Content-Type": "application/json",
+				"X-Apohara-Mode": mode,
+				"X-Apohara-Roster": rosterCsv,
+			},
 				body: JSON.stringify({ prompt, mode }),
 			});
 			const data = (await r.json()) as { enhanced: string; error?: string };
@@ -37,7 +47,11 @@ export function ObjectivePane({ active, onRun, mode }: ObjectivePaneProps) {
 		try {
 			const r = await fetch("/api/run", {
 				method: "POST",
-				headers: { "Content-Type": "application/json", "X-Apohara-Mode": mode },
+				headers: {
+				"Content-Type": "application/json",
+				"X-Apohara-Mode": mode,
+				"X-Apohara-Roster": rosterCsv,
+			},
 				body: JSON.stringify({ prompt: enhanced ?? prompt, mode }),
 			});
 			const data = (await r.json()) as { sessionId: string; error?: string };
