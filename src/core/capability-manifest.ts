@@ -280,6 +280,48 @@ export const CAPABILITY_MANIFEST: ProviderCapability[] = [
 		sources: ["community-eval"],
 		lastUpdated: "2026-05-02",
 	},
+	// CLI drivers (M013.3 partial). Scores match the underlying model
+	// families: claude-code-cli ≈ Claude Sonnet 4, codex-cli ≈ GPT-4 /
+	// gpt-4o, gemini-cli ≈ Gemini 2.x. Scores are deliberately a hair
+	// HIGHER than the API equivalents so capability-driven selection
+	// prefers the subscription path (no key, no TOS issue, no per-call
+	// cost) when both are available.
+	{
+		provider: "claude-code-cli",
+		scores: {
+			research: 0.78,
+			planning: 0.94,
+			codegen: 0.93,
+			debugging: 0.92,
+			verification: 0.92,
+		},
+		sources: ["anthropic-claude-sonnet-4", "subscription-no-key"],
+		lastUpdated: "2026-05-12",
+	},
+	{
+		provider: "codex-cli",
+		scores: {
+			research: 0.75,
+			planning: 0.9,
+			codegen: 0.91,
+			debugging: 0.88,
+			verification: 0.86,
+		},
+		sources: ["openai-gpt-4o", "subscription-no-key"],
+		lastUpdated: "2026-05-12",
+	},
+	{
+		provider: "gemini-cli",
+		scores: {
+			research: 0.82,
+			planning: 0.87,
+			codegen: 0.83,
+			debugging: 0.82,
+			verification: 0.9, // Stronger on audit/review per Gemini's RLHF tilt
+		},
+		sources: ["google-gemini-2.x", "subscription-no-key"],
+		lastUpdated: "2026-05-12",
+	},
 ];
 
 /**

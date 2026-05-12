@@ -28,8 +28,8 @@
 
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import type { LLMMessage, LLMResponse } from "./router";
 import type { ProviderId } from "../core/types";
+import type { LLMMessage, LLMResponse } from "./router";
 
 export interface CliDriverConfig {
 	/** ProviderId that this driver fulfills (e.g. `"claude-code-cli"`). */
@@ -67,7 +67,9 @@ export interface CliDriverConfig {
  */
 function stripAnsi(s: string): string {
 	// eslint-disable-next-line no-control-regex
-	return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "");
+	return s
+		.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+		.replace(/\x1b\][^\x07]*\x07/g, "");
 }
 
 /**
@@ -191,9 +193,7 @@ export async function callCliDriver(
 	const timeoutMs = cfg.timeoutMs ?? 120_000;
 
 	const child = spawn(cfg.binary, argv, {
-		stdio: cfg.stdin
-			? ["pipe", "pipe", "pipe"]
-			: ["ignore", "pipe", "pipe"],
+		stdio: cfg.stdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
 		env: { ...process.env, APOHARA_DRIVEN: "1" },
 	});
 

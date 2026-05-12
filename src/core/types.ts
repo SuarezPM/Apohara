@@ -279,6 +279,52 @@ export const MODELS: ModelCapability[] = [
 		contextWindow: 4096, // Server-side n_ctx limit; can be raised to 262144 model max
 		supportsVision: false,
 	},
+	// CLI-driver providers (Gap 2 / M013.3 partial). Each rides the
+	// user's existing subscription via the official agent CLI on PATH.
+	// We declare them with the underlying model family's known
+	// strengths so capability-based selection picks the right CLI per
+	// role.
+	{
+		id: "claude-code-cli",
+		name: "Claude Code CLI (Anthropic subscription)",
+		provider: "Anthropic (via @anthropic-ai/claude-code)",
+		bestFor: ["planning", "execution", "verification"],
+		strengths: [
+			"code generation",
+			"long context",
+			"tool use",
+			"subscription-based (no API key)",
+		],
+		contextWindow: 200000,
+		supportsVision: true,
+	},
+	{
+		id: "codex-cli",
+		name: "Codex CLI (OpenAI subscription)",
+		provider: "OpenAI (via @openai/codex)",
+		bestFor: ["execution", "planning"],
+		strengths: [
+			"code generation",
+			"fast iteration",
+			"subscription-based (no API key)",
+		],
+		contextWindow: 128000,
+		supportsVision: true,
+	},
+	{
+		id: "gemini-cli",
+		name: "Gemini CLI (Google subscription)",
+		provider: "Google (via @google/gemini-cli)",
+		bestFor: ["verification", "research", "planning"],
+		strengths: [
+			"verification / audit",
+			"web search integration",
+			"multimodal",
+			"subscription-based (no API key)",
+		],
+		contextWindow: 1000000,
+		supportsVision: true,
+	},
 ];
 
 // Get model capability by ID
@@ -294,12 +340,15 @@ export function getBestModelsForRole(role: TaskRole): ModelCapability[] {
 }
 
 // Role-to-provider mapping with intelligent selection
-// Uses Groq as primary (available via GROQ_API_KEY) with fallbacks
+// CLI-driver primary (M013.3 partial): claude-code-cli rides the user's
+// existing Claude Code subscription — no API key needed, no TOS-grey
+// scraping. Falls through to API-keyed providers if `claude` isn't
+// installed or returns an error.
 export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
-	research: "tavily", // Tavily for real-time web search/research
-	planning: "groq", // Groq for planning (fast, reliable, available)
-	execution: "groq", // Groq for execution (fast inference)
-	verification: "groq", // Groq for verification
+	research: "tavily", // Tavily for real-time web search/research (CLI drivers can't web-search)
+	planning: "claude-code-cli", // Subscription-based, fast, no key required
+	execution: "claude-code-cli", // Same — coder role
+	verification: "gemini-cli", // Cross-vendor by design: a different AI audits the diff
 };
 
 // Fallback provider order for each role.
@@ -308,6 +357,8 @@ export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 	research: [
 		"tavily",
+		"gemini-cli",
+		"claude-code-cli",
 		"gemini",
 		"gemini-api",
 		"anthropic-api",
@@ -316,6 +367,10 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"qwen3.6-plus",
 	],
 	planning: [
+		"claude-code-cli",
+		"codex-cli",
+		"gemini-cli",
+		"opencode-go",
 		"groq",
 		"anthropic-api",
 		"gemini-api",
@@ -328,9 +383,12 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"mistral",
 	],
 	execution: [
+		"claude-code-cli",
+		"codex-cli",
+		"gemini-cli",
+		"opencode-go",
 		"groq",
 		"anthropic-api",
-		"opencode-go",
 		"deepseek-v4",
 		"moonshot-k2.6",
 		"minimax-m2.7",
@@ -342,6 +400,10 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"carnice-9b-local", // Local GPU fallback — zero cost, offline-capable, last resort if cloud chain exhausted
 	],
 	verification: [
+		"gemini-cli", // Cross-vendor audit by design — different AI than the coder
+		"codex-cli",
+		"claude-code-cli",
+		"opencode-go",
 		"groq",
 		"anthropic-api",
 		"gemini-api",

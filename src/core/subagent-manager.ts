@@ -8,11 +8,11 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { InngestClient } from "../lib/inngest-client";
+import { ProviderRouter } from "../providers/router";
 import { type RouteResult, routeTask } from "./agent-router";
 import type { DecomposedTask } from "./decomposer";
 import { IndexerClient, type Memory } from "./indexer-client";
 import { EventLedger } from "./ledger";
-import { ProviderRouter } from "../providers/router";
 import type { ProviderId, TaskRole } from "./types";
 
 /**

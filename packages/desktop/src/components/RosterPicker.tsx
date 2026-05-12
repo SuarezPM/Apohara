@@ -90,7 +90,10 @@ const GROUPS: Group[] = [
 		label: "Local",
 		hint: "Optional GPU booster. Zero cloud tokens when the local server is up.",
 		providers: [
-			{ id: "carnice-9b-local", label: "Carnice-9b (llama-cpp + ContextForge)" },
+			{
+				id: "carnice-9b-local",
+				label: "Carnice-9b (llama-cpp + ContextForge)",
+			},
 		],
 	},
 ];
@@ -155,11 +158,7 @@ export function RosterPicker({ enabled, onChange }: Props) {
 				◈ {label}
 			</button>
 			{open && (
-				<div
-					className="roster-popover"
-					role="dialog"
-					aria-label="AI roster"
-				>
+				<div className="roster-popover" role="dialog" aria-label="AI roster">
 					<div className="roster-header">
 						<span className="roster-title">AI roster for this run</span>
 						<button
@@ -180,9 +179,7 @@ export function RosterPicker({ enabled, onChange }: Props) {
 						</button>
 					</div>
 					{GROUPS.map((group) => {
-						const groupAllOn = group.providers.every((p) =>
-							enabled.has(p.id),
-						);
+						const groupAllOn = group.providers.every((p) => enabled.has(p.id));
 						return (
 							<section className="roster-group" key={group.label}>
 								<header className="roster-group-header">
@@ -190,9 +187,7 @@ export function RosterPicker({ enabled, onChange }: Props) {
 										<input
 											type="checkbox"
 											checked={groupAllOn}
-											onChange={(e) =>
-												setGroupAll(group, e.target.checked)
-											}
+											onChange={(e) => setGroupAll(group, e.target.checked)}
 										/>
 										<span className="roster-group-name">{group.label}</span>
 									</label>

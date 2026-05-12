@@ -1,10 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { EventLog, EventSeverity } from "./types";
+import type { EventLog, EventSeverity, ProviderId, TaskRole } from "./types";
 
 export const LEDGER_VERSION = 1;
 export const GENESIS_PREV_HASH = "0".repeat(64);
+
+/**
+ * Canonical event type written by the agent router on every completed
+ * (or failed) provider call. Consumed by M013.3 capability-stats
+ * collection and surfaced in `apohara stats`.
+ */
+export const PROVIDER_OUTCOME_EVENT = "provider_outcome";
 
 type UnsealedEvent = Omit<EventLog, "prev_hash" | "hash">;
 
@@ -131,6 +138,42 @@ export class EventLedger {
 
 	public getFilePath(): string {
 		return this.filePath;
+	}
+
+	/**
+	 * Emit a `provider_outcome` event. This is the canonical signal the
+	 * Thompson-Sampling ranker consumes: every routed call ends with one
+	 * success=true or success=false entry. The hash chain is unchanged —
+	 * this is just `log(PROVIDER_OUTCOME_EVENT, …)` with a typed shape.
+	 */
+	public async logProviderOutcome(
+		provider: ProviderId,
+		role: TaskRole,
+		success: boolean,
+		options: {
+			taskId?: string;
+			errorReason?: string;
+			explored?: boolean;
+		} = {},
+	): Promise<void> {
+		await this.log(
+			PROVIDER_OUTCOME_EVENT,
+			{
+				message: `Provider ${provider} ${success ? "succeeded" : "failed"} on role ${role}`,
+				provider,
+				role,
+				success,
+				errorReason: options.errorReason,
+				explored: options.explored,
+			},
+			success ? "info" : "warning",
+			options.taskId,
+			{
+				role,
+				provider,
+				errorReason: options.errorReason,
+			},
+		);
 	}
 
 	public static async verify(filePath: string): Promise<VerifyResult> {

@@ -49,9 +49,7 @@ async function runStats(opts: {
 		...new Set<ProviderId>([...knownProviders, ...seenProviders]),
 	];
 
-	const roles: TaskType[] = opts.role
-		? [opts.role as TaskType]
-		: TASK_TYPES;
+	const roles: TaskType[] = opts.role ? [opts.role as TaskType] : TASK_TYPES;
 
 	if (opts.json) {
 		const result: Record<

@@ -14,10 +14,10 @@
 	--text-primary: #e2e8f0;
 	--text-muted: #64748b;
 
-	--font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
-		monospace;
-	--font-sans: "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
-		sans-serif;
+	--font-mono:
+		"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--font-sans:
+		"Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 * {

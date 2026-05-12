@@ -9,10 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	CapabilityStats,
-	sampleBeta,
-} from "../src/core/capability-stats";
+import { CapabilityStats, sampleBeta } from "../src/core/capability-stats";
 
 function mulberry32(seed: number): () => number {
 	let s = seed >>> 0;
@@ -149,12 +146,18 @@ describe("CapabilityStats.rank — M013.2 + M013.5 ranking", () => {
 			// Provider A: 80/100 wins. Provider B: 30/100. Provider C: 50/100.
 			// In a sampled ranking, A should be first more than half the
 			// time and never below ~70% of the trials.
-			for (let i = 0; i < 80; i++) await stats.update("a-prov" as never, "codegen", true);
-			for (let i = 0; i < 20; i++) await stats.update("a-prov" as never, "codegen", false);
-			for (let i = 0; i < 30; i++) await stats.update("b-prov" as never, "codegen", true);
-			for (let i = 0; i < 70; i++) await stats.update("b-prov" as never, "codegen", false);
-			for (let i = 0; i < 50; i++) await stats.update("c-prov" as never, "codegen", true);
-			for (let i = 0; i < 50; i++) await stats.update("c-prov" as never, "codegen", false);
+			for (let i = 0; i < 80; i++)
+				await stats.update("a-prov" as never, "codegen", true);
+			for (let i = 0; i < 20; i++)
+				await stats.update("a-prov" as never, "codegen", false);
+			for (let i = 0; i < 30; i++)
+				await stats.update("b-prov" as never, "codegen", true);
+			for (let i = 0; i < 70; i++)
+				await stats.update("b-prov" as never, "codegen", false);
+			for (let i = 0; i < 50; i++)
+				await stats.update("c-prov" as never, "codegen", true);
+			for (let i = 0; i < 50; i++)
+				await stats.update("c-prov" as never, "codegen", false);
 
 			const rng = mulberry32(123);
 			let aFirst = 0;

@@ -14,7 +14,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { callCliDriver, type CliDriverConfig } from "../src/providers/cli-driver";
+import {
+	type CliDriverConfig,
+	callCliDriver,
+} from "../src/providers/cli-driver";
 
 const FAKE_BINARY = `#!/usr/bin/env bash
 # A fake agent CLI. Behavior:
@@ -90,9 +93,7 @@ describe("callCliDriver", () => {
 			binary,
 			args: ({ prompt, system }) => {
 				// Mirror the real-claude pattern (--append-system-prompt).
-				const argv = system
-					? ["--system", system, prompt]
-					: [prompt];
+				const argv = system ? ["--system", system, prompt] : [prompt];
 				seen.push(argv);
 				return argv;
 			},

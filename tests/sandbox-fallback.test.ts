@@ -136,9 +136,7 @@ describe("Isolator — M014.5 security_violation events", () => {
 		});
 
 		const events = await ledgerEvents(isolator.getEventLedgerPath());
-		const violations = events.filter(
-			(e) => e.type === "security_violation",
-		);
+		const violations = events.filter((e) => e.type === "security_violation");
 		expect(violations.length).toBe(1);
 		expect(violations[0].payload.syscall).toBe(
 			"sandbox_unavailable_no_consent",

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ObjectivePane } from "./components/ObjectivePane.js";
-import { SwarmCanvas } from "./components/SwarmCanvas.js";
 import { CodeDiffPane } from "./components/CodeDiffPane.js";
 import { CostMeter } from "./components/CostMeter.js";
+import { ObjectivePane } from "./components/ObjectivePane.js";
 import {
 	ALL_PROVIDERS,
 	type ProviderId,
 	RosterPicker,
 } from "./components/RosterPicker.js";
+import { SwarmCanvas } from "./components/SwarmCanvas.js";
 import { useLedgerStream } from "./hooks/useLedgerStream.js";
 
 /**
@@ -33,9 +33,10 @@ function loadRoster(): Set<ProviderId> {
 		const arr = JSON.parse(raw) as unknown;
 		if (Array.isArray(arr)) {
 			return new Set(
-				arr.filter((x): x is ProviderId =>
-					typeof x === "string" &&
-					(ALL_PROVIDERS as readonly string[]).includes(x),
+				arr.filter(
+					(x): x is ProviderId =>
+						typeof x === "string" &&
+						(ALL_PROVIDERS as readonly string[]).includes(x),
 				),
 			);
 		}
