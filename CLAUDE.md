@@ -201,7 +201,7 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Clarity-Code** (3113 symbols, 6851 relationships, 169 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Apohara** (3113 symbols, 6851 relationships, 169 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -224,10 +224,10 @@ This project is indexed by GitNexus as **Clarity-Code** (3113 symbols, 6851 rela
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/Clarity-Code/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Clarity-Code/clusters` | All functional areas |
-| `gitnexus://repo/Clarity-Code/processes` | All execution flows |
-| `gitnexus://repo/Clarity-Code/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/Apohara/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/Apohara/clusters` | All functional areas |
+| `gitnexus://repo/Apohara/processes` | All execution flows |
+| `gitnexus://repo/Apohara/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
@@ -358,7 +358,7 @@ This file is living configuration.
 
 ## 10. Open Items
 
-**Naming reconciled (2026-05-11).** Project is Apohara everywhere. Old "Clarity-Code" references in the GitNexus index are residual from earlier sessions — reindex with `npx gitnexus analyze` to refresh.
+**Naming reconciled (2026-05-11).** Project is Apohara everywhere. Old "Apohara" references in the GitNexus index are residual from earlier sessions — reindex with `npx gitnexus analyze` to refresh.
 
 **Roadmap 2.0 active.** See `ROADMAP.md` for milestone plan: Phase 5 (test foundation reset) → M014 (sandbox real) → M017 (Tauri+React desktop) → M015 (ContextForge integration) → Phase 6 (v0.1 ship) → M013 (Thompson Sampling) → Phase 7 (v0.2 self-improvement).
 
