@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { LLMMessage } from "../providers/router";
 import { type ProviderId, ProviderRouter } from "../providers/router";
 import { ContextForgeClient } from "./contextforge-client";
@@ -5,7 +6,101 @@ import type { DecomposedTask } from "./decomposer";
 import { IsolationEngine, type IsolationResult } from "./isolation";
 import { EventLedger } from "./ledger";
 import { StateMachine } from "./state";
-import type { Task } from "./types";
+import {
+	TASK_ABORTED_STUCK_EVENT,
+	TASK_STUCK_EVENT,
+	type Task,
+} from "./types";
+
+/**
+ * M018.B — Stuck detector.
+ *
+ * Maintains a ring buffer of the last N action fingerprints emitted by an
+ * agent loop. When the ratio of duplicates in the saturated window exceeds
+ * DUPLICATE_THRESHOLD, the agent is considered "stuck" (looping). After
+ * `abortThreshold` consecutive stuck windows the detector signals abort.
+ *
+ * The detector itself is pure / I/O-free; ledger emission is the scheduler's
+ * responsibility. Reset whenever the agent advances (distinct action breaks
+ * the duplicate run, see `record`).
+ */
+export class StuckDetector {
+	public static readonly STUCK_WINDOW_SIZE = 6;
+	public static readonly DUPLICATE_THRESHOLD = 0.5;
+	public static readonly DEFAULT_ABORT_THRESHOLD = 3;
+
+	private window: string[] = [];
+	private consecutiveStuckCount = 0;
+	private stuckAlreadyEmitted = false;
+
+	public record(fingerprint: string): {
+		stuck: boolean;
+		shouldAbort: boolean;
+	} {
+		this.window.push(fingerprint);
+		if (this.window.length > StuckDetector.STUCK_WINDOW_SIZE) {
+			this.window.shift();
+		}
+
+		if (this.window.length < StuckDetector.STUCK_WINDOW_SIZE) {
+			return { stuck: false, shouldAbort: false };
+		}
+
+		const counts = new Map<string, number>();
+		for (const fp of this.window) {
+			counts.set(fp, (counts.get(fp) || 0) + 1);
+		}
+		const maxDuplicates = Math.max(...counts.values());
+		const ratio = maxDuplicates / StuckDetector.STUCK_WINDOW_SIZE;
+		const isStuck = ratio > StuckDetector.DUPLICATE_THRESHOLD;
+
+		if (!isStuck) {
+			// Agent escaped the saturated window — allow a fresh stuck
+			// emission next time the ratio trips. Consecutive count is
+			// preserved: only successful task completion (or explicit
+			// reset()) zeroes it, matching the spec's "N consecutive stuck
+			// events before abort" semantic.
+			this.stuckAlreadyEmitted = false;
+			return { stuck: false, shouldAbort: false };
+		}
+
+		const emit = !this.stuckAlreadyEmitted;
+		if (emit) {
+			this.consecutiveStuckCount += 1;
+			this.stuckAlreadyEmitted = true;
+		}
+		const shouldAbort = this.consecutiveStuckCount >= this.abortThreshold;
+		return { stuck: emit, shouldAbort };
+	}
+
+	public reset(): void {
+		this.window = [];
+		this.consecutiveStuckCount = 0;
+		this.stuckAlreadyEmitted = false;
+	}
+
+	public get abortThreshold(): number {
+		const raw = process.env.APOHARA_STUCK_ABORT_THRESHOLD;
+		const parsed = raw === undefined ? Number.NaN : Number(raw);
+		return Number.isFinite(parsed) && parsed > 0
+			? parsed
+			: StuckDetector.DEFAULT_ABORT_THRESHOLD;
+	}
+}
+
+/**
+ * Builds the action fingerprint consumed by `StuckDetector`. Args are
+ * hashed (SHA-256, 8-char hex prefix) so that prompts and secrets never
+ * leak into ledger events while still distinguishing distinct calls.
+ */
+export function actionFingerprint(
+	toolName: string,
+	toolArgs: unknown,
+): string {
+	const canonical = JSON.stringify(toolArgs ?? null);
+	const hash = createHash("sha256").update(canonical).digest("hex").slice(0, 8);
+	return `${toolName}:${hash}`;
+}
 
 export interface SchedulerConfig {
 	worktreePoolSize: number;
@@ -31,6 +126,9 @@ export class ParallelScheduler {
 	private worktrees: Map<string, string>; // worktreeId -> path
 	private activeTasks: Map<string, DecomposedTask>; // worktreeId -> task
 	private initialized = false;
+	// M018.B — one StuckDetector per active task so concurrent lanes don't
+	// pollute each other's ring buffers.
+	private stuckDetectors: Map<string, StuckDetector> = new Map();
 
 	constructor(
 		isolationEngine?: IsolationEngine,
@@ -135,6 +233,8 @@ export class ParallelScheduler {
 
 		// Add to active tasks first (before state update for atomicity)
 		this.activeTasks.set(worktreeId, task);
+		// M018.B — fresh StuckDetector per task; cleared on completion/abort.
+		this.stuckDetectors.set(task.id, new StuckDetector());
 
 		// M015.2 — fire-and-forget register_context. The sidecar uses this to
 		// index the task's prompt for later dedup/compression in optimize().
@@ -229,6 +329,57 @@ export class ParallelScheduler {
 
 		// Clear from active tasks
 		this.activeTasks.delete(worktreeId);
+		this.stuckDetectors.delete(taskId);
+	}
+
+	/**
+	 * M018.B — Agent-loop hook. Call once per intended tool action.
+	 * Builds a fingerprint, feeds it to the per-task StuckDetector, and
+	 * emits `task_stuck` / `task_aborted_stuck` ledger events as needed.
+	 * Returns `{ shouldAbort }` so the caller can break the run loop.
+	 */
+	public async recordAgentAction(
+		taskId: string,
+		toolName: string,
+		toolArgs: unknown,
+	): Promise<{ shouldAbort: boolean }> {
+		let detector = this.stuckDetectors.get(taskId);
+		if (!detector) {
+			detector = new StuckDetector();
+			this.stuckDetectors.set(taskId, detector);
+		}
+		const fingerprint = actionFingerprint(toolName, toolArgs);
+		const { stuck, shouldAbort } = detector.record(fingerprint);
+
+		if (stuck) {
+			await this.ledger.log(
+				TASK_STUCK_EVENT,
+				{
+					taskId,
+					fingerprint,
+					windowSize: StuckDetector.STUCK_WINDOW_SIZE,
+					duplicateThreshold: StuckDetector.DUPLICATE_THRESHOLD,
+				},
+				"warning",
+				taskId,
+			);
+		}
+
+		if (shouldAbort) {
+			await this.ledger.log(
+				TASK_ABORTED_STUCK_EVENT,
+				{
+					taskId,
+					fingerprint,
+					abortThreshold: detector.abortThreshold,
+				},
+				"error",
+				taskId,
+			);
+			this.stuckDetectors.delete(taskId);
+		}
+
+		return { shouldAbort };
 	}
 
 	/**
@@ -427,6 +578,7 @@ export class ParallelScheduler {
 		await Promise.all(destroyPromises);
 		this.worktrees.clear();
 		this.activeTasks.clear();
+		this.stuckDetectors.clear();
 		this.initialized = false;
 	}
 }
