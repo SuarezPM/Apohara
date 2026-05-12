@@ -4,7 +4,12 @@ import { dirname, join } from "node:path";
 import { getProviderKey } from "../core/config";
 import { ContextForgeClient } from "../core/contextforge-client";
 import type { EventLedger } from "../core/ledger";
-import type { EventLog, EventSeverity, ProviderId } from "../core/types";
+import type {
+	EventLog,
+	EventSeverity,
+	ProviderErrorClass,
+	ProviderId,
+} from "../core/types";
 import {
 	type CliDriverConfig,
 	callCliDriver,
@@ -167,10 +172,104 @@ const MODEL_NAMES: Record<ProviderId, string> = {
 	"gemini-cli": "gemini-via-cli",
 };
 
+/**
+ * Per-provider health record.
+ *
+ * M018.D — Pattern D extends this with auth-aware fallback fields:
+ *   - lastErrorClass: classification of the most recent failure
+ *   - needsAuthRefresh: set when AUTH_FAILURE detected (1h cooldown)
+ *   - retryAfterMs: parsed from Retry-After header on RATE_LIMIT
+ *   - cooldownExpiresAt: absolute timestamp when isOnCooldown should clear
+ */
 interface ProviderHealth {
 	failureCount: number;
 	lastFailureTime: number | null;
 	isOnCooldown: boolean;
+	lastErrorClass: ProviderErrorClass | null;
+	needsAuthRefresh: boolean;
+	retryAfterMs: number | null;
+	cooldownExpiresAt: number | null;
+}
+
+/**
+ * M018.D — Per-class cooldown defaults (in ms).
+ * Hard cap on AUTH_FAILURE = 1h is overridable via env (mitigation per plan §risks).
+ */
+const COOLDOWN_AUTH_MS = (() => {
+	const env = Number(process.env.APOHARA_COOLDOWN_AUTH_MS);
+	return Number.isFinite(env) && env > 0 ? env : 60 * 60 * 1000; // 1h
+})();
+const COOLDOWN_RATE_LIMIT_DEFAULT_MS = 5 * 60 * 1000; // 5min
+const COOLDOWN_NETWORK_MS = 30 * 1000; // 30s
+const COOLDOWN_MODEL_ERROR_MS = 60 * 1000; // 1min
+const NETWORK_MAX_RETRIES = 3;
+
+/**
+ * M018.D — Classifies an arbitrary thrown error into one of 4 provider error
+ * classes. Inspects HTTP status codes embedded in error messages (the
+ * provider call sites construct errors like "X API Error: 401 Unauthorized")
+ * plus common network error names. Defaults to MODEL_ERROR for anything that
+ * doesn't match a more specific class.
+ */
+export function classifyError(err: unknown): ProviderErrorClass {
+	if (!(err instanceof Error)) return "MODEL_ERROR";
+	const msg = err.message.toLowerCase();
+
+	// AUTH_FAILURE — 401/403 or "invalid api key" / "unauthorized" / "forbidden"
+	if (
+		/\b(401|403)\b/.test(msg) ||
+		msg.includes("unauthorized") ||
+		msg.includes("forbidden") ||
+		msg.includes("invalid api key") ||
+		msg.includes("invalid_api_key") ||
+		msg.includes("authentication") ||
+		msg.includes("api key not configured") ||
+		msg.includes("api key format")
+	) {
+		return "AUTH_FAILURE";
+	}
+
+	// RATE_LIMIT — 429 or "rate limit"
+	if (/\b429\b/.test(msg) || msg.includes("rate limit")) {
+		return "RATE_LIMIT";
+	}
+
+	// NETWORK — connection / timeout / fetch failures
+	if (
+		msg.includes("econnrefused") ||
+		msg.includes("enotfound") ||
+		msg.includes("etimedout") ||
+		msg.includes("econnaborted") ||
+		msg.includes("econnreset") ||
+		msg.includes("timeout") ||
+		msg.includes("network") ||
+		msg.includes("unreachable") ||
+		msg.includes("fetch failed")
+	) {
+		return "NETWORK";
+	}
+
+	// MODEL_ERROR — 5xx, malformed JSON, anything else
+	return "MODEL_ERROR";
+}
+
+/**
+ * M018.D — Extracts the Retry-After header value (in ms) from an Error whose
+ * message includes a "Retry-After: <n>" hint or a "retry after <n>s" phrase.
+ * Returns null if no parsable hint is found.
+ *
+ * Note: Provider call sites currently don't propagate Retry-After to the
+ * Error message. This helper is the hook point — when a future PR threads
+ * the header through, this parser will pick it up automatically.
+ */
+export function parseRetryAfterMs(err: unknown): number | null {
+	if (!(err instanceof Error)) return null;
+	const m =
+		err.message.match(/retry[- ]after[:= ]\s*(\d+(?:\.\d+)?)/i) ||
+		err.message.match(/retry after\s+(\d+(?:\.\d+)?)\s*s/i);
+	if (!m) return null;
+	const seconds = Number(m[1]);
+	return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
 }
 
 /**
@@ -291,6 +390,10 @@ export class ProviderRouter {
 				failureCount: 0,
 				lastFailureTime: null,
 				isOnCooldown: false,
+				lastErrorClass: null,
+				needsAuthRefresh: false,
+				retryAfterMs: null,
+				cooldownExpiresAt: null,
 			});
 		}
 
@@ -343,59 +446,119 @@ export class ProviderRouter {
 	}
 
 	/**
-	 * Records a failure for a provider and applies cooldown if threshold reached.
+	 * Records a failure for a provider and applies cooldown.
+	 *
+	 * M018.D — Pattern D: the cooldown duration now depends on the error
+	 * class (caller passes the classification or it's derived from the
+	 * error). The legacy `failureCount >= maxFailuresBeforeCooldown` gate
+	 * still applies for NETWORK / MODEL_ERROR; AUTH_FAILURE and RATE_LIMIT
+	 * cool down immediately on the first occurrence because retrying them
+	 * without external action (key rotation, header wait) cannot succeed.
 	 */
-	private async recordProviderFailure(provider: ProviderId): Promise<void> {
+	private async recordProviderFailure(
+		provider: ProviderId,
+		errorClass?: ProviderErrorClass,
+		retryAfterMs?: number | null,
+	): Promise<void> {
 		const health = this.providerHealth.get(provider);
 		if (!health) return;
 
 		health.failureCount++;
 		health.lastFailureTime = Date.now();
+		if (errorClass) health.lastErrorClass = errorClass;
+		health.retryAfterMs = retryAfterMs ?? null;
+		health.needsAuthRefresh = errorClass === "AUTH_FAILURE";
 
-		if (health.failureCount >= this.maxFailuresBeforeCooldown) {
-			health.isOnCooldown = true;
+		// Decide cooldown duration based on error class.
+		// AUTH_FAILURE and RATE_LIMIT cooldown immediately; NETWORK and
+		// MODEL_ERROR follow the legacy threshold so transient blips don't
+		// instantly lock out a provider.
+		let cooldownMs: number | null = null;
+		let immediate = false;
+		if (errorClass === "AUTH_FAILURE") {
+			cooldownMs = COOLDOWN_AUTH_MS;
+			immediate = true;
+		} else if (errorClass === "RATE_LIMIT") {
+			cooldownMs = retryAfterMs ?? COOLDOWN_RATE_LIMIT_DEFAULT_MS;
+			immediate = true;
+		} else if (errorClass === "NETWORK") {
+			if (health.failureCount >= NETWORK_MAX_RETRIES) {
+				cooldownMs = COOLDOWN_NETWORK_MS;
+			}
+		} else if (errorClass === "MODEL_ERROR") {
+			if (health.failureCount >= this.maxFailuresBeforeCooldown) {
+				cooldownMs = COOLDOWN_MODEL_ERROR_MS;
+			}
+			// MODEL_ERROR also surfaces a ledger warning every time (per plan §D).
 			await this.logEvent(
-				"fallback_cooldown",
+				"provider_model_error",
 				{
 					provider,
 					failureCount: health.failureCount,
-					cooldownMinutes: this.cooldownMinutes,
+					message: `Provider ${provider} returned a model-class error`,
 				},
 				"warning",
+				{ provider, errorClass },
+			);
+		} else if (health.failureCount >= this.maxFailuresBeforeCooldown) {
+			// Legacy path: no errorClass passed → use legacy cooldownMinutes.
+			cooldownMs = this.cooldownMinutes * 60 * 1000;
+		}
+
+		if (cooldownMs == null) return;
+
+		health.isOnCooldown = true;
+		health.cooldownExpiresAt = Date.now() + cooldownMs;
+
+		await this.logEvent(
+			"fallback_cooldown",
+			{
+				provider,
+				failureCount: health.failureCount,
+				cooldownMs,
+				errorClass: errorClass ?? null,
+				needsAuthRefresh: health.needsAuthRefresh,
+				immediate,
+			},
+			"warning",
+			{ provider, errorClass },
+		);
+
+		// Schedule cooldown removal.
+		setTimeout(() => {
+			const h = this.providerHealth.get(provider);
+			if (!h) return;
+			h.isOnCooldown = false;
+			h.cooldownExpiresAt = null;
+			h.failureCount = 0;
+			h.retryAfterMs = null;
+			// needsAuthRefresh persists across the cooldown expiry — only a
+			// success or explicit `apohara providers reset` clears it.
+			this.logEvent(
+				"cooldown_expired",
+				{
+					provider,
+					message: `Provider ${provider} cooldown expired, ready for requests`,
+				},
+				"info",
 				{ provider },
 			);
-
-			// Schedule cooldown removal
-			setTimeout(
-				() => {
-					const h = this.providerHealth.get(provider);
-					if (h) {
-						h.isOnCooldown = false;
-						h.failureCount = 0;
-						this.logEvent(
-							"cooldown_expired",
-							{
-								provider,
-								message: `Provider ${provider} cooldown expired, ready for requests`,
-							},
-							"info",
-							{ provider },
-						);
-					}
-				},
-				this.cooldownMinutes * 60 * 1000,
-			);
-		}
+		}, cooldownMs);
 	}
 
 	/**
 	 * Records a success for a provider (resets failure count).
+	 * M018.D — also clears auth-refresh flag, retry-after, and last error class.
 	 */
 	private recordProviderSuccess(provider: ProviderId): void {
 		const health = this.providerHealth.get(provider);
 		if (health) {
 			health.failureCount = 0;
 			health.isOnCooldown = false;
+			health.cooldownExpiresAt = null;
+			health.needsAuthRefresh = false;
+			health.retryAfterMs = null;
+			health.lastErrorClass = null;
 		}
 	}
 
@@ -467,6 +630,35 @@ export class ProviderRouter {
 	 */
 	public getFailureCount(provider: ProviderId): number {
 		return this.providerHealth.get(provider)?.failureCount ?? 0;
+	}
+
+	/**
+	 * M018.D — Returns a snapshot of a provider's full health record.
+	 * Used by `apohara stats` to render the `last_err` column and by the
+	 * future auth-refresh UI to surface `needsAuthRefresh`.
+	 *
+	 * Returns null when the provider is unknown to this router instance.
+	 */
+	public getProviderHealth(provider: ProviderId): {
+		failureCount: number;
+		lastFailureTime: number | null;
+		isOnCooldown: boolean;
+		lastErrorClass: ProviderErrorClass | null;
+		needsAuthRefresh: boolean;
+		retryAfterMs: number | null;
+		cooldownExpiresAt: number | null;
+	} | null {
+		const h = this.providerHealth.get(provider);
+		if (!h) return null;
+		return {
+			failureCount: h.failureCount,
+			lastFailureTime: h.lastFailureTime,
+			isOnCooldown: h.isOnCooldown,
+			lastErrorClass: h.lastErrorClass,
+			needsAuthRefresh: h.needsAuthRefresh,
+			retryAfterMs: h.retryAfterMs,
+			cooldownExpiresAt: h.cooldownExpiresAt,
+		};
 	}
 
 	/**
@@ -558,9 +750,17 @@ export class ProviderRouter {
 			} catch (error) {
 				lastError = error;
 				const isRetryable = this.isRetryableError(error);
+				// M018.D — classify the error and feed it into the cooldown
+				// machinery so the right policy applies (auth vs rate vs net vs model).
+				const errorClass = classifyError(error);
+				const retryAfterMs = parseRetryAfterMs(error);
 
 				// Always record the failure for health tracking
-				await this.recordProviderFailure(currentProvider);
+				await this.recordProviderFailure(
+					currentProvider,
+					errorClass,
+					retryAfterMs,
+				);
 
 				// Only try fallback on attempt 0 if error is retryable (429, timeout, network)
 				// For non-retryable errors (500, 401), we record but don't fallback
@@ -571,10 +771,11 @@ export class ProviderRouter {
 						{
 							message: `Provider ${currentProvider} failed with retryable error, trying next provider`,
 							fromProvider: currentProvider,
+							errorClass,
 							error: error instanceof Error ? error.message : String(error),
 						},
 						"warning",
-						{ provider: currentProvider },
+						{ provider: currentProvider, errorClass },
 					);
 
 					// Get next available provider
