@@ -205,12 +205,12 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 
 | # | Task | Verify |
 |---|------|--------|
-| 6.1 | Binary <15 MB for Linux (x64/ARM), macOS (ARM/x86), Windows (x64). | `curl -L install.apohara.dev \| sh` lands working binary |
-| 6.2 | **90-second viral demo video**: split-screen of 5 providers + DAG + verification mesh + green PR. | Video published, ready for HN/Twitter |
-| 6.3 | README rewrite + ARCHITECTURE.md + landing page on github.io | Pages live, README has hero diagram + demo video |
-| 6.4 | HN launch + Twitter thread + arXiv link to INV-15 paper | Coordinated drop |
-| 6.5 | 50 beta users onboarded via Discord | Discord live with channels |
-| 6.6 | Release `v0.1.0` on GitHub, Homebrew formula, `curl \| sh` script | `brew install suarezpm/tap/apohara` works |
+| 6.1 | Binary <15 MB for Linux (x64/ARM), macOS (ARM/x86), Windows (x64). | 🟡 wiring done 2026-05-12 — `.github/workflows/desktop-release.yml` matrix builds for ubuntu/macos/windows on `v*` tag pushes and on PRs touching `packages/desktop/`. Linux artifact verified 5.6 MB. macOS + Windows verification gated on first run on hosted runners. |
+| 6.2 | **90-second viral demo video**: split-screen of 5 providers + DAG + verification mesh + green PR. | Video published, ready for HN/Twitter (content work, not autonomous) |
+| 6.3 | README rewrite + ARCHITECTURE.md + landing page on github.io | ✅ 2026-05-12 — `README.md` rewritten with hero, status table, three use cases, sandbox + ContextForge sections. `ARCHITECTURE.md` (new) carries the v2.0 diagram, end-to-end request flow, per-package responsibility map, build/distribution table, test architecture. Landing page deferred. |
+| 6.4 | HN launch + Twitter thread + arXiv link to INV-15 paper | Coordinated drop (content work, not autonomous) |
+| 6.5 | 50 beta users onboarded via Discord | Discord live with channels (external) |
+| 6.6 | Release `v0.1.0` on GitHub, Homebrew formula, `curl \| sh` script | 🟡 templates 2026-05-12 — `scripts/install.sh` (Linux/macOS, detects arch, falls back to ~/.local, handles latest-tag resolution) and `packaging/homebrew/apohara.rb` skeleton committed. Final tag-time work: render the formula with real SHA256s, sign + publish. |
 
 **Duration:** 1–2 sessions release engineering after M015.
 
