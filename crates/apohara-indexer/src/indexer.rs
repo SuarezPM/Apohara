@@ -511,15 +511,19 @@ mod tests {
         let different_content = "User prefers camelCase for all variable names";
         let different_embedding = indexer.embed(different_content).unwrap();
 
-        // Cosine similarity should be high but not identical
-        let dot_product: f32 = embedding.iter().zip(different_embedding.iter()).map(|(a, b)| a * b).sum();
-        assert!(dot_product > 0.5, "Similar content should have high cosine similarity");
-        assert!(dot_product < 0.99, "Different content should not be identical");
+        // Semantic-similarity assertions only hold for the real BERT model. The mock
+        // produces hash-keyed random vectors with no semantic structure.
+        if !crate::embeddings::EmbeddingModel::should_use_mock() {
+            // Cosine similarity should be high but not identical
+            let dot_product: f32 = embedding.iter().zip(different_embedding.iter()).map(|(a, b)| a * b).sum();
+            assert!(dot_product > 0.5, "Similar content should have high cosine similarity");
+            assert!(dot_product < 0.99, "Different content should not be identical");
 
-        // Test that similar content produces very similar embeddings
-        let similar_content = "User prefers snake_case for variable naming";
-        let similar_embedding = indexer.embed(similar_content).unwrap();
-        let similar_dot: f32 = embedding.iter().zip(similar_embedding.iter()).map(|(a, b)| a * b).sum();
-        assert!(similar_dot > 0.9, "Semantically similar content should have very high cosine similarity");
+            // Test that similar content produces very similar embeddings
+            let similar_content = "User prefers snake_case for variable naming";
+            let similar_embedding = indexer.embed(similar_content).unwrap();
+            let similar_dot: f32 = embedding.iter().zip(similar_embedding.iter()).map(|(a, b)| a * b).sum();
+            assert!(similar_dot > 0.9, "Semantically similar content should have very high cosine similarity");
+        }
     }
 }

@@ -2,10 +2,18 @@
 //!
 //! Tests the full flow: store_memory -> search_memory
 
-use apohara_indexer::{Indexer, MemoryType};
+use apohara_indexer::{embeddings::EmbeddingModel, Indexer, MemoryType};
 use serial_test::serial;
 use std::str::FromStr;
 use tempfile::TempDir;
+
+/// True when running with mock embeddings (no semantic similarity preserved).
+/// Tests gate their semantic-similarity assertions on `!mock_mode()` so they
+/// pass under `APOHARA_MOCK_EMBEDDINGS=1` while still verifying the store/search
+/// round-trip works structurally.
+fn mock_mode() -> bool {
+    EmbeddingModel::should_use_mock()
+}
 
 /// Test full memory lifecycle: store and retrieve
 #[test]
@@ -34,9 +42,11 @@ fn test_memory_integration_basic() {
         .expect("Failed to search memories");
 
     assert!(!results.is_empty(), "Should find at least one memory");
-    // The stored memory should be in the results (may not be first if other memories exist)
-    let found = results.iter().any(|(m, score)| m.id == memory_id && *score > 0.5);
-    assert!(found, "Should find our stored memory with reasonable similarity");
+    if !mock_mode() {
+        // The stored memory should be in the results (may not be first if other memories exist)
+        let found = results.iter().any(|(m, score)| m.id == memory_id && *score > 0.5);
+        assert!(found, "Should find our stored memory with reasonable similarity");
+    }
 }
 
 /// Test that different memory types can coexist
@@ -69,26 +79,32 @@ fn test_memory_integration_multiple_types() {
         .store_memory("correction", "Use async/await instead of callbacks")
         .expect("Failed to store correction");
 
-    // Search for architecture-related content
-    let results = indexer
-        .search_memories("web application design patterns", 3)
-        .expect("Failed to search");
+    // Semantic search assertions only meaningful with real BERT
+    if !mock_mode() {
+        // Search for architecture-related content
+        let results = indexer
+            .search_memories("web application design patterns", 3)
+            .expect("Failed to search");
+        assert!(
+            results.iter().any(|(m, _)| m.id == arch_id),
+            "Should find architecture memory"
+        );
 
-    // Should find the architecture memory
-    assert!(
-        results.iter().any(|(m, _)| m.id == arch_id),
-        "Should find architecture memory"
-    );
-
-    // Search for error-related content
-    let results = indexer
-        .search_memories("database error handling", 3)
-        .expect("Failed to search");
-
-    assert!(
-        results.iter().any(|(m, _)| m.id == error_id),
-        "Should find past_error memory"
-    );
+        // Search for error-related content
+        let results = indexer
+            .search_memories("database error handling", 3)
+            .expect("Failed to search");
+        assert!(
+            results.iter().any(|(m, _)| m.id == error_id),
+            "Should find past_error memory"
+        );
+    } else {
+        // Under mock, just verify search returns SOMETHING (no semantic guarantees)
+        let results = indexer.search_memories("anything", 3).expect("Failed to search");
+        assert!(!results.is_empty(), "Search should return at least one stored memory");
+        let _ = arch_id;
+        let _ = error_id;
+    }
 
     // Suppress unused variable warning
     let _ = pref_id;
@@ -113,20 +129,20 @@ fn test_memory_embedding_consistency() {
         .store_memory("correction", content)
         .expect("Failed to store memory");
 
-    // Search with semantically similar but textually different query
-    let results = indexer
-        .search_memories("Input validation is important", 3)
-        .expect("Failed to search");
-
-    // Should still find the memory due to semantic similarity
-    assert!(
-        results.iter().any(|(m, _)| m.id == memory_id),
-        "Should find memory with semantically similar query"
-    );
-
-    // The similarity might not be as high since the wording is different
-    let found = results.iter().find(|(m, _)| m.id == memory_id).unwrap();
-    assert!(found.1 > 0.5, "Similarity should be moderate to high for related concepts");
+    if !mock_mode() {
+        // Search with semantically similar but textually different query
+        let results = indexer
+            .search_memories("Input validation is important", 3)
+            .expect("Failed to search");
+        assert!(
+            results.iter().any(|(m, _)| m.id == memory_id),
+            "Should find memory with semantically similar query"
+        );
+        let found = results.iter().find(|(m, _)| m.id == memory_id).unwrap();
+        assert!(found.1 > 0.5, "Similarity should be moderate to high for related concepts");
+    } else {
+        let _ = memory_id;
+    }
 }
 
 /// Test search relevance ordering
@@ -160,9 +176,13 @@ fn test_memory_search_relevance() {
         .search_memories("distributed systems and microservices", 2)
         .expect("Failed to search");
 
-    // The architecture memory should be first
-    assert_eq!(results[0].0.id, arch_id, "Most relevant result should be first");
-    assert!(results[0].1 > 0.6, "Top result should have high similarity");
+    if !mock_mode() {
+        // The architecture memory should be first
+        assert_eq!(results[0].0.id, arch_id, "Most relevant result should be first");
+        assert!(results[0].1 > 0.6, "Top result should have high similarity");
+    } else {
+        let _ = arch_id;
+    }
 }
 
 /// Test top_k limiting

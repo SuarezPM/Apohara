@@ -33,6 +33,13 @@ tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3"
 uuid = { version = "1", features = ["v4"] }
 
+[features]
+# Force mock embeddings (no BERT load). Useful for CI and integration tests that
+# don't need real semantic similarity but exercise the indexer code paths.
+# At runtime, env var APOHARA_MOCK_EMBEDDINGS=1 has the same effect without
+# rebuilding.
+mock-embeddings = []
+
 [dev-dependencies]
 tempfile = "3"
 serial_test = "3"
