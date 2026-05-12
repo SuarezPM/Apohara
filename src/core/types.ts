@@ -445,6 +445,27 @@ export type ProviderErrorClass =
 	| "NETWORK" // ECONNREFUSED / timeout / fetch failures — short cooldown, fast retry
 	| "MODEL_ERROR"; // 5xx / malformed JSON — short cooldown, ledger warning
 
+// M018.E — Pattern E: drift reconciliation. Events logged when the agent's
+// actual action diverges from the planner's expected next step. Recoverable
+// drift continues the run; aborting drift triggers scheduler abort.
+export const DRIFT_RECOVERED_EVENT = "drift_recovered";
+export const DRIFT_ABORTED_EVENT = "drift_aborted";
+
+export type DriftKind =
+	| "tool_args_diff" // Same tool, different args than expected
+	| "off_plan_tool" // Different tool than planner expected
+	| "file_scope_violation" // Mutation outside expected file scope
+	| "expected_no_op" // Planner expected no-op but agent acted
+	| "unexpected_completion"; // Agent declared done off-step
+
+export interface DriftEvent {
+	kind: DriftKind;
+	expected: unknown;
+	observed: unknown;
+	severity: EventSeverity;
+	timestamp: number;
+}
+
 export interface EventLog {
 	id: string;
 	timestamp: string; // ISO string
