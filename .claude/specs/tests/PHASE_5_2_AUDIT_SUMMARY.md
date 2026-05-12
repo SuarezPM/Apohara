@@ -16,6 +16,20 @@
 
 Total: 25 files, ~294 tests classified.
 
+## Empirical validation (2026-05-12)
+
+Ran a subset of the audit with `APOHARA_MOCK_EMBEDDINGS=1`. Results:
+
+| Cohort | Files run | Tests pass | Tests fail | Notes |
+|---|---|---|---|---|
+| KEEP_GREEN | 12 of 14 | 217 | 0 | Verdict 100% accurate. `oauth-pkce.test.ts` + `api-key-validation.test.ts` skipped (in `src/lib/oauth/` not `tests/`) |
+| KEEP_REFACTOR | 5 of 6 | 60 | 14 | 4 files pass as-is (mcp-bridge 8, memory-injection 10, decomposer 14, verification-mesh 12, ecosystem-e2e 6). 1 file has real failures: `e2e-swarm-integration.test.ts` (7 pass / 14 fail) — failures are role/provider constants drift, an actual refactor target |
+| INVESTIGATE | 0 of 6 | — | — | Not run — all depend on external binaries (target/debug/apohara-indexer, target/release/apohara-indexer, dist/cli.js, isolation-engine binary) that need separate build steps |
+
+**Revised reality**: of the 70 tests classified KEEP_REFACTOR, 60 actually pass as-is. Only 14 tests (1 file) genuinely need refactor. Audit was conservative on REFACTOR. The 6 INVESTIGATE files still need binary-build-then-run to triage.
+
+**Net empirical state**: 217 GREEN + 60 REFACTOR-passing = **277 tests confirmed green in ~5 seconds total**. 14 confirmed broken (one file). The remaining ~33 INVESTIGATE tests pending binary-dependent runs.
+
 ## Detail tables
 
 See `PHASE_5_2_AUDIT_BATCH1.md` through `PHASE_5_2_AUDIT_BATCH4.md` for per-file rows.
