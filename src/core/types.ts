@@ -427,6 +427,16 @@ export interface Task {
 
 export type EventSeverity = "info" | "warning" | "error";
 
+/**
+ * M018.B — Stuck-detector ledger events emitted by `ParallelScheduler`'s
+ * StuckDetector (see scheduler.ts). `task_stuck` is severity "warning"
+ * and is emitted at most once per stuck-window saturation. `task_aborted_stuck`
+ * is severity "error" and fires when N consecutive stuck windows trip the
+ * abort threshold (default 3, env-overridable via APOHARA_STUCK_ABORT_THRESHOLD).
+ */
+export const TASK_STUCK_EVENT = "task_stuck";
+export const TASK_ABORTED_STUCK_EVENT = "task_aborted_stuck";
+
 export interface EventLog {
 	id: string;
 	timestamp: string; // ISO string
