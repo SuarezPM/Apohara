@@ -27,6 +27,9 @@ target/
 vendor/
 *.log
 coverage/
+
+# ── Tauri auto-generated schemas + capability bindings ──
+packages/desktop/src-tauri/gen/
 .cache/
 tmp/
 .gitnexus

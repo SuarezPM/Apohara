@@ -3,6 +3,7 @@ members = [
     "isolation-engine",
     "crates/apohara-sandbox",
     "crates/apohara-indexer",
+    "packages/desktop/src-tauri",
 ]
 resolver = "3"
 

@@ -6,7 +6,7 @@
   "description": "Apohara visual orchestrator — Tauri v2 + React 19 + Bun.serve + SSE",
   "scripts": {
     "dev": "bun --hot src/server.ts",
-    "build": "bun build src/main.tsx --target browser --outdir dist --splitting --minify",
+    "build": "bun run scripts/build.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
