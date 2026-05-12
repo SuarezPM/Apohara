@@ -280,7 +280,9 @@ export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
 	verification: "groq", // Groq for verification
 };
 
-// Fallback provider order for each role (primary + fallbacks)
+// Fallback provider order for each role.
+// INVARIANT: fallback[0] === ROLE_TO_PROVIDER[role] (primary leads the chain).
+// Verified in tests/e2e-swarm-integration.test.ts "should have fallback provider chains".
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 	research: [
 		"tavily",
@@ -292,9 +294,9 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"qwen3.6-plus",
 	],
 	planning: [
+		"groq",
 		"anthropic-api",
 		"gemini-api",
-		"groq",
 		"moonshot-k2.6",
 		"qwen3.6-plus",
 		"moonshot-k2.5",
@@ -304,9 +306,9 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"mistral",
 	],
 	execution: [
+		"groq",
 		"anthropic-api",
 		"opencode-go",
-		"groq",
 		"deepseek-v4",
 		"moonshot-k2.6",
 		"minimax-m2.7",
@@ -317,9 +319,9 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"openai",
 	],
 	verification: [
+		"groq",
 		"anthropic-api",
 		"gemini-api",
-		"groq",
 		"deepseek-v4",
 		"moonshot-k2.6",
 		"kiro-ai",
