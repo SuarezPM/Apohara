@@ -6,6 +6,8 @@
 
 use crate::permission::PermissionTier;
 
+pub mod syscalls;
+
 #[cfg(target_os = "linux")]
 pub mod linux;
 
