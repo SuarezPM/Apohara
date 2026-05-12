@@ -54,10 +54,18 @@ export class Isolator {
 	private sandboxBinaryPath: string;
 	private ledger: EventLedger;
 
-	constructor(
-		sandboxBinaryPath = "crates/apohara-sandbox/target/release/apohara-sandbox",
-	) {
-		this.sandboxBinaryPath = sandboxBinaryPath;
+	constructor(sandboxBinaryPath?: string) {
+		// Prefer an explicit path; otherwise auto-resolve (release first, then debug)
+		// from the workspace target dir.
+		if (sandboxBinaryPath) {
+			this.sandboxBinaryPath = sandboxBinaryPath;
+		} else {
+			const release = "target/release/apohara-sandbox";
+			const debug = "target/debug/apohara-sandbox";
+			// Synchronous existsSync would simplify, but Bun.file().exists() is async.
+			// Default to release; exec() will fall back to debug if release missing.
+			this.sandboxBinaryPath = release;
+		}
 		this.ledger = new EventLedger();
 	}
 
@@ -78,37 +86,50 @@ export class Isolator {
 
 		const startTime = Date.now();
 
-		// Check binary exists before attempting to spawn
-		const binaryFile = Bun.file(this.sandboxBinaryPath);
-		if (!(await binaryFile.exists())) {
-			return {
-				exitCode: 1,
-				stdout: "",
-				stderr: `Sandbox binary not found at: ${this.sandboxBinaryPath}. Please run 'cargo build --release' in crates/apohara-sandbox.`,
-				violations: [],
-				durationMs: 0,
-				error: "binary_not_found",
-			};
+		// Resolve the binary path with debug fallback
+		let resolvedPath = this.sandboxBinaryPath;
+		if (!(await Bun.file(resolvedPath).exists())) {
+			const debugPath = resolvedPath.replace("/release/", "/debug/");
+			if (debugPath !== resolvedPath && (await Bun.file(debugPath).exists())) {
+				resolvedPath = debugPath;
+			} else {
+				return {
+					exitCode: 1,
+					stdout: "",
+					stderr: `Sandbox binary not found at: ${this.sandboxBinaryPath}. Build with 'cargo build -p apohara-sandbox' (debug) or 'cargo build -p apohara-sandbox --release'.`,
+					violations: [],
+					durationMs: 0,
+					error: "binary_not_found",
+				};
+			}
 		}
 
+		// Parse the command into argv. We accept either a single string (shell-style)
+		// or pre-split arguments; for now we split on whitespace which is the existing
+		// contract from the prior implementation.
+		const commandArgv = command.trim().split(/\s+/);
+
 		try {
-			// Invoke the Rust sandbox binary
-			const proc = spawn(
-				[
-					this.sandboxBinaryPath,
-					"exec",
-					"--workdir",
-					workdir,
-					"--command",
-					command,
-					"--permission",
-					permission,
-				],
-				{
-					stdout: "pipe",
-					stderr: "pipe",
-				},
-			);
+			// New CLI signature: apohara-sandbox --workdir X --permission Y --timeout-ms N -- CMD ARGS
+			const args = [
+				resolvedPath,
+				"--workdir",
+				workdir,
+				"--permission",
+				permission,
+			];
+			if (timeout) {
+				args.push("--timeout-ms", String(timeout));
+			}
+			if (taskId) {
+				args.push("--task-id", taskId);
+			}
+			args.push("--", ...commandArgv);
+
+			const proc = spawn(args, {
+				stdout: "pipe",
+				stderr: "pipe",
+			});
 
 			// Enforce timeout manually since SpawnOptions doesn't carry a timeout field
 			const timeoutHandle = timeout
@@ -126,24 +147,28 @@ export class Isolator {
 
 			const durationMs = Date.now() - startTime;
 
-			if (exitCode === 0 && stdout.trim()) {
-				// Parse JSON result from Rust binary
+			// The Rust binary always prints a JSON result on stdout, even on non-zero
+			// exit codes (it carries the child exit in result.exit_code separately).
+			// Exit code 99 from the binary itself means "sandbox unavailable" — surface
+			// it as a clear error rather than treating it as a child execution failure.
+			if (stdout.trim()) {
 				try {
 					const result = JSON.parse(stdout);
 					const execResult: SandboxExecResult = {
-						exitCode: result.exit_code,
-						stdout: result.stdout,
-						stderr: result.stderr,
-						violations: result.sandbox_violations || [],
-						durationMs: result.duration_ms || durationMs,
-						error: result.error,
+						exitCode: result.exit_code ?? exitCode,
+						stdout: result.stdout ?? "",
+						stderr: result.stderr ?? "",
+						violations: result.violations ?? [],
+						durationMs: result.duration_ms ?? durationMs,
+						error:
+							result.exit_code === 99 || result.violations?.includes("unavailable")
+								? "sandbox_unavailable"
+								: undefined,
 					};
 
-					// Log to event ledger
 					await this.logExecution(taskId, execResult, permission);
-
 					return execResult;
-				} catch (e) {
+				} catch {
 					return {
 						exitCode: 1,
 						stdout: "",
@@ -154,11 +179,10 @@ export class Isolator {
 					};
 				}
 			} else {
-				// Binary execution failed
 				return {
-					exitCode: exitCode,
+					exitCode,
 					stdout: "",
-					stderr: stderr || "Sandbox binary failed",
+					stderr: stderr || "Sandbox binary produced no output",
 					violations: [],
 					durationMs,
 					error: "sandbox_error",
