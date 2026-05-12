@@ -31,6 +31,29 @@ function getRouter(): ProviderRouter {
 	return sharedRouter;
 }
 
+// Routing-mode preference shared across endpoints. "gpu" prefers
+// Carnice/ContextForge; "cloud" prefers a configured cloud provider. The mode
+// can be updated via POST /api/mode and is also accepted per-request via the
+// `X-Apohara-Mode` header or the `mode` body field (M017.6 / M015.5).
+type RoutingMode = "gpu" | "cloud";
+let routingMode: RoutingMode =
+	(process.env.APOHARA_ROUTING_MODE as RoutingMode) ?? "gpu";
+
+function pickEnhanceProvider(modeOverride?: RoutingMode): string {
+	const explicit = process.env.APOHARA_ENHANCE_PROVIDER;
+	if (explicit) return explicit;
+	const mode = modeOverride ?? routingMode;
+	if (mode === "gpu") return "carnice-9b-local";
+	return process.env.APOHARA_CLOUD_PROVIDER ?? "opencode-go";
+}
+
+function readMode(req: Request, body: { mode?: unknown }): RoutingMode {
+	const header = req.headers.get("x-apohara-mode");
+	if (header === "gpu" || header === "cloud") return header;
+	if (body.mode === "gpu" || body.mode === "cloud") return body.mode;
+	return routingMode;
+}
+
 /**
  * Read every new byte appended to `filePath` since `offset` and return
  * `{ lines, nextOffset }` where `lines` is the newline-split tail (last
@@ -79,9 +102,14 @@ const server = Bun.serve({
 		"/api/enhance": {
 			POST: async (req) => {
 				let prompt = "";
+				let bodyMode: RoutingMode | undefined;
 				try {
-					const body = (await req.json()) as { prompt?: string };
+					const body = (await req.json()) as {
+						prompt?: string;
+						mode?: unknown;
+					};
 					prompt = (body.prompt ?? "").trim();
+					bodyMode = readMode(req, body);
 				} catch {
 					return new Response("invalid JSON body", { status: 400 });
 				}
@@ -100,17 +128,7 @@ const server = Bun.serve({
 					{ role: "user", content: prompt },
 				];
 
-				// Prefer the local Carnice GPU server (M015.1) for the rewrite —
-				// it's free, fast, and always-on when the user has the sidecar
-				// running. The override is read once at request time so users
-				// without local GPU can set APOHARA_ENHANCE_PROVIDER to any
-				// cloud provider configured with an API key.
-				const provider = (process.env.APOHARA_ENHANCE_PROVIDER ??
-					"carnice-9b-local") as Parameters<
-					typeof getRouter
-				> extends never[]
-					? string
-					: string;
+				const provider = pickEnhanceProvider(bodyMode);
 
 				try {
 					const result = await getRouter().completion({
@@ -124,6 +142,7 @@ const server = Bun.serve({
 						provider: result.provider,
 						model: result.model,
 						usage: result.usage,
+						mode: bodyMode ?? routingMode,
 					});
 				} catch (err) {
 					return Response.json(
@@ -138,6 +157,38 @@ const server = Bun.serve({
 			},
 		},
 
+		// POST /api/mode — update the server's preferred routing mode (M015.5).
+		// The server holds the canonical setting; clients sync via localStorage
+		// for instant UI feedback. Body: `{ mode: "gpu" | "cloud" }`.
+		"/api/mode": {
+			POST: async (req) => {
+				let body: { mode?: unknown } = {};
+				try {
+					body = (await req.json()) as { mode?: unknown };
+				} catch {
+					return new Response("invalid JSON body", { status: 400 });
+				}
+				if (body.mode !== "gpu" && body.mode !== "cloud") {
+					return new Response("mode must be 'gpu' or 'cloud'", {
+						status: 400,
+					});
+				}
+				routingMode = body.mode;
+				return Response.json({ mode: routingMode });
+			},
+			GET: () => Response.json({ mode: routingMode }),
+		},
+
+		// GET /api/health — lightweight liveness probe for the tmux bridge,
+		// reverse proxies, and the visual-verdict QA loop.
+		"/api/health": () =>
+			Response.json({
+				ok: true,
+				port: PORT,
+				mode: routingMode,
+				eventsDir: EVENTS_DIR,
+			}),
+
 		// POST /api/run — minimal session-start hook (M017.2). The full
 		// scheduler spawn lands in M017.3+ when the UI can drive it. For
 		// now we create the session's ledger file + write a
@@ -146,9 +197,14 @@ const server = Bun.serve({
 		"/api/run": {
 			POST: async (req) => {
 				let prompt = "";
+				let mode: RoutingMode = routingMode;
 				try {
-					const body = (await req.json()) as { prompt?: string };
+					const body = (await req.json()) as {
+						prompt?: string;
+						mode?: unknown;
+					};
 					prompt = (body.prompt ?? "").trim();
+					mode = readMode(req, body);
 				} catch {
 					return new Response("invalid JSON body", { status: 400 });
 				}
@@ -163,10 +219,10 @@ const server = Bun.serve({
 					timestamp: new Date().toISOString(),
 					type: "session_started",
 					severity: "info",
-					payload: { prompt, source: "desktop" },
+					payload: { prompt, source: "desktop", mode },
 				};
 				await writeFile(ledgerPath, `${JSON.stringify(event)}\n`, "utf-8");
-				return Response.json({ sessionId, ledger: ledgerPath });
+				return Response.json({ sessionId, ledger: ledgerPath, mode });
 			},
 		},
 

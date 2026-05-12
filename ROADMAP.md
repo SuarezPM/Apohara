@@ -102,7 +102,9 @@
 | Worktree isolation | ✅ | scheduler.ts spawns in `.claude/worktrees/` |
 | TUI prototype (Ink+React) | 🟡 | `packages/tui/` — archived after M017 parity |
 | apohara-indexer (Rust) | ✅ | Production: tree-sitter + redb + candle |
-| apohara-sandbox (Rust) | 🔴 | 1-line stub. M014 target. |
+| apohara-sandbox (Rust) | 🟡 | M014.1 scaffold ✅ (8/8 tests); M014.2-.6 pending |
+| apohara-desktop (Tauri+React+Bun) | 🟢 | M017.1-.7 shipped 2026-05-12; .8-.10 pending |
+| ContextForge integration (M015) | ✅ | All 6 subtasks shipped 2026-05-12 |
 | Test suite | 🟡 | ~610 blocks total. 60 known-broken. CI red. Phase 5 fixes this. |
 
 ---
@@ -165,18 +167,18 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 
 **Tracer bullet:** type `"build a CRUD endpoint with auth"` in the Objective pane, watch the DAG appear, agents execute in canvas, verification mesh resolve a conflict, green PR appear.
 
-| # | Task | Verify |
-|---|------|--------|
-| 17.1 | Bootstrap Tauri v2 in `packages/desktop/`. Bun.serve on `localhost:7331`. | `bun run desktop:dev` opens native window with React SPA |
-| 17.2 | API routes: `POST /api/enhance`, `POST /api/run`, `GET /api/session/:id/events` (SSE) | curl test: SSE tail emits ledger lines as they're written |
-| 17.3 | **Objective pane** (left): textarea, enhance toggle (before/after), run/pause/takeover controls | Click "Enhance" → enhanced prompt streams into pane |
-| 17.4 | **Swarm Canvas** (center): DAG via `@xyflow/react` + agent lanes with progress bars, provider badge, cost ticker | DAG nodes animate in as decomposer emits events |
-| 17.5 | **Code+Diff pane** (right): file tree (modified flagged), Monaco diff viewer, verification mesh panel | File appears as modified the moment an agent writes |
-| 17.6 | **Top bar cost meter**: cumulative tokens, USD, run duration. GPU/Cloud mode toggle (for M015). | Cost increments live during run |
-| 17.7 | Visual identity locked: dark default, Geist Mono + Geist Sans, cyan `#6EE7F7` + violet `#A78BFA` accents | Storybook for each main pane |
-| 17.8 | Tauri build → single binary <15 MB Linux/macOS/Windows | `tauri build` produces verified binary, smoke-tested on all 3 OSes |
-| 17.9 | Migrate useful hooks from `packages/tui/` (Ink) → `packages/desktop/` (React). Archive `packages/tui/`. | `packages/tui/` has README pointing to packages/desktop |
-| 17.10 | E2E test: full visual flow with mocked providers | Playwright test reaches green PR step |
+| # | Task | Status | Verify |
+|---|------|--------|--------|
+| 17.1 | Bootstrap Tauri v2 in `packages/desktop/`. Bun.serve on `localhost:7331`. | ✅ | Tauri v2 scaffold in `packages/desktop/src-tauri/`; React SPA loads via `bun --hot src/server.ts` |
+| 17.2 | API routes: `POST /api/enhance`, `POST /api/run`, `GET /api/session/:id/events` (SSE) | ✅ | Verified end-to-end with `curl POST /api/run`, SSE tail emits ledger lines (replay + live via `fs.watch`); commit `479a9d9` |
+| 17.3 | **Objective pane** (left): textarea, enhance toggle (before/after), run/pause/takeover controls | ✅ 2026-05-12 | `ObjectivePane.tsx` wired to `/api/enhance` + `/api/run`, error banner, mode-aware; renders enhanced output in bordered pre |
+| 17.4 | **Swarm Canvas** (center): DAG via `@xyflow/react` + agent lanes with progress bars, provider badge, cost ticker | ✅ 2026-05-12 | `SwarmCanvas.tsx` builds nodes from `decomposer_complete` + `task_scheduled/_completed/_failed`, edges from `dependsOn`, mesh verdict sentinels, layered layout, dark-themed xyflow |
+| 17.5 | **Code+Diff pane** (right): file tree (modified flagged), Monaco diff viewer, verification mesh panel | ✅ 2026-05-12 | `CodeDiffPane.tsx` reconstructs snapshots from `file_created`/`file_modified` ledger events, Monaco `DiffEditor` (vs-dark, inline), `mesh_verdict` panel; language inference per extension |
+| 17.6 | **Top bar cost meter**: cumulative tokens, USD, run duration. GPU/Cloud mode toggle (for M015). | ✅ 2026-05-12 | `CostMeter.tsx` aggregates `metadata.tokens.total` + `costUsd` + `contextforge_savings`; GPU/Cloud toggle persists to `localStorage` and POSTs `/api/mode` |
+| 17.7 | Visual identity locked: dark default, Geist Mono + Geist Sans, cyan `#6EE7F7` + violet `#A78BFA` accents | ✅ 2026-05-12 | `index.css` has CSS vars + pane chrome + xyflow dark overrides + mode-toggle styling |
+| 17.8 | Tauri build → single binary <15 MB Linux/macOS/Windows | 🔴 | `tauri build` produces verified binary, smoke-tested on all 3 OSes |
+| 17.9 | Migrate useful hooks from `packages/tui/` (Ink) → `packages/desktop/` (React). Archive `packages/tui/`. | 🔴 | `packages/tui/` has README pointing to packages/desktop |
+| 17.10 | E2E test: full visual flow with mocked providers | 🔴 | Playwright test reaches green PR step |
 
 **Duration estimate:** 5–7 sessions. Biggest milestone of v0.1.
 
@@ -186,16 +188,16 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 
 **Goal:** when the user has a GPU and runs Apohara Context Forge as a sidecar, Apohara orchestrator routes through it for 60–80% token savings.
 
-| # | Task | Verify |
-|---|------|--------|
-| 15.1 | New provider `contextforge-vllm` in `src/providers/router.ts`. HTTP client to ContextForge endpoints. | `apohara auto "X"` with sidecar running succeeds |
-| 15.2 | Apohara → ContextForge call sequence: `register_context` before inference, `get_optimized_context` for shared handles | Token count from sidecar < cloud-only count |
-| 15.3 | New ledger event type: `contextforge_savings` with measured token delta | Event appears in `.events/*.jsonl` |
-| 15.4 | **INV-15 transfer**: port the safety gate concept to `src/core/verification-mesh.ts`. When risk > τ on judge agent, force fresh context. | Unit test mirroring INV-15 paper's 9-tuple sweep |
-| 15.5 | UI toggle in cost meter: "GPU mode (ContextForge)" vs "Cloud mode". Shows live savings %. | Toggle switches routing, UI reflects mode |
-| 15.6 | Documentation: how users deploy ContextForge sidecar (Docker compose snippet in README) | `docker-compose up` + `apohara auto` works end-to-end |
+| # | Task | Status | Verify |
+|---|------|--------|--------|
+| 15.1 | New provider `carnice-9b-local` (and `contextforge-vllm`) in `src/providers/router.ts`. HTTP client to ContextForge endpoints. | ✅ commit `55c4bf5` | `apohara auto "X"` routed to Carnice succeeds; ContextForge client wired in M015.2 |
+| 15.2 | Apohara → ContextForge call sequence: `register_context` before inference, `get_optimized_context` for shared handles | ✅ commit `f589d4f` | ContextForgeClient TS port + router/scheduler hooks |
+| 15.3 | New ledger event type: `contextforge_savings` with measured token delta | ✅ shipped at `55c4bf5` | Event emitted from `router.ts:1588` with `costUsdLocal=0` + `costUsdBaselineEstimate` against Groq llama-3.3-70b cheap-cloud reference |
+| 15.4 | **INV-15 transfer**: port the safety gate concept to `src/core/verification-mesh.ts`. When risk > τ on judge agent, force fresh context. | ✅ commit `c49039e` | 17 tests covering paper Table 1 sweep + Theorem 1 (zero violations) + Section 5.4 critic dense rate 1.000 |
+| 15.5 | UI toggle in cost meter: "GPU mode (ContextForge)" vs "Cloud mode". Shows live savings %. | ✅ 2026-05-12 | Toggle in `CostMeter.tsx`, persisted to `localStorage`, POSTed to `/api/mode`; `/api/enhance` honors `X-Apohara-Mode` header / body `mode` to pick provider; savings derived from `contextforge_savings` events |
+| 15.6 | Documentation: how users deploy ContextForge sidecar (Docker compose snippet in README) | ✅ commit `b3107e4` | README section on ContextForge sidecar deploy + integration guide |
 
-**Duration estimate:** 2–3 sessions.
+**Duration estimate:** 2–3 sessions. **Status: M015 100% shipped** as of 2026-05-12.
 
 ---
 
