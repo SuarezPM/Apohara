@@ -232,20 +232,20 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 
 ---
 
-## M018 — GSD2 Patterns Adoption (incremental, ongoing)
+## M018 — GSD2 Patterns Adoption (✅ ALL 6 PATTERNS SHIPPED 2026-05-12)
 
-GSD2 (`gsd-build/gsd-2`, MIT, 7K stars, active) has battle-tested patterns Apohara should inherit. Apply opportunistically when refactoring the relevant module:
+GSD2 (`gsd-build/gsd-2`, MIT, 7K stars, active) has battle-tested patterns Apohara should inherit. All 6 ported to trunk via `/team` parallel orchestration on 2026-05-12.
 
-| Pattern (GSD2 file) | Where to apply in Apohara |
-|---|---|
-| `AutoOrchestrationModule` + 8 adapter contracts | `src/core/subagent-manager.ts` |
-| `STUCK_WINDOW_SIZE = 6` ring-buffer stuck detector | scheduler.ts run loop |
-| `worktree-manager.ts` lifecycle verbs (`adoptOrphanWorktree`, `restoreToProjectRoot`) | `.claude/worktrees/` formalization |
-| Model resolver with auth-aware fallback | `agent-router.ts` |
-| Drift reconciliation registry (ADR-017) | recovery in scheduler |
-| `gsd headless query` JSON state | new `apohara state --json` command for CI |
+| # | Pattern (GSD2 file) | Apohara landing | Status |
+|---|---|---|---|
+| F | `gsd headless query` JSON state | `src/commands/state.ts` + `apohara state [--json]` | ✅ `e2c5344` |
+| B | `STUCK_WINDOW_SIZE = 6` ring-buffer stuck detector | `src/core/scheduler.ts` StuckDetector | ✅ `518a620` |
+| C | `worktree-manager.ts` lifecycle verbs | `src/core/worktree-manager.ts` (extracted) | ✅ `e2c5344` (bundled with F) |
+| D | Model resolver with auth-aware fallback | `src/core/provider-router.ts` (4 ProviderErrorClass) | ✅ `dd08dc9` |
+| A | `AutoOrchestrationModule` + 8 adapter contracts | `src/core/orchestration/{module,default-module}.ts` | ✅ `93efaf5` |
+| E | Drift reconciliation registry (ADR-001) | `src/core/drift-registry.ts` + `docs/adrs/ADR-001-drift-reconciliation.md` | ✅ `abda2aa` |
 
-Not a blocking milestone. Stolen incrementally.
+**Follow-up `M018.E.2`**: wire `DriftRegistry.record()` into the subagent-manager tool-call path behind `APOHARA_DRIFT_DETECTION=1` opt-in (2-week trial). The registry itself is fully unit-tested and zero side-effect until wiring lands.
 
 ---
 
