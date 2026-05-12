@@ -2,7 +2,7 @@
 
 > **The first open-source multi-AI coding orchestrator.** Write a prompt
 > once. Apohara decomposes it into microtasks and dispatches each one to
-> the AI that does it best — Claude plans, GPT-4 codes, Gemini verifies —
+> the AI that does it best — Claude plans, GPT codes, Gemini verifies —
 > using **your existing subscriptions**, not API keys.
 
 ```
@@ -14,7 +14,7 @@
 │  build CRUD   │   ┌─planner (Claude)─┐   │  + src/api/users.ts       │
 │  endpoint     │   └──┬───────────────┘   │  ~ src/db/schema.ts       │
 │  with auth    │      ▼                   │                           │
-│               │   ┌─coder (GPT-4) ──┐    │  ┌──── verification ────┐ │
+│               │   ┌─coder (GPT) ──┐    │  ┌──── verification ────┐ │
 │  [Enhance ▾]  │   └──┬──────────────┘    │  │ judge (Gemini) ✓     │ │
 │  [Run ▶]      │      ▼                   │  │ critic (Claude) ✓    │ │
 │               │   ┌─verifier (Gemini)┐ ⚖ │  └──────────────────────┘ │
