@@ -14,6 +14,7 @@ import type { DecomposedTask } from "./decomposer";
 import { IndexerClient, type Memory } from "./indexer-client";
 import { EventLedger } from "./ledger";
 import type { ProviderId, TaskRole } from "./types";
+import { WorktreeManager } from "./worktree-manager";
 
 /**
  * Configuration for SubagentManager
@@ -90,43 +91,6 @@ interface TrackedTask {
 	result?: SubagentResult;
 	attempt: number;
 	startedAt?: number;
-}
-
-/**
- * WorktreeManager - manages pool of worktrees for parallel execution.
- * This is a placeholder that could be expanded later to manage actual git worktrees.
- */
-class WorktreeManager {
-	private pool: Map<string, boolean> = new Map();
-
-	constructor(maxWorktrees: number = 5) {
-		// Pre-populate pool
-		for (let i = 0; i < maxWorktrees; i++) {
-			this.pool.set(`worktree-${i}`, true);
-		}
-	}
-
-	async acquire(): Promise<string | null> {
-		for (const [id, available] of this.pool) {
-			if (available) {
-				this.pool.set(id, false);
-				return id;
-			}
-		}
-		return null;
-	}
-
-	async release(id: string): Promise<void> {
-		this.pool.set(id, true);
-	}
-
-	getAvailableCount(): number {
-		let count = 0;
-		for (const available of this.pool.values()) {
-			if (available) count++;
-		}
-		return count;
-	}
 }
 
 /**
