@@ -10,14 +10,19 @@
 //! and the runner returns an [`SandboxError::Unavailable`] that the orchestrator can
 //! gate behind explicit user consent.
 //!
-//! M014.1 scope (this milestone): scaffold + Cargo deps + compiling skeleton.
-//! M014.2-.6 will fill in the seccomp profiles, namespace setup, ledger integration.
+//! M014.1: scaffold + deps. M014.2: seccomp-bpf compiled per tier.
+//! M014.3: user+mount+PID namespace bundle via [`namespace::enter_isolated_namespaces`].
+//! M014.4-.6: spawn integration, violation events, non-Linux fallback wiring.
 
 pub mod error;
+#[cfg(target_os = "linux")]
+pub mod namespace;
 pub mod permission;
 pub mod profile;
 pub mod runner;
 
 pub use error::SandboxError;
+#[cfg(target_os = "linux")]
+pub use namespace::enter_isolated_namespaces;
 pub use permission::PermissionTier;
 pub use runner::{SandboxRunner, SandboxRequest, SandboxResult};
