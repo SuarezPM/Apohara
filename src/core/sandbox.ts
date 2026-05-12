@@ -86,6 +86,29 @@ export class Isolator {
 
 		const startTime = Date.now();
 
+		// M014.6: non-Linux platforms (macOS dev box, Windows) have no
+		// equivalent of seccomp-bpf + Linux namespaces. The apohara-sandbox
+		// Rust binary returns Unavailable on those platforms. We honor that
+		// here with an explicit-consent gate: set APOHARA_ALLOW_UNSANDBOXED=1
+		// to acknowledge the risk and run the command directly via the host
+		// shell, logging a `sandbox_bypassed` ledger event so the audit
+		// trail still records the unprotected execution. Without consent,
+		// return a clear error. The `APOHARA_FORCE_NONLINUX` env hook lets
+		// the integration suite exercise this path on a Linux dev box.
+		if (
+			process.platform !== "linux" ||
+			process.env.APOHARA_FORCE_NONLINUX === "1"
+		) {
+			return this.execBypassNonLinux({
+				workdir,
+				command,
+				permission,
+				timeout,
+				taskId,
+				startTime,
+			});
+		}
+
 		// Resolve the binary path with debug fallback
 		let resolvedPath = this.sandboxBinaryPath;
 		if (!(await Bun.file(resolvedPath).exists())) {
@@ -204,6 +227,97 @@ export class Isolator {
 	}
 
 	/**
+	 * M014.6 fallback path: run the requested command directly on the
+	 * host (no sandbox) when running on a non-Linux platform AND the
+	 * user has set APOHARA_ALLOW_UNSANDBOXED=1 to explicitly opt in.
+	 *
+	 * Without the env opt-in we return a clear `sandbox_unavailable`
+	 * error so callers don't silently get an unprotected execution.
+	 */
+	private async execBypassNonLinux(args: {
+		workdir: string;
+		command: string;
+		permission: PermissionTier;
+		timeout: number;
+		taskId?: string;
+		startTime: number;
+	}): Promise<SandboxExecResult> {
+		const { workdir, command, permission, timeout, taskId, startTime } = args;
+		const consent = process.env.APOHARA_ALLOW_UNSANDBOXED === "1";
+
+		if (!consent) {
+			const stderr =
+				`Sandbox unavailable on ${process.platform}. ` +
+				`To run unsandboxed, set APOHARA_ALLOW_UNSANDBOXED=1 ` +
+				`(no syscall isolation, no namespace separation).`;
+			const result: SandboxExecResult = {
+				exitCode: 99,
+				stdout: "",
+				stderr,
+				violations: ["sandbox_unavailable_no_consent"],
+				durationMs: 0,
+				error: "sandbox_unavailable",
+			};
+			await this.logExecution(taskId, result, permission);
+			return result;
+		}
+
+		const commandArgv = command.trim().split(/\s+/);
+		try {
+			const proc = spawn(commandArgv, {
+				stdout: "pipe",
+				stderr: "pipe",
+				cwd: workdir,
+			});
+			const killTimer = timeout
+				? setTimeout(() => {
+						try {
+							(proc as unknown as { kill: () => void }).kill();
+						} catch {}
+					}, timeout)
+				: null;
+			const exitCode = await proc.exited;
+			if (killTimer) clearTimeout(killTimer);
+			const stdout = await proc.stdout.text();
+			const stderr = await proc.stderr.text();
+			const durationMs = Date.now() - startTime;
+
+			const result: SandboxExecResult = {
+				exitCode,
+				stdout,
+				stderr,
+				violations: [],
+				durationMs,
+			};
+			await this.ledger.log(
+				"sandbox_bypassed",
+				{
+					platform: process.platform,
+					permission,
+					command: commandArgv,
+					workdir,
+					exitCode,
+					reason: "non_linux_with_explicit_consent",
+				},
+				"warning",
+				taskId,
+			);
+			await this.logExecution(taskId, result, permission);
+			return result;
+		} catch (err) {
+			const durationMs = Date.now() - startTime;
+			return {
+				exitCode: 1,
+				stdout: "",
+				stderr: err instanceof Error ? err.message : String(err),
+				violations: [],
+				durationMs,
+				error: "execution_error",
+			};
+		}
+	}
+
+	/**
 	 * Log sandbox execution to event ledger.
 	 */
 	private async logExecution(
@@ -241,6 +355,24 @@ export class Isolator {
 			severity,
 			taskId,
 		);
+
+		// M014.5: emit one `security_violation` event per detected
+		// violation so `apohara replay` can show them individually and
+		// downstream tooling (UI swarm canvas, alerting) can subscribe
+		// at finer grain than the rollup `sandbox_execution` entry.
+		for (const v of normalizedViolations) {
+			await this.ledger.log(
+				"security_violation",
+				{
+					syscall: v.syscall,
+					path: v.path,
+					permission,
+					exitCode: result.exitCode,
+				},
+				"warning",
+				taskId,
+			);
+		}
 	}
 
 	/**

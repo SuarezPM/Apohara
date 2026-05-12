@@ -55,6 +55,14 @@ const TOKEN_VALIDATORS: Record<ProviderId, () => boolean> = {
 	mistral: () => !!getProviderKey("mistral"),
 	openai: () => !!getProviderKey("openai"),
 	"carnice-9b-local": () => true, // No auth required — local server; reachability is checked at call time
+	// CLI drivers: "auth" is whatever the user's installed CLI already
+	// has (Claude subscription, ChatGPT/Codex subscription, Google
+	// account). We can't probe it from here without spawning the binary,
+	// so we declare them available and let `callCliDriver` surface a
+	// clean ENOENT/auth error at the call site if not.
+	"claude-code-cli": () => true,
+	"codex-cli": () => true,
+	"gemini-cli": () => true,
 };
 
 /**

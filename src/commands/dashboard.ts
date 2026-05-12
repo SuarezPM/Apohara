@@ -46,14 +46,19 @@ export const dashboardCommand = new Command("dashboard")
 			process.exit(1);
 		}
 
-		const env = { ...process.env };
+		// Filter undefined values out of process.env so the spawn env type
+		// matches Bun's `Record<string, string>` constraint.
+		const env: Record<string, string> = {};
+		for (const [k, v] of Object.entries(process.env)) {
+			if (typeof v === "string") env[k] = v;
+		}
 		if (options.run) {
 			env.APOHARA_RUN_ID = options.run;
 		}
 
 		const tuiPath = getTuiPath();
 		const proc = spawn(["bun", "run", tuiPath], {
-			stdio: ["inherit", "inherit", "inherit"],
+			stdio: "inherit",
 			env,
 		});
 

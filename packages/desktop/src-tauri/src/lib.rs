@@ -10,8 +10,10 @@ pub fn run() {
 }
 
 // Stub plugin (avoids needing a real tauri-plugin-shell dep at scaffold time).
+// Tauri 2.11 added a second generic on `plugin::Builder` (`C: DeserializeOwned`)
+// that needs to be pinned explicitly when the builder isn't used with config.
 fn tauri_plugin_shell() -> impl tauri::plugin::Plugin<tauri::Wry> {
-    tauri::plugin::Builder::new("shell").build()
+    tauri::plugin::Builder::<tauri::Wry, ()>::new("shell").build()
 }
 
 #[tauri::command]

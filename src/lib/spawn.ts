@@ -70,7 +70,13 @@ export function spawn(args: string[], options: SpawnOptions = {}): SpawnResult {
 	}
 
 	if (options.env) {
-		spawnOptions.env = { ...process.env, ...options.env };
+		// Filter undefined values from process.env so the merged record
+		// satisfies the node spawn `Record<string, string>` env type.
+		const baseEnv: Record<string, string> = {};
+		for (const [k, v] of Object.entries(process.env)) {
+			if (typeof v === "string") baseEnv[k] = v;
+		}
+		spawnOptions.env = { ...baseEnv, ...options.env };
 	}
 
 	const child = nodeSpawn(args[0], args.slice(1), spawnOptions);

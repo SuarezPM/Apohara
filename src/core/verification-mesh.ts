@@ -680,6 +680,14 @@ export class VerificationMesh {
 			"kiro-ai": 0.2,
 			mistral: 0.5,
 			openai: 1,
+			// CLI drivers ride the user's existing subscription, so the
+			// marginal cost per call is effectively zero from Apohara's
+			// pricing POV. The verification-mesh cost model is only used
+			// for ranking — actual user-facing cost is recorded by the
+			// provider call itself.
+			"claude-code-cli": 0,
+			"codex-cli": 0,
+			"gemini-cli": 0,
 		};
 		return costMap[provider] || 1;
 	}

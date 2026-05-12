@@ -25,7 +25,10 @@ export type ProviderId =
 	| "kiro-ai" // Kiro AI - Free tier, no auth required
 	| "mistral" // Mistral AI - Free tier (mistral-small-latest)
 	| "openai" // OpenAI - gpt-4o-mini
-	| "carnice-9b-local"; // Carnice-9b (Qwen3.5-9B Hermes fine-tune) served locally via llama-cpp-python on GPU; M015 local-first path
+	| "carnice-9b-local" // Carnice-9b (Qwen3.5-9B Hermes fine-tune) served locally via llama-cpp-python on GPU; M015 local-first path
+	| "claude-code-cli" // Driver: subprocess of @anthropic-ai/claude-code (`claude --print`) — uses the user's Claude subscription
+	| "codex-cli" // Driver: subprocess of @openai/codex (`codex exec`) — uses the user's ChatGPT/Codex subscription
+	| "gemini-cli"; // Driver: subprocess of @google/gemini-cli (`gemini -p`) — uses the user's Google account
 
 // Model capabilities for intelligent routing
 export interface ModelCapability {
@@ -386,6 +389,7 @@ export interface EventLog {
 		toProvider?: ProviderId;
 		errorReason?: string;
 		fallbackProviders?: ProviderId[]; // List of fallback providers attempted
+		capabilityScore?: number; // Score from getCapabilityScore(provider, taskType)
 	};
 }
 

@@ -23,7 +23,7 @@ clap = { version = "4", features = ["derive"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nix = { version = "0.30", features = ["sched", "process", "fs", "mount", "user"] }
-seccompiler = "0.5"
+seccompiler = { version = "0.5", features = ["json"] }
 libc = "0.2"
 
 [dev-dependencies]

@@ -1,6 +1,7 @@
-//! Sandbox process runner. Takes a command + permission tier + workdir, applies
-//! the appropriate seccomp profile and namespace isolation, then exec()s the
-//! command. M014.1 scope: API + scaffold; real namespace setup lands in M014.3.
+//! Sandbox process runner. Takes a command + permission tier + workdir,
+//! enters the M014.3 namespace bundle, applies the M014.2 seccomp filter,
+//! and exec()s the command in a forked child. Captures stdout/stderr via
+//! pipes and reports exit + violations as a [`SandboxResult`].
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -8,6 +9,9 @@ use std::time::Duration;
 
 use crate::error::Result;
 use crate::permission::PermissionTier;
+
+#[cfg(target_os = "linux")]
+mod imp;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SandboxRequest {
@@ -36,19 +40,25 @@ impl SandboxRunner {
         Self
     }
 
-    /// Run the request to completion. M014.1 returns Unavailable on non-Linux
-    /// and logs a warning on Linux (the real seccomp + namespace work is M014.2-.3).
+    /// Run the request to completion under sandbox isolation.
+    ///
+    /// Linux: fork → unshare(USER|NS|PID) → fork → seccomp → execvp. The
+    /// outer fork is necessary because `unshare` modifies the caller's
+    /// user/mount ns; doing it in the host process would taint long-lived
+    /// orchestrator state.
+    ///
+    /// Other platforms: returns [`SandboxError::Unavailable`]. The TS
+    /// wrapper falls back to a consent-gated unsandboxed path (M014.6).
     pub fn run(&self, req: SandboxRequest) -> Result<SandboxResult> {
-        let profile = crate::profile::for_tier(req.permission);
-        tracing::info!(
-            profile = profile.name(),
-            workdir = ?req.workdir,
-            command = ?req.command,
-            "sandbox runner invoked (M014.1 scaffold — no actual enforcement yet)"
-        );
-        // M014.2-.3: fork, setns(CLONE_NEWPID|CLONE_NEWNS), apply profile, exec.
-        // For now, refuse explicitly so callers don't think they're sandboxed.
-        Err(crate::error::SandboxError::Unavailable)
+        #[cfg(target_os = "linux")]
+        {
+            imp::run_linux(req)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = req;
+            Err(crate::error::SandboxError::Unavailable)
+        }
     }
 }
 
@@ -107,19 +117,5 @@ mod tests {
         assert_eq!(req.command, back.command);
         assert_eq!(req.permission, back.permission);
         assert_eq!(req.timeout, back.timeout);
-    }
-
-    #[test]
-    fn runner_returns_unavailable_in_m014_1() {
-        let runner = SandboxRunner::new();
-        let req = SandboxRequest {
-            command: vec!["true".into()],
-            workdir: PathBuf::from("/tmp"),
-            permission: PermissionTier::ReadOnly,
-            timeout: None,
-            task_id: None,
-        };
-        let err = runner.run(req).unwrap_err();
-        assert!(matches!(err, crate::error::SandboxError::Unavailable));
     }
 }
