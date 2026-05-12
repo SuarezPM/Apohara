@@ -57,7 +57,12 @@ describe("Gemini OAuth Module", () => {
 		});
 
 		it("should handle token without refresh_token", () => {
-			const tokenWithoutRefresh = {
+			const tokenWithoutRefresh: {
+				access_token: string;
+				token_type: string;
+				expires_at: number;
+				refresh_token?: string;
+			} = {
 				access_token: "test-token",
 				token_type: "Bearer",
 				expires_at: Date.now() + 3600000,

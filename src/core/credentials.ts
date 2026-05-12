@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { OAuthToken } from "../lib/oauth-pkce";
 import type { OAuthTokenStore } from "../lib/oauth-token-store";
 
 // Dynamic imports to avoid circular dependencies
@@ -143,7 +144,7 @@ function getTokenStore(provider: string): OAuthTokenStore {
 			// For token refresh, we need proper configuration
 			store = createGeminiTokenStore(
 				"" /* clientId will be loaded on refresh */,
-			);
+			) as OAuthTokenStore;
 			tokenStores.set(provider, store);
 		}
 		return store;
@@ -202,7 +203,7 @@ function getTokenStore(provider: string): OAuthTokenStore {
 			};
 		};
 
-		store = new OAuthStore({ provider }, refreshHandler);
+		store = new OAuthStore({ provider }, refreshHandler) as OAuthTokenStore;
 		tokenStores.set(provider, store);
 	}
 	return store;

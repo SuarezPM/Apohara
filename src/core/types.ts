@@ -386,6 +386,7 @@ export interface EventLog {
 		toProvider?: ProviderId;
 		errorReason?: string;
 		fallbackProviders?: ProviderId[]; // List of fallback providers attempted
+		capabilityScore?: number; // Score from getCapabilityScore(provider, taskType)
 	};
 }
 

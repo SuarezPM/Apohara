@@ -222,7 +222,10 @@ export class IndexerClient extends EventEmitter {
 	private socketPath: string;
 	private binaryPath: string;
 	private socket: net.Socket | null = null;
-	private process: child_process.ChildProcessWithoutNullStreams | null = null;
+	// Stored as the broader ChildProcess because the daemon is spawned with
+	// `stdio: "ignore"` — its streams are null at runtime, which only the
+	// non-`WithoutNullStreams` variant models.
+	private process: child_process.ChildProcess | null = null;
 	private state: ConnectionState = "disconnected";
 	private requestId = 0;
 	private pendingRequests = new Map<

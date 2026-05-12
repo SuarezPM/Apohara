@@ -198,10 +198,11 @@ function startCallbackServer(port: number): Promise<{
 		});
 
 		const server = http.createServer(
-			(
-				req: ReturnType<typeof import("http").IncomingMessage>,
-				res: ReturnType<typeof import("http").ServerResponse>,
-			) => {
+			// http is loaded via require() so the runtime types aren't in
+			// scope as a namespace; the callback shape is inferred from
+			// createServer's signature.
+			// biome-ignore lint/suspicious/noExplicitAny: see comment above
+			(req: any, res: any) => {
 				const url = new URL(req.url || "/", `http://localhost:${port}`);
 
 				if (url.pathname === "/callback" || url.pathname === "") {
