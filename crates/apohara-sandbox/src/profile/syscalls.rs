@@ -36,6 +36,9 @@ pub const READONLY_PURE_ALLOW: &[&str] = &[
     "getgid",
     "geteuid",
     "getegid",
+    "getcwd",
+    "prlimit64",
+    "tgkill",
     // Signals
     "rt_sigprocmask",
     "rt_sigaction",
@@ -80,8 +83,26 @@ pub const READONLY_CONDITIONAL: &[(&str, &str)] = &[(
 
 /// Tier 2: WorkspaceWrite ADDITIONS — what's on top of Tier 1.
 ///
-/// Pure-allow extensions for write I/O, path mutation, fd lifecycle, ownership.
+/// Pure-allow extensions for write I/O, path mutation, fd lifecycle,
+/// ownership, *and* the syscalls a normal program needs to start at all
+/// (execve, execveat, wait*, child fork): a sandboxed agent's primary
+/// purpose is to invoke `bun test`, `cargo build`, etc., so we have to
+/// let it `exec`. Path-level enforcement comes from the M014.3 mount
+/// namespace, not from seccomp.
 pub const WORKSPACE_WRITE_ADDITIONS_PURE_ALLOW: &[&str] = &[
+    // Process startup + spawn — required so the grandchild can transfer
+    // control to the target binary and so that binary can in turn run
+    // its build tools.
+    "execve",
+    "execveat",
+    "wait4",
+    "waitid",
+    "clone",
+    "clone3",
+    "set_robust_list",
+    "rseq",
+    "set_tid_address",
+    "uname",
     // Write I/O
     "write",
     "pwrite64",
@@ -218,22 +239,33 @@ mod tests {
 
     #[test]
     fn dangerous_syscalls_never_in_any_pure_allow_list() {
-        // These should NEVER be in any tier's allowlist regardless of how the
-        // research evolves. Hard-coded as a guardrail.
+        // Hard-coded guardrail: these stay blocked across every tier.
+        // execve / clone / wait4 are *not* on this list — a sandboxed
+        // agent's job is to spawn build tools (bun, cargo, …) and those
+        // need normal process lifecycle syscalls. Path-level restrictions
+        // come from the M014.3 mount namespace, not from seccomp.
         let forbidden = [
-            "execve",
-            "execveat",
             "ptrace",
-            "eventfd",
-            "eventfd2",
+            "process_vm_readv",
+            "process_vm_writev",
+            "perf_event_open",
             "unshare",
             "setns",
-            "clone",
             "fork",
             "vfork",
             "kexec_load",
+            "kexec_file_load",
             "init_module",
+            "finit_module",
             "delete_module",
+            "reboot",
+            "mount",
+            "umount2",
+            "pivot_root",
+            "sethostname",
+            "setdomainname",
+            "swapon",
+            "swapoff",
         ];
         for tier in [
             PermissionTier::ReadOnly,
