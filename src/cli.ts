@@ -8,6 +8,7 @@ import { autoCommand } from "./commands/auto.js";
 import { configCommand } from "./commands/config.js";
 import { dashboardCommand } from "./commands/dashboard.js";
 import { replayCommand } from "./commands/replay.js";
+import { stateCommand } from "./commands/state.js";
 import { statsCommand } from "./commands/stats.js";
 import { uninstallCommand } from "./commands/uninstall.js";
 
@@ -25,6 +26,7 @@ program.addCommand(authCommand);
 program.addCommand(autoCommand);
 program.addCommand(dashboardCommand);
 program.addCommand(replayCommand);
+program.addCommand(stateCommand);
 program.addCommand(statsCommand);
 program.addCommand(uninstallCommand);
 
