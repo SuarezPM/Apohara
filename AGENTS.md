@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Apohara** (3113 symbols, 6851 relationships, 169 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Clarity-Code** (3158 symbols, 7121 relationships, 199 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -24,10 +24,10 @@ This project is indexed by GitNexus as **Apohara** (3113 symbols, 6851 relations
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/Apohara/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Apohara/clusters` | All functional areas |
-| `gitnexus://repo/Apohara/processes` | All execution flows |
-| `gitnexus://repo/Apohara/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/Clarity-Code/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/Clarity-Code/clusters` | All functional areas |
+| `gitnexus://repo/Clarity-Code/processes` | All execution flows |
+| `gitnexus://repo/Clarity-Code/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
