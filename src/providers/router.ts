@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { config, getProviderKey } from "../core/config";
+import { ContextForgeClient } from "../core/contextforge-client";
 import { EventLedger } from "../core/ledger";
 import type { EventLog, EventSeverity, ProviderId } from "../core/types";
 
@@ -14,6 +15,12 @@ export interface LLMRequest {
 	messages: LLMMessage[];
 	provider?: ProviderId;
 	signal?: AbortSignal;
+	/**
+	 * Optional agent identifier. When set AND ContextForge is enabled
+	 * (CONTEXTFORGE_ENABLED=1), the router asks the sidecar to optimize
+	 * the context before dispatching to the provider (M015.2).
+	 */
+	agentId?: string;
 }
 
 export interface LLMResponse {
@@ -198,6 +205,8 @@ export class ProviderRouter {
 	private ledgerInitialized = false;
 	// Optional shared chained ledger for llm_request events (Phase 4)
 	private eventLedger?: EventLedger;
+	// M015.2 — optional ContextForge sidecar client. `null` when disabled.
+	private contextforge: ContextForgeClient | null = null;
 	// Phase 4.4: forces temperature:0 on every provider call for replay determinism
 	public readonly replayMode: boolean;
 
@@ -238,6 +247,10 @@ export class ProviderRouter {
 		this.simulateFailure = cfg?.simulateFailure ?? false;
 		this.eventLedger = cfg?.eventLedger;
 		this.replayMode = cfg?.replayMode ?? false;
+		// M015.2 — opt-in ContextForge sidecar. Returns null unless
+		// CONTEXTFORGE_ENABLED=1 in env. The chained ledger (if any) is
+		// reused so the sidecar's events join the same hash chain.
+		this.contextforge = ContextForgeClient.fromEnv(cfg?.eventLedger);
 
 		// Initialize health tracking for each provider
 		const allProviders: ProviderId[] = [
@@ -498,6 +511,33 @@ export class ProviderRouter {
 			{ provider: currentProvider },
 		);
 
+		// M015.2 — best-effort context optimization via ContextForge sidecar.
+		// Only runs when the caller supplied an agentId AND CONTEXTFORGE_ENABLED=1.
+		// On any failure (timeout, 503 passthrough, non-2xx, parse) the optimize()
+		// call returns null and we proceed with the original messages — sidecar
+		// failure CANNOT block a real LLM call.
+		if (req.agentId && this.contextforge) {
+			const lastUserIdx = this.findLastUserMessageIndex(req.messages);
+			if (lastUserIdx >= 0) {
+				const original = req.messages[lastUserIdx].content;
+				const decision = await this.contextforge.optimize(
+					req.agentId,
+					original,
+				);
+				if (decision && decision.final_context && decision.tokens_saved > 0) {
+					// Substitute only the last user message's content. The system
+					// prompt and role structure are preserved so the provider sees
+					// the same message shape it always does.
+					req = {
+						...req,
+						messages: req.messages.map((m, i) =>
+							i === lastUserIdx ? { ...m, content: decision.final_context } : m,
+						),
+					};
+				}
+			}
+		}
+
 		// Try up to 2 providers (original + fallback)
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
@@ -567,6 +607,14 @@ export class ProviderRouter {
 	 * but mostly one-liner edits per call site. Replay against an uncovered provider
 	 * silently runs at default temperature.
 	 */
+	/** Index of the last user-role message, or -1 if none. M015.2 helper. */
+	private findLastUserMessageIndex(messages: LLMMessage[]): number {
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === "user") return i;
+		}
+		return -1;
+	}
+
 	private withReplayDefaults<T extends Record<string, unknown>>(
 		body: T,
 	): T & { temperature?: 0 } {

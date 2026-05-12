@@ -1,5 +1,6 @@
 import type { LLMMessage } from "../providers/router";
 import { type ProviderId, ProviderRouter } from "../providers/router";
+import { ContextForgeClient } from "./contextforge-client";
 import type { DecomposedTask } from "./decomposer";
 import { IsolationEngine, type IsolationResult } from "./isolation";
 import { EventLedger } from "./ledger";
@@ -24,6 +25,8 @@ export class ParallelScheduler {
 	private stateMachine: StateMachine;
 	private ledger: EventLedger;
 	private providerRouter: ProviderRouter;
+	// M015.2 — best-effort sidecar client. `null` unless CONTEXTFORGE_ENABLED=1.
+	private contextforge: ContextForgeClient | null = null;
 	private config: SchedulerConfig;
 	private worktrees: Map<string, string>; // worktreeId -> path
 	private activeTasks: Map<string, DecomposedTask>; // worktreeId -> task
@@ -40,6 +43,9 @@ export class ParallelScheduler {
 		this.stateMachine = stateMachine || new StateMachine();
 		this.ledger = ledger || new EventLedger();
 		this.providerRouter = providerRouter || new ProviderRouter();
+		// M015.2 — one ContextForge client per scheduler; reuses the same
+		// ledger so register/optimize/unavailable events join the chain.
+		this.contextforge = ContextForgeClient.fromEnv(this.ledger);
 		this.config = {
 			worktreePoolSize: config?.worktreePoolSize || 3,
 			cwd: config?.cwd,
@@ -129,6 +135,14 @@ export class ParallelScheduler {
 
 		// Add to active tasks first (before state update for atomicity)
 		this.activeTasks.set(worktreeId, task);
+
+		// M015.2 — fire-and-forget register_context. The sidecar uses this to
+		// index the task's prompt for later dedup/compression in optimize().
+		// We do NOT await: register is purely optimization; if it fails the
+		// optimize() path falls back to passthrough on its own.
+		if (this.contextforge) {
+			void this.contextforge.register(task.id, task.description);
+		}
 
 		// Update state with the new task
 		await this.stateMachine.update((state) => {
