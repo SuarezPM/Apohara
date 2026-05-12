@@ -6,18 +6,19 @@
  * Works as both ESM and CommonJS.
  */
 
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
-import { createRequire } from "module";
-import { arch, platform } from "os";
-import { dirname, join } from "path";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { arch, platform } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// ESM-compatible way to get the directory of this script
+// ESM-compatible way to get the directory of this script.
+// Uses node:url's fileURLToPath so `file:///D:/...` URLs on Windows
+// are normalized to native `D:\...` paths before passing to fs.
 const getScriptDir = () => {
-	// Use import.meta.url for ESM, __dirname for CommonJS
 	if (typeof import.meta !== "undefined" && import.meta.url) {
 		return dirname(fileURLToPath(import.meta.url));
 	}
-	// Fallback for CommonJS
 	try {
 		const require = createRequire(import.meta.url || __filename);
 		return dirname(require.main?.filename || __filename);
@@ -25,12 +26,6 @@ const getScriptDir = () => {
 		return dirname(__filename);
 	}
 };
-
-// Helper for ESM
-function fileURLToPath(url) {
-	if (typeof url === "string") return url;
-	return url.pathname;
-}
 
 const platformMap = {
 	darwin: "darwin",

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { config, getProviderKey } from "../core/config";
+import { ContextForgeClient } from "../core/contextforge-client";
+import { EventLedger } from "../core/ledger";
 import type { EventLog, EventSeverity, ProviderId } from "../core/types";
 
 export interface LLMMessage {
@@ -13,6 +15,12 @@ export interface LLMRequest {
 	messages: LLMMessage[];
 	provider?: ProviderId;
 	signal?: AbortSignal;
+	/**
+	 * Optional agent identifier. When set AND ContextForge is enabled
+	 * (CONTEXTFORGE_ENABLED=1), the router asks the sidecar to optimize
+	 * the context before dispatching to the provider (M015.2).
+	 */
+	agentId?: string;
 }
 
 export interface LLMResponse {
@@ -65,6 +73,10 @@ export interface RouterConfig {
 	cooldownMinutes?: number;
 	maxFailuresBeforeCooldown?: number;
 	simulateFailure?: boolean;
+	// Phase 4: pass an EventLedger so llm_request events join the chained run ledger.
+	eventLedger?: EventLedger;
+	// Phase 4.4: when true, every provider call sets temperature:0 for byte-identical replay.
+	replayMode?: boolean;
 }
 
 // Re-export ProviderId from types for external use
@@ -113,6 +125,10 @@ const API_ENDPOINTS = {
 	mistral: "https://api.mistral.ai/v1/chat/completions",
 	// OpenAI
 	openai: "https://api.openai.com/v1/chat/completions",
+	// Carnice-9b local GPU server (llama-cpp-python OpenAI-compat) — M015 local-first path.
+	// Override base via env: CARNICE_BASE_URL=http://other-host:8000/v1/chat/completions
+	"carnice-9b-local":
+		process.env.CARNICE_BASE_URL ?? "http://localhost:8000/v1/chat/completions",
 };
 
 /**
@@ -140,6 +156,7 @@ const MODEL_NAMES: Record<ProviderId, string> = {
 	"kiro-ai": "claude-sonnet-4-20250514",
 	mistral: "mistral-small-latest",
 	openai: "gpt-4o-mini",
+	"carnice-9b-local": "carnice-9b",
 };
 
 interface ProviderHealth {
@@ -186,6 +203,12 @@ export class ProviderRouter {
 	// Event ledger for fallback events
 	private ledgerPath: string;
 	private ledgerInitialized = false;
+	// Optional shared chained ledger for llm_request events (Phase 4)
+	private eventLedger?: EventLedger;
+	// M015.2 — optional ContextForge sidecar client. `null` when disabled.
+	private contextforge: ContextForgeClient | null = null;
+	// Phase 4.4: forces temperature:0 on every provider call for replay determinism
+	public readonly replayMode: boolean;
 
 	// Simulate failure flag for demo/testing
 	private simulateFailure = false;
@@ -222,6 +245,12 @@ export class ProviderRouter {
 		this.cooldownMinutes = cfg?.cooldownMinutes ?? 5;
 		this.maxFailuresBeforeCooldown = cfg?.maxFailuresBeforeCooldown ?? 3;
 		this.simulateFailure = cfg?.simulateFailure ?? false;
+		this.eventLedger = cfg?.eventLedger;
+		this.replayMode = cfg?.replayMode ?? false;
+		// M015.2 — opt-in ContextForge sidecar. Returns null unless
+		// CONTEXTFORGE_ENABLED=1 in env. The chained ledger (if any) is
+		// reused so the sidecar's events join the same hash chain.
+		this.contextforge = ContextForgeClient.fromEnv(cfg?.eventLedger);
 
 		// Initialize health tracking for each provider
 		const allProviders: ProviderId[] = [
@@ -482,6 +511,33 @@ export class ProviderRouter {
 			{ provider: currentProvider },
 		);
 
+		// M015.2 — best-effort context optimization via ContextForge sidecar.
+		// Only runs when the caller supplied an agentId AND CONTEXTFORGE_ENABLED=1.
+		// On any failure (timeout, 503 passthrough, non-2xx, parse) the optimize()
+		// call returns null and we proceed with the original messages — sidecar
+		// failure CANNOT block a real LLM call.
+		if (req.agentId && this.contextforge) {
+			const lastUserIdx = this.findLastUserMessageIndex(req.messages);
+			if (lastUserIdx >= 0) {
+				const original = req.messages[lastUserIdx].content;
+				const decision = await this.contextforge.optimize(
+					req.agentId,
+					original,
+				);
+				if (decision && decision.final_context && decision.tokens_saved > 0) {
+					// Substitute only the last user message's content. The system
+					// prompt and role structure are preserved so the provider sees
+					// the same message shape it always does.
+					req = {
+						...req,
+						messages: req.messages.map((m, i) =>
+							i === lastUserIdx ? { ...m, content: decision.final_context } : m,
+						),
+					};
+				}
+			}
+		}
+
 		// Try up to 2 providers (original + fallback)
 		for (let attempt = 0; attempt < 2; attempt++) {
 			try {
@@ -541,12 +597,55 @@ export class ProviderRouter {
 	}
 
 	/**
+	 * Phase 4.4: in replay mode, force temperature:0 on every OpenAI-compatible request body.
+	 * Returns the body unchanged otherwise.
+	 *
+	 * Coverage: applied to opencode, anthropic-api, deepseek, openai. The remaining
+	 * OpenAI-compatible providers (zai, moonshot, qwen, minimax, deepinfra, fireworks,
+	 * groq, kiro-ai, mistral, deepseek-v4) and Gemini (uses generationConfig.temperature)
+	 * still build their bodies without this wrapper — extending coverage is mechanical
+	 * but mostly one-liner edits per call site. Replay against an uncovered provider
+	 * silently runs at default temperature.
+	 */
+	/** Index of the last user-role message, or -1 if none. M015.2 helper. */
+	private findLastUserMessageIndex(messages: LLMMessage[]): number {
+		for (let i = messages.length - 1; i >= 0; i--) {
+			if (messages[i].role === "user") return i;
+		}
+		return -1;
+	}
+
+	private withReplayDefaults<T extends Record<string, unknown>>(
+		body: T,
+	): T & { temperature?: 0 } {
+		if (!this.replayMode) return body;
+		return { ...body, temperature: 0 };
+	}
+
+	/**
+	 * Phase 4 prereq: log the LLM request payload to the chained ledger so replay can
+	 * reconstruct calls. No-op if no eventLedger was provided.
+	 */
+	private async logLLMRequest(
+		provider: ProviderId,
+		messages: LLMMessage[],
+	): Promise<void> {
+		if (!this.eventLedger) return;
+		await this.eventLedger.log("llm_request", {
+			provider,
+			model: MODEL_NAMES[provider] ?? null,
+			messages,
+		});
+	}
+
+	/**
 	 * Calls a specific provider with the given messages.
 	 */
 	private async callProvider(
 		provider: ProviderId,
 		messages: LLMMessage[],
 	): Promise<LLMResponse> {
+		await this.logLLMRequest(provider, messages);
 		switch (provider) {
 			case "opencode-go":
 				return this.callOpenCode(messages);
@@ -590,6 +689,8 @@ export class ProviderRouter {
 				return this.callMistral(messages);
 			case "openai":
 				return this.callOpenAI(messages);
+			case "carnice-9b-local":
+				return this.callCarnice(messages);
 			default:
 				throw new Error(`Unknown provider: ${provider}`);
 		}
@@ -631,7 +732,7 @@ export class ProviderRouter {
 				"x-api-key": this.opencodeApiKey,
 				"anthropic-version": "2023-06-01",
 			},
-			body: JSON.stringify(body),
+			body: JSON.stringify(this.withReplayDefaults(body)),
 			signal: AbortSignal.timeout(30000),
 		});
 
@@ -713,7 +814,7 @@ export class ProviderRouter {
 				"x-api-key": this.anthropicApiKey,
 				"anthropic-version": "2023-06-01",
 			},
-			body: JSON.stringify(body),
+			body: JSON.stringify(this.withReplayDefaults(body)),
 			signal: AbortSignal.timeout(60000),
 		});
 
@@ -891,10 +992,12 @@ export class ProviderRouter {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${this.deepseekApiKey}`,
 			},
-			body: JSON.stringify({
-				model: "deepseek-coder",
-				messages,
-			}),
+			body: JSON.stringify(
+				this.withReplayDefaults({
+					model: "deepseek-coder",
+					messages,
+				}),
+			),
 			signal: AbortSignal.timeout(30000), // 30 second timeout
 		});
 
@@ -1422,10 +1525,12 @@ export class ProviderRouter {
 				"Content-Type": "application/json",
 				Authorization: `Bearer ${this.openaiApiKey}`,
 			},
-			body: JSON.stringify({
-				model: MODEL_NAMES.openai,
-				messages,
-			}),
+			body: JSON.stringify(
+				this.withReplayDefaults({
+					model: MODEL_NAMES.openai,
+					messages,
+				}),
+			),
 			signal: AbortSignal.timeout(30000),
 		});
 
@@ -1445,6 +1550,62 @@ export class ProviderRouter {
 				promptTokens: data.usage?.prompt_tokens || 0,
 				completionTokens: data.usage?.completion_tokens || 0,
 				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callCarnice(messages: LLMMessage[]): Promise<LLMResponse> {
+		const startedAt = Date.now();
+		const response = await fetch(this.API_URLS["carnice-9b-local"], {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(
+				this.withReplayDefaults({
+					model: MODEL_NAMES["carnice-9b-local"],
+					messages,
+				}),
+			),
+			// Local GGUF Q4 inference on consumer GPU: ~1s for short replies,
+			// up to 30s for multi-paragraph. 60s ceiling covers both.
+			signal: AbortSignal.timeout(60000),
+		}).catch((err) => {
+			throw new Error(
+				`Carnice local server unreachable at ${this.API_URLS["carnice-9b-local"]} — is llama-cpp-python running? Original: ${(err as Error).message}`,
+			);
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "");
+			throw new Error(
+				`Carnice local server error: ${response.status} ${response.statusText} ${errorText}`,
+			);
+		}
+
+		const data = await response.json();
+		const totalTokens = data.usage?.total_tokens || 0;
+		// Emit a contextforge_savings event so the ledger reflects the cost-zero local path.
+		// Baseline is informational — uses groq llama-3.3-70b output pricing as cheap-cloud reference.
+		await this.logEvent(
+			"contextforge_savings",
+			{
+				provider: "carnice-9b-local",
+				model: MODEL_NAMES["carnice-9b-local"],
+				tokens: totalTokens,
+				latencyMs: Date.now() - startedAt,
+				costUsdLocal: 0,
+				costUsdBaselineEstimate: (totalTokens / 1_000_000) * 0.59,
+			},
+			"info",
+		);
+
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "carnice-9b-local",
+			model: MODEL_NAMES["carnice-9b-local"],
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens,
 			},
 		};
 	}

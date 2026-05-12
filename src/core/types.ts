@@ -24,7 +24,8 @@ export type ProviderId =
 	| "groq" // Groq - Ultra-fast inference (Llama, Qwen, etc.)
 	| "kiro-ai" // Kiro AI - Free tier, no auth required
 	| "mistral" // Mistral AI - Free tier (mistral-small-latest)
-	| "openai"; // OpenAI - gpt-4o-mini
+	| "openai" // OpenAI - gpt-4o-mini
+	| "carnice-9b-local"; // Carnice-9b (Qwen3.5-9B Hermes fine-tune) served locally via llama-cpp-python on GPU; M015 local-first path
 
 // Model capabilities for intelligent routing
 export interface ModelCapability {
@@ -257,6 +258,24 @@ export const MODELS: ModelCapability[] = [
 		contextWindow: 1000000,
 		supportsVision: true,
 	},
+	// Carnice-9b — local GPU model (M015 local-first path).
+	// Fine-tune of Qwen3.5-9B optimized for agent behavior (Hermes harness, tool calling).
+	// Served via llama-cpp-python on user GPU (RTX 2060S 8GB w/ Q4_K_M).
+	{
+		id: "carnice-9b-local",
+		name: "Carnice-9b (local Hermes/Qwen3.5)",
+		provider: "Local GPU (llama.cpp)",
+		bestFor: ["execution", "verification"],
+		strengths: [
+			"local inference",
+			"zero cost",
+			"tool calling (Hermes format)",
+			"private",
+			"offline-capable",
+		],
+		contextWindow: 4096, // Server-side n_ctx limit; can be raised to 262144 model max
+		supportsVision: false,
+	},
 ];
 
 // Get model capability by ID
@@ -280,7 +299,9 @@ export const ROLE_TO_PROVIDER: Record<TaskRole, ProviderId> = {
 	verification: "groq", // Groq for verification
 };
 
-// Fallback provider order for each role (primary + fallbacks)
+// Fallback provider order for each role.
+// INVARIANT: fallback[0] === ROLE_TO_PROVIDER[role] (primary leads the chain).
+// Verified in tests/e2e-swarm-integration.test.ts "should have fallback provider chains".
 export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 	research: [
 		"tavily",
@@ -292,9 +313,9 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"qwen3.6-plus",
 	],
 	planning: [
+		"groq",
 		"anthropic-api",
 		"gemini-api",
-		"groq",
 		"moonshot-k2.6",
 		"qwen3.6-plus",
 		"moonshot-k2.5",
@@ -304,9 +325,9 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"mistral",
 	],
 	execution: [
+		"groq",
 		"anthropic-api",
 		"opencode-go",
-		"groq",
 		"deepseek-v4",
 		"moonshot-k2.6",
 		"minimax-m2.7",
@@ -315,16 +336,18 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"deepseek",
 		"mistral",
 		"openai",
+		"carnice-9b-local", // Local GPU fallback — zero cost, offline-capable, last resort if cloud chain exhausted
 	],
 	verification: [
+		"groq",
 		"anthropic-api",
 		"gemini-api",
-		"groq",
 		"deepseek-v4",
 		"moonshot-k2.6",
 		"kiro-ai",
 		"deepseek",
 		"openai",
+		"carnice-9b-local",
 	],
 };
 
@@ -346,6 +369,9 @@ export interface EventLog {
 	severity: EventSeverity;
 	taskId?: string;
 	payload: Record<string, unknown>;
+	// Hash chain fields. Set by EventLedger.log(); absent on legacy (pre-Phase-4) entries.
+	prev_hash?: string;
+	hash?: string;
 	metadata?: {
 		provider?: ProviderId;
 		model?: string;

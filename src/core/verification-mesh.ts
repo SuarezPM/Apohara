@@ -14,6 +14,7 @@
 import { ProviderRouter } from "../providers/router";
 import { routeTaskWithFallback } from "./agent-router";
 import type { FileSignaturesResponse, IndexerClient } from "./indexer-client";
+import { JCRSafetyGate } from "./jcr-safety-gate";
 import { EventLedger } from "./ledger";
 import type { ProviderId, TaskRole } from "./types";
 
@@ -82,10 +83,22 @@ export class VerificationMesh {
 	 * @param routerFn - Injectable router for testing; defaults to routeTaskWithFallback
 	 * @param indexerClient - Injectable indexer client for context compression; null disables it
 	 */
+	// INV-15 safety gate (M015.4). Enforces dense prefill for the arbiter
+	// when its risk score exceeds τ — guards against the Judge Candidate
+	// Reuse failure mode. See src/core/jcr-safety-gate.ts and
+	// DOI 10.5281/zenodo.20114594.
+	private jcrGate: JCRSafetyGate;
+
 	constructor(routerFn?: RouterFn, indexerClient?: IndexerClient | null) {
 		this.ledger = new EventLedger();
 		this.routerFn = routerFn ?? routeTaskWithFallback;
 		this.indexerClient = indexerClient ?? null;
+		this.jcrGate = new JCRSafetyGate();
+	}
+
+	/** Exposed for telemetry / dashboard. Aggregate INV-15 stats over the run. */
+	getJcrSummary() {
+		return this.jcrGate.summary();
 	}
 
 	/**
@@ -478,6 +491,35 @@ export class VerificationMesh {
 			}
 		}
 
+		// INV-15 (M015.4): the arbiter is a judge-class invocation. If its
+		// JCR risk exceeds τ, force dense context (drop the compressed view)
+		// to prevent positional priors from corrupting the verdict. The gate
+		// is a no-op for non-judge roles. See jcr-safety-gate.ts.
+		const inv15Decision = this.jcrGate.gateDecision({
+			agentRole: "critic", // Arbiter == critic-class in our taxonomy
+			candidateCount: 2, // Exactly A and B
+			// reuseRate is 1.0 when we have compressedContext (we *would* reuse
+			// pre-computed file signatures), 0.0 when we'd use full context.
+			reuseRate: compressedContext ? 1.0 : 0.0,
+			layoutShuffled: false, // A/B order is deterministic in our pipeline
+		});
+		await this.ledger.log(
+			"inv15_gate_decision",
+			{
+				riskScore: inv15Decision.riskScore,
+				useDense: inv15Decision.useDense,
+				reason: inv15Decision.reason,
+				threshold: this.jcrGate.threshold,
+				contextSourceBeforeGate: contextSource,
+			},
+			"info",
+		);
+		if (inv15Decision.useDense && compressedContext) {
+			// Drop the compressed context — judge requires fresh dense prefill.
+			compressedContext = null;
+			contextSource = "full";
+		}
+
 		// Outputs differ — invoke LLM arbiter
 		try {
 			const taskDescription =
@@ -626,6 +668,7 @@ export class VerificationMesh {
 			"moonshot-k2.5": 2,
 			"moonshot-k2.6": 2.5,
 			"xiaomi-mimo": 0.5,
+			"carnice-9b-local": 0, // Local inference — zero marginal cost
 			"qwen3.5-plus": 1,
 			"qwen3.6-plus": 1.5,
 			"minimax-m2.5": 1,

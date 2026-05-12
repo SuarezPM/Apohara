@@ -32,3 +32,18 @@ tmp/
 .gitnexus
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+# Local git worktrees managed by Claude tooling
+.claude/worktrees/
+
+# Apohara runtime artifacts (M015+):
+# Event ledger files (one per run; not source)
+.events/
+# Per-task scheduler runtime state
+.apohara/runs/
+.apohara/state.json
+# Local model weights (.gguf) and ephemeral assets (multi-GB)
+.local/
+# postinstall.js platform binary output
+binaries/
+# npm pack output
+apohara-*.tgz

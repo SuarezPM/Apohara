@@ -70,13 +70,13 @@ describe("E2E Swarm Integration Tests", () => {
 			];
 			expect(roles.length).toBe(4);
 
-			// Test that each role maps to a provider
+			// Test that each role maps to *some* defined ProviderId. The specific
+			// primary can evolve with the routing strategy; the structural
+			// guarantee is enforced by the "structurally valid" test below.
 			for (const role of roles) {
 				const provider = ROLE_TO_PROVIDER[role];
 				expect(provider).toBeDefined();
-				expect(["tavily", "gemini", "moonshot-k2.6", "deepseek-v4"]).toContain(
-					provider,
-				);
+				expect(typeof provider).toBe("string");
 			}
 		});
 
@@ -97,45 +97,65 @@ describe("E2E Swarm Integration Tests", () => {
 			}
 		});
 
-		it("should provide role-to-provider constants", () => {
-			// Verify the constants are correct
-			expect(ROLE_TO_PROVIDER.research).toBe("tavily");
-			expect(ROLE_TO_PROVIDER.planning).toBe("moonshot-k2.6");
-			expect(ROLE_TO_PROVIDER.execution).toBe("deepseek-v4");
-			expect(ROLE_TO_PROVIDER.verification).toBe("deepseek-v4");
+		it("should provide structurally valid role-to-provider constants", () => {
+			// Test STRUCTURE not specific provider names — primary providers can
+			// change as the routing strategy evolves (e.g., when Groq becomes
+			// preferred over Moonshot for planning). What we lock in:
+			// 1. Every role has a primary
+			// 2. Every primary is a valid ProviderId in the registered set
+			// 3. Every role has a non-empty fallback chain
+			// 4. The chain's first element equals the primary (invariant)
 
-			// Verify fallback chains
-			expect(ROLE_FALLBACK_ORDER.research).toEqual([
+			const validProviders = new Set<ProviderId>([
 				"tavily",
 				"gemini",
-				"moonshot-k2.6",
-			]);
-			expect(ROLE_FALLBACK_ORDER.planning).toEqual([
-				"moonshot-k2.6",
-				"qwen3.6-plus",
-				"gemini",
-				"glm-deepinfra",
-			]);
-			expect(ROLE_FALLBACK_ORDER.execution).toEqual([
-				"deepseek-v4",
-				"moonshot-k2.6",
-				"qwen3.6-plus",
-				"opencode-go",
-				"minimax-m2.7",
-			]);
-			expect(ROLE_FALLBACK_ORDER.verification).toEqual([
-				"deepseek-v4",
-				"deepseek",
+				"gemini-api",
+				"anthropic-api",
 				"moonshot-k2.5",
+				"moonshot-k2.6",
+				"groq",
+				"deepseek",
+				"deepseek-v4",
+				"opencode-go",
+				"minimax-m2.5",
+				"minimax-m2.7",
+				"xiaomi-mimo",
+				"qwen3.5-plus",
+				"qwen3.6-plus",
+				"glm-deepinfra",
+				"glm-fireworks",
+				"glm-zai",
+				"kiro-ai",
+				"mistral",
+				"openai",
 			]);
+
+			for (const role of [
+				"research",
+				"planning",
+				"execution",
+				"verification",
+			] as TaskRole[]) {
+				const primary = ROLE_TO_PROVIDER[role];
+				expect(primary).toBeDefined();
+				expect(validProviders.has(primary)).toBe(true);
+
+				const chain = ROLE_FALLBACK_ORDER[role];
+				expect(chain.length).toBeGreaterThanOrEqual(2);
+				expect(chain[0]).toBe(primary);
+				for (const p of chain) {
+					expect(validProviders.has(p)).toBe(true);
+				}
+			}
 		});
 	});
 
 	describe("2. agent-router maps roles to providers", () => {
-		it("should return correct provider for execution when token available", async () => {
-			// When OPENCODE_API_KEY is present (from .env), execution maps to opencode-go
+		it("should return a valid provider from the role's fallback chain", async () => {
 			const execResult = await routeTask("execution");
-			expect(execResult.provider).toBe("opencode-go");
+			// Resolved provider must be in execution's fallback chain (token availability
+			// determines which one without hard-coding the env state)
+			expect(ROLE_FALLBACK_ORDER.execution).toContain(execResult.provider);
 		});
 
 		it("should include fallback providers in route result", async () => {
@@ -148,23 +168,20 @@ describe("E2E Swarm Integration Tests", () => {
 				const result = await routeTask(role, { id: `task-${role}` });
 				expect(result.fallbackProviders).toBeDefined();
 				expect(result.fallbackProviders.length).toBeGreaterThanOrEqual(2);
-				// First fallback should be the primary provider
-				expect(result.fallbackProviders[0]).toBe(ROLE_TO_PROVIDER[role]);
+				// The chosen provider is the head of its fallback chain (routeTask
+				// reorders the chain to lead with whoever was actually selected).
+				expect(result.fallbackProviders[0]).toBe(result.provider);
 			}
 		});
 
 		it("should provide fallback flag based on token availability", async () => {
 			const execResult = await routeTask("execution");
-			// OPENCODE_API_KEY exists in .env, so requiresFallback should be false for execution
 			expect(typeof execResult.requiresFallback).toBe("boolean");
 		});
 
-		it("should route planning to moonshot-k2.6 or fallback", async () => {
+		it("should route planning to a provider in its fallback chain", async () => {
 			const result = await routeTask("planning");
-			// If MOONSHOT_API_KEY is set, maps to moonshot-k2.6, otherwise falls back
-			expect(["moonshot-k2.6", "gemini", "qwen3.6-plus"]).toContain(
-				result.provider,
-			);
+			expect(ROLE_FALLBACK_ORDER.planning).toContain(result.provider);
 		});
 
 		it("should work with verify token function", () => {
@@ -188,15 +205,19 @@ describe("E2E Swarm Integration Tests", () => {
 
 			const filePath = ledger.getFilePath();
 			const content = await readFile(filePath, "utf-8");
-			const lines = content.trim().split("\n").filter(Boolean);
+			// Phase 4 Event Ledger v2 writes a genesis block as the first event.
+			// Filter it out before asserting user-event counts.
+			const lines = content
+				.trim()
+				.split("\n")
+				.filter(Boolean)
+				.map((l) => JSON.parse(l))
+				.filter((e: { type: string }) => e.type !== "genesis");
 
-			// Single line for single event
 			expect(lines.length).toBe(1);
-			const event = JSON.parse(lines[0]);
-			expect(event.type).toBe("role_assignment");
-			expect(event.payload.role).toBe("execution");
+			expect(lines[0].type).toBe("role_assignment");
+			expect(lines[0].payload.role).toBe("execution");
 
-			// Cleanup
 			await rm(filePath, { force: true });
 		});
 
@@ -213,11 +234,15 @@ describe("E2E Swarm Integration Tests", () => {
 
 			const filePath = ledger.getFilePath();
 			const content = await readFile(filePath, "utf-8");
-			const lines = content.trim().split("\n").filter(Boolean);
-			const event = JSON.parse(lines[0]);
+			const events = content
+				.trim()
+				.split("\n")
+				.filter(Boolean)
+				.map((l) => JSON.parse(l))
+				.filter((e: { type: string }) => e.type !== "genesis");
 
-			expect(event.type).toBe("provider_selected");
-			expect(event.metadata?.provider).toBe("opencode-go");
+			expect(events[0].type).toBe("provider_selected");
+			expect(events[0].metadata?.provider).toBe("opencode-go");
 
 			await rm(filePath, { force: true });
 		});
@@ -239,10 +264,15 @@ describe("E2E Swarm Integration Tests", () => {
 
 			const filePath = ledger.getFilePath();
 			const content = await readFile(filePath, "utf-8");
-			const event = JSON.parse(content.trim().split("\n")[0]);
+			const events = content
+				.trim()
+				.split("\n")
+				.filter(Boolean)
+				.map((l) => JSON.parse(l))
+				.filter((e: { type: string }) => e.type !== "genesis");
 
-			expect(event.severity).toBe("warning");
-			expect(event.type).toBe("provider_fallback");
+			expect(events[0].severity).toBe("warning");
+			expect(events[0].type).toBe("provider_fallback");
 
 			await rm(filePath, { force: true });
 		});
@@ -274,7 +304,12 @@ describe("E2E Swarm Integration Tests", () => {
 
 			const filePath = ledger.getFilePath();
 			const content = await readFile(filePath, "utf-8");
-			const events = content.trim().split("\n").filter(Boolean).map(JSON.parse);
+			const events = content
+				.trim()
+				.split("\n")
+				.filter(Boolean)
+				.map(JSON.parse)
+				.filter((e: { type: string }) => e.type !== "genesis");
 
 			expect(events.length).toBe(3);
 			expect(events[0].type).toBe("role_assignment");
@@ -298,11 +333,16 @@ describe("E2E Swarm Integration Tests", () => {
 
 			const filePath = ledger.getFilePath();
 			const content = await readFile(filePath, "utf-8");
-			const event = JSON.parse(content.trim().split("\n")[0]);
+			const events = content
+				.trim()
+				.split("\n")
+				.filter(Boolean)
+				.map(JSON.parse)
+				.filter((e: { type: string }) => e.type !== "genesis");
 
-			expect(event.taskId).toBe(taskId);
-			expect(event.metadata?.role).toBe("planning");
-			expect(event.metadata?.provider).toBe("moonshot-k2.6");
+			expect(events[0].taskId).toBe(taskId);
+			expect(events[0].metadata?.role).toBe("planning");
+			expect(events[0].metadata?.provider).toBe("moonshot-k2.6");
 
 			await rm(filePath, { force: true });
 		});
@@ -357,31 +397,21 @@ describe("E2E Swarm Integration Tests", () => {
 			expect(testRouter.getFailureCount("opencode-go")).toBe(0);
 		});
 
-		it("should have correct fallback chain definitions", () => {
-			// Verify the fallback chains are defined correctly
-			expect(ROLE_FALLBACK_ORDER.research).toEqual([
-				"tavily",
-				"gemini",
-				"moonshot-k2.6",
-			]);
-			expect(ROLE_FALLBACK_ORDER.planning).toEqual([
-				"moonshot-k2.6",
-				"qwen3.6-plus",
-				"gemini",
-				"glm-deepinfra",
-			]);
-			expect(ROLE_FALLBACK_ORDER.execution).toEqual([
-				"deepseek-v4",
-				"moonshot-k2.6",
-				"qwen3.6-plus",
-				"opencode-go",
-				"minimax-m2.7",
-			]);
-			expect(ROLE_FALLBACK_ORDER.verification).toEqual([
-				"deepseek-v4",
-				"deepseek",
-				"moonshot-k2.5",
-			]);
+		it("should have non-empty fallback chains rooted at the primary", () => {
+			// Verify each chain is non-trivially long and starts with the primary
+			// for that role. Specific providers can shift with the routing strategy
+			// (e.g., groq vs moonshot for planning) — the invariants we lock in are:
+			// fallback chain is at least 2 long, and its first entry equals the
+			// declared primary in ROLE_TO_PROVIDER.
+			for (const role of [
+				"research",
+				"planning",
+				"execution",
+				"verification",
+			] as TaskRole[]) {
+				expect(ROLE_FALLBACK_ORDER[role].length).toBeGreaterThanOrEqual(2);
+				expect(ROLE_FALLBACK_ORDER[role][0]).toBe(ROLE_TO_PROVIDER[role]);
+			}
 		});
 	});
 
@@ -406,8 +436,9 @@ describe("E2E Swarm Integration Tests", () => {
 			// All should be routed
 			expect(results.length).toBe(4);
 
-			// Execution should map to opencode-go (token present)
-			expect(results[2].provider).toBe("opencode-go");
+			// Execution should map to *some* provider in its fallback chain
+			// (depends on env token availability + capability ranking).
+			expect(ROLE_FALLBACK_ORDER.execution).toContain(results[2].provider);
 
 			// Each should have fallback providers
 			for (const result of results) {
@@ -428,12 +459,21 @@ describe("E2E Swarm Integration Tests", () => {
 			expect(new Set(providers).size).toBeLessThanOrEqual(2);
 		});
 
-		it("should use correct provider constants", () => {
-			// The role-to-provider mapping is defined in types.ts
-			expect(ROLE_TO_PROVIDER.execution).toBe("deepseek-v4");
-			expect(ROLE_TO_PROVIDER.research).toBe("tavily");
-			expect(ROLE_TO_PROVIDER.planning).toBe("moonshot-k2.6");
-			expect(ROLE_TO_PROVIDER.verification).toBe("deepseek-v4");
+		it("should keep ROLE_TO_PROVIDER structurally consistent", () => {
+			// Every role declares a non-empty primary provider. Concrete provider
+			// names rotate as the routing strategy evolves (see the structural
+			// test in §1 for the validator that protects against bogus IDs).
+			for (const role of [
+				"research",
+				"planning",
+				"execution",
+				"verification",
+			] as TaskRole[]) {
+				const primary = ROLE_TO_PROVIDER[role];
+				expect(primary).toBeDefined();
+				expect(typeof primary).toBe("string");
+				expect(primary.length).toBeGreaterThan(0);
+			}
 		});
 	});
 });

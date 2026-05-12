@@ -25,8 +25,21 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build CLI bundle
+        # Required by `tests/build.test.ts` and `tests/install-and-run.test.ts`
+        # which assert dist/cli.js exists and is invokable.
+        run: bun run build
+
       - name: Run tests
-        run: bun test
+        env:
+          # Force mock embedding model so the indexer-dependent test paths
+          # skip the ~400 MB BERT load. Real model is gated behind explicit
+          # opt-out per CLAUDE.md §8.1 (OOM hazard rule).
+          APOHARA_MOCK_EMBEDDINGS: "1"
+        # Exclude packages/tui — vitest+Ink prototype to be archived in M017.9
+        # (ROADMAP v2.0); its .test.tsx files need react/jsx-dev-runtime which
+        # bun's runner cannot resolve from the nested workspace.
+        run: bun test src tests
 
       - name: Lint code
         run: bunx biome format --write

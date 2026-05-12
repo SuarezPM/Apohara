@@ -2,18 +2,21 @@ import { exec as execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { promisify } from "node:util";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 const execAsync = promisify(execSync);
+
+// Read version from package.json so the assertion stays in sync with the
+// real shipped artifact instead of a hardcoded literal.
+const pkg = JSON.parse(
+	fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"),
+) as { version: string };
 
 describe("Build Distribution", () => {
 	const distPath = path.resolve(process.cwd(), "dist/cli.js");
 
 	it("should produce dist/cli.js", () => {
-		expect(
-			fs.existsSync(distPath),
-			`dist/cli.js should exist at ${distPath}`,
-		).toBe(true);
+		expect(fs.existsSync(distPath)).toBe(true);
 	});
 
 	it("should run under node and show help", async () => {
@@ -26,6 +29,6 @@ describe("Build Distribution", () => {
 
 	it("should show correct version under node", async () => {
 		const { stdout } = await execAsync("node dist/cli.js --version");
-		expect(stdout).toContain("0.1.0");
+		expect(stdout).toContain(pkg.version);
 	});
 });
