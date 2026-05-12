@@ -26,6 +26,11 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run tests
+        env:
+          # Force mock embedding model so the indexer-dependent test paths
+          # skip the ~400 MB BERT load. Real model is gated behind explicit
+          # opt-out per CLAUDE.md §8.1 (OOM hazard rule).
+          APOHARA_MOCK_EMBEDDINGS: "1"
         run: bun test
 
       - name: Lint code
