@@ -102,7 +102,7 @@
 | Worktree isolation | ✅ | scheduler.ts spawns in `.claude/worktrees/` |
 | TUI prototype (Ink+React) | 🟡 | `packages/tui/` — archived after M017 parity |
 | apohara-indexer (Rust) | ✅ | Production: tree-sitter + redb + candle |
-| apohara-sandbox (Rust) | 🟡 | M014.1 scaffold ✅ (8/8 tests); M014.2-.6 pending |
+| apohara-sandbox (Rust) | 🟡 | M014.1 + M014.2 shipped (25 tests green); M014.3-.6 pending |
 | apohara-desktop (Tauri+React+Bun) | 🟢 | M017.1-.7 shipped 2026-05-12; .8-.10 pending |
 | ContextForge integration (M015) | ✅ | All 6 subtasks shipped 2026-05-12 |
 | Test suite | 🟡 | ~610 blocks total. 60 known-broken. CI red. Phase 5 fixes this. |
@@ -149,7 +149,7 @@ NOW ──► Phase 5 ──► M014 ──► M017 ──► M015 ──► Pha
 | # | Task | Status | Verify |
 |---|------|--------|--------|
 | 14.1 | Recreate `crates/apohara-sandbox/` from scratch with real Cargo deps: `seccompiler`, `nix`, `libc` | ✅ 2026-05-12 | `cargo build -p apohara-sandbox` green in 13s; `cargo test -p apohara-sandbox` → 8/8 pass. 9 source files, ~300 LOC of skeleton |
-| 14.2 | seccomp-bpf profile: 3-tier syscall allowlists (`ReadOnly` / `WorkspaceWrite` / `DangerFullAccess`) | 🔴 next | Unit test: forbidden syscall → EPERM |
+| 14.2 | seccomp-bpf profile: 3-tier syscall allowlists (`ReadOnly` / `WorkspaceWrite` / `DangerFullAccess`) | ✅ 2026-05-12 | `LinuxProfile::build_filter` compiles a real `BpfProgram` via `seccompiler::compile_from_json`. `install()` calls `apply_filter` (caller must be in fork+unshare child). ReadOnly `openat` is constrained to `O_RDONLY` access mode via `masked_eq`. Integration tests in `tests/seccomp_enforcement.rs` fork+enforce+verify: `readonly_blocks_write_syscall` (write → EPERM), `readonly_allows_read_syscall`, `workspace_write_allows_write_syscall`, `danger_full_access_does_not_install_a_filter`. 21 lib + 4 integration tests pass. |
 | 14.3 | Linux namespaces: separate mount + PID namespace per worktree, via `unshare(2)` | 🔴 | Integration test: process inside namespace cannot see host PIDs |
 | 14.4 | Integration with `src/core/sandbox.ts` spawn — subprocess via Unix socket | 🔴 | E2E test: an agent given `rm -rf ~` returns EPERM, logged to ledger |
 | 14.5 | Sandbox escape attempts → Event Ledger entries with `type: "security_violation"` | 🔴 | Replay shows violation events |

@@ -41,9 +41,10 @@ pub const READONLY_PURE_ALLOW: &[&str] = &[
     "rt_sigaction",
     "rt_sigreturn",
     "sigaltstack",
-    // Time
+    // Time. `clock_gettime64` deliberately omitted — it's a 32-bit ABI
+    // compatibility syscall, absent on x86_64/aarch64 64-bit kernels and
+    // rejected by `seccompiler::compile_from_json` as unknown.
     "clock_gettime",
-    "clock_gettime64",
     "gettimeofday",
     "nanosleep",
     "clock_nanosleep",
@@ -96,11 +97,12 @@ pub const WORKSPACE_WRITE_ADDITIONS_PURE_ALLOW: &[&str] = &[
     // Truncation
     "ftruncate",
     "truncate",
-    // Metadata
+    // Metadata. `futimens` deliberately omitted — there's no dedicated
+    // x86_64/aarch64 syscall for it; glibc implements it via `utimensat(fd,
+    // NULL, ts, 0)`, so `utimensat` covers both call shapes.
     "fchmodat",
     "chmod",
     "utimensat",
-    "futimens",
     // Pipes
     "pipe2",
     // Working directory
