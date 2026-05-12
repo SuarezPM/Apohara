@@ -626,6 +626,7 @@ export class VerificationMesh {
 			"moonshot-k2.5": 2,
 			"moonshot-k2.6": 2.5,
 			"xiaomi-mimo": 0.5,
+			"carnice-9b-local": 0, // Local inference — zero marginal cost
 			"qwen3.5-plus": 1,
 			"qwen3.6-plus": 1.5,
 			"minimax-m2.5": 1,

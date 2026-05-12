@@ -118,6 +118,10 @@ const API_ENDPOINTS = {
 	mistral: "https://api.mistral.ai/v1/chat/completions",
 	// OpenAI
 	openai: "https://api.openai.com/v1/chat/completions",
+	// Carnice-9b local GPU server (llama-cpp-python OpenAI-compat) — M015 local-first path.
+	// Override base via env: CARNICE_BASE_URL=http://other-host:8000/v1/chat/completions
+	"carnice-9b-local":
+		process.env.CARNICE_BASE_URL ?? "http://localhost:8000/v1/chat/completions",
 };
 
 /**
@@ -145,6 +149,7 @@ const MODEL_NAMES: Record<ProviderId, string> = {
 	"kiro-ai": "claude-sonnet-4-20250514",
 	mistral: "mistral-small-latest",
 	openai: "gpt-4o-mini",
+	"carnice-9b-local": "carnice-9b",
 };
 
 interface ProviderHealth {
@@ -636,6 +641,8 @@ export class ProviderRouter {
 				return this.callMistral(messages);
 			case "openai":
 				return this.callOpenAI(messages);
+			case "carnice-9b-local":
+				return this.callCarnice(messages);
 			default:
 				throw new Error(`Unknown provider: ${provider}`);
 		}
@@ -1495,6 +1502,62 @@ export class ProviderRouter {
 				promptTokens: data.usage?.prompt_tokens || 0,
 				completionTokens: data.usage?.completion_tokens || 0,
 				totalTokens: data.usage?.total_tokens || 0,
+			},
+		};
+	}
+
+	private async callCarnice(messages: LLMMessage[]): Promise<LLMResponse> {
+		const startedAt = Date.now();
+		const response = await fetch(this.API_URLS["carnice-9b-local"], {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(
+				this.withReplayDefaults({
+					model: MODEL_NAMES["carnice-9b-local"],
+					messages,
+				}),
+			),
+			// Local GGUF Q4 inference on consumer GPU: ~1s for short replies,
+			// up to 30s for multi-paragraph. 60s ceiling covers both.
+			signal: AbortSignal.timeout(60000),
+		}).catch((err) => {
+			throw new Error(
+				`Carnice local server unreachable at ${this.API_URLS["carnice-9b-local"]} — is llama-cpp-python running? Original: ${(err as Error).message}`,
+			);
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text().catch(() => "");
+			throw new Error(
+				`Carnice local server error: ${response.status} ${response.statusText} ${errorText}`,
+			);
+		}
+
+		const data = await response.json();
+		const totalTokens = data.usage?.total_tokens || 0;
+		// Emit a contextforge_savings event so the ledger reflects the cost-zero local path.
+		// Baseline is informational — uses groq llama-3.3-70b output pricing as cheap-cloud reference.
+		await this.logEvent(
+			"contextforge_savings",
+			{
+				provider: "carnice-9b-local",
+				model: MODEL_NAMES["carnice-9b-local"],
+				tokens: totalTokens,
+				latencyMs: Date.now() - startedAt,
+				costUsdLocal: 0,
+				costUsdBaselineEstimate: (totalTokens / 1_000_000) * 0.59,
+			},
+			"info",
+		);
+
+		return {
+			content: data.choices?.[0]?.message?.content || "",
+			provider: "carnice-9b-local",
+			model: MODEL_NAMES["carnice-9b-local"],
+			usage: {
+				promptTokens: data.usage?.prompt_tokens || 0,
+				completionTokens: data.usage?.completion_tokens || 0,
+				totalTokens,
 			},
 		};
 	}

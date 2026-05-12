@@ -24,7 +24,8 @@ export type ProviderId =
 	| "groq" // Groq - Ultra-fast inference (Llama, Qwen, etc.)
 	| "kiro-ai" // Kiro AI - Free tier, no auth required
 	| "mistral" // Mistral AI - Free tier (mistral-small-latest)
-	| "openai"; // OpenAI - gpt-4o-mini
+	| "openai" // OpenAI - gpt-4o-mini
+	| "carnice-9b-local"; // Carnice-9b (Qwen3.5-9B Hermes fine-tune) served locally via llama-cpp-python on GPU; M015 local-first path
 
 // Model capabilities for intelligent routing
 export interface ModelCapability {
@@ -257,6 +258,24 @@ export const MODELS: ModelCapability[] = [
 		contextWindow: 1000000,
 		supportsVision: true,
 	},
+	// Carnice-9b — local GPU model (M015 local-first path).
+	// Fine-tune of Qwen3.5-9B optimized for agent behavior (Hermes harness, tool calling).
+	// Served via llama-cpp-python on user GPU (RTX 2060S 8GB w/ Q4_K_M).
+	{
+		id: "carnice-9b-local",
+		name: "Carnice-9b (local Hermes/Qwen3.5)",
+		provider: "Local GPU (llama.cpp)",
+		bestFor: ["execution", "verification"],
+		strengths: [
+			"local inference",
+			"zero cost",
+			"tool calling (Hermes format)",
+			"private",
+			"offline-capable",
+		],
+		contextWindow: 4096, // Server-side n_ctx limit; can be raised to 262144 model max
+		supportsVision: false,
+	},
 ];
 
 // Get model capability by ID
@@ -317,6 +336,7 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"deepseek",
 		"mistral",
 		"openai",
+		"carnice-9b-local", // Local GPU fallback — zero cost, offline-capable, last resort if cloud chain exhausted
 	],
 	verification: [
 		"groq",
@@ -327,6 +347,7 @@ export const ROLE_FALLBACK_ORDER: Record<TaskRole, ProviderId[]> = {
 		"kiro-ai",
 		"deepseek",
 		"openai",
+		"carnice-9b-local",
 	],
 };
 

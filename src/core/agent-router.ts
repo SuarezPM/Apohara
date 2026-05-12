@@ -54,6 +54,7 @@ const TOKEN_VALIDATORS: Record<ProviderId, () => boolean> = {
 	"kiro-ai": () => true, // No auth required
 	mistral: () => !!getProviderKey("mistral"),
 	openai: () => !!getProviderKey("openai"),
+	"carnice-9b-local": () => true, // No auth required — local server; reachability is checked at call time
 };
 
 /**
